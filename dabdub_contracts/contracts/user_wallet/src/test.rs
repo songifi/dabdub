@@ -5,14 +5,13 @@ use soroban_sdk::{testutils::Address as _, token, Address, Env};
 #[test]
 fn test_initialize() {
     let env = Env::default();
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
 
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     assert_eq!(client.get_backend(), backend);
     assert_eq!(client.get_vault(), vault);
@@ -20,34 +19,17 @@ fn test_initialize() {
 }
 
 #[test]
-fn test_initialize_with_owner() {
+fn test_with_owner() {
     let env = Env::default();
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
 
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let usdc = Address::generate(&env);
     let owner = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &Some(owner.clone()));
-
-    assert_eq!(client.get_owner(), Some(owner));
-}
-
-#[test]
-#[should_panic(expected = "Already initialized")]
-fn test_cannot_reinitialize() {
-    let env = Env::default();
-    let contract_id = env.register(UserWallet, ());
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &Some(owner.clone())));
     let client = UserWalletClient::new(&env, &contract_id);
-
-    let backend = Address::generate(&env);
-    let vault = Address::generate(&env);
-    let usdc = Address::generate(&env);
-
-    client.initialize(&backend, &vault, &usdc, &None);
-    client.initialize(&backend, &vault, &usdc, &None);
+    assert_eq!(client.get_owner(), Some(owner));
 }
 
 #[test]
@@ -55,16 +37,14 @@ fn test_get_balance() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let token_admin = Address::generate(&env);
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     // Mint some tokens to wallet
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -78,9 +58,6 @@ fn test_withdraw_by_backend() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let recipient = Address::generate(&env);
@@ -88,7 +65,8 @@ fn test_withdraw_by_backend() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     // Mint tokens
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -108,9 +86,6 @@ fn test_withdraw_by_owner() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let owner = Address::generate(&env);
@@ -119,7 +94,8 @@ fn test_withdraw_by_owner() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    client.initialize(&backend, &vault, &usdc, &Some(owner.clone()));
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &Some(owner.clone())));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     // Mint tokens
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -137,16 +113,14 @@ fn test_withdraw_unauthorized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let unauthorized = Address::generate(&env);
     let recipient = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     client.withdraw(&unauthorized, &100_0000000, &recipient);
 }
@@ -157,9 +131,6 @@ fn test_withdraw_insufficient_balance() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let recipient = Address::generate(&env);
@@ -167,7 +138,8 @@ fn test_withdraw_insufficient_balance() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     // Mint only 50 USDC
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -182,15 +154,13 @@ fn test_set_owner() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let usdc = Address::generate(&env);
     let new_owner = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     client.set_owner(&backend, &new_owner);
 
@@ -203,16 +173,14 @@ fn test_set_owner_not_backend() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let usdc = Address::generate(&env);
     let not_backend = Address::generate(&env);
     let new_owner = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     client.set_owner(&not_backend, &new_owner);
 }
@@ -222,9 +190,6 @@ fn test_emergency_withdraw() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let owner = Address::generate(&env);
@@ -232,7 +197,8 @@ fn test_emergency_withdraw() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    client.initialize(&backend, &vault, &usdc, &Some(owner.clone()));
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &Some(owner.clone())));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     // Mint tokens
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -253,15 +219,13 @@ fn test_emergency_withdraw_no_owner() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let usdc = Address::generate(&env);
     let someone = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &None);
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &None::<Address>));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     client.emergency_withdraw(&someone);
 }
@@ -272,16 +236,14 @@ fn test_emergency_withdraw_not_owner() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(UserWallet, ());
-    let client = UserWalletClient::new(&env, &contract_id);
-
     let backend = Address::generate(&env);
     let vault = Address::generate(&env);
     let owner = Address::generate(&env);
     let not_owner = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    client.initialize(&backend, &vault, &usdc, &Some(owner));
+    let contract_id = env.register(UserWallet, (&backend, &vault, &usdc, &Some(owner.clone())));
+    let client = UserWalletClient::new(&env, &contract_id);
 
     client.emergency_withdraw(&not_owner);
 }

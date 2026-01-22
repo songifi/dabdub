@@ -34,18 +34,14 @@ pub struct UserWallet;
 
 #[contractimpl]
 impl UserWallet {
-    /// Initialize wallet
-    pub fn initialize(
+    /// Constructor - called once on deployment
+    pub fn __constructor(
         env: Env,
         backend: Address,
         vault: Address,
         usdc_token: Address,
         owner: Option<Address>,
     ) {
-        if env.storage().instance().has(&DataKey::Backend) {
-            panic!("Already initialized");
-        }
-
         env.storage().instance().set(&DataKey::Backend, &backend);
         env.storage().instance().set(&DataKey::Vault, &vault);
         env.storage()
