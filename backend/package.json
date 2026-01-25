@@ -32,7 +32,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "dotenv": "^17.2.3",
     "pg": "^8.17.2",
-    "typeorm": "^0.3.28"
+    "typeorm": "^0.3.28",
     "@types/uuid": "^10.0.0",
     "nest-winston": "^1.10.2",
     "reflect-metadata": "^0.2.2",
