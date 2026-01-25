@@ -1,8 +1,8 @@
 /**
  * Error Code Enumeration System
- * 
+ *
  * Error codes follow the pattern: [CATEGORY][SUB_CATEGORY][NUMBER]
- * 
+ *
  * Categories:
  * - 1xxx: General/System Errors
  * - 2xxx: Validation Errors
@@ -246,7 +246,8 @@ export const ErrorCodeMetadata: Record<
   [ErrorCode.INSUFFICIENT_FUNDS]: {
     message: 'Insufficient funds',
     httpStatus: 400,
-    userMessage: 'You do not have sufficient funds to complete this transaction.',
+    userMessage:
+      'You do not have sufficient funds to complete this transaction.',
   },
   [ErrorCode.WALLET_LOCKED]: {
     message: 'Wallet is locked',
@@ -268,17 +269,20 @@ export const ErrorCodeMetadata: Record<
   [ErrorCode.EXTERNAL_SERVICE_ERROR]: {
     message: 'External service error',
     httpStatus: 502,
-    userMessage: 'An error occurred while processing your request. Please try again.',
+    userMessage:
+      'An error occurred while processing your request. Please try again.',
   },
   [ErrorCode.EXTERNAL_SERVICE_TIMEOUT]: {
     message: 'External service timeout',
     httpStatus: 504,
-    userMessage: 'The service is taking longer than expected. Please try again.',
+    userMessage:
+      'The service is taking longer than expected. Please try again.',
   },
   [ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE]: {
     message: 'External service unavailable',
     httpStatus: 503,
-    userMessage: 'The service is temporarily unavailable. Please try again later.',
+    userMessage:
+      'The service is temporarily unavailable. Please try again later.',
   },
   [ErrorCode.API_RATE_LIMIT_EXCEEDED]: {
     message: 'API rate limit exceeded',
@@ -290,7 +294,8 @@ export const ErrorCodeMetadata: Record<
   [ErrorCode.DATABASE_ERROR]: {
     message: 'Database error',
     httpStatus: 500,
-    userMessage: 'An error occurred while processing your request. Please try again.',
+    userMessage:
+      'An error occurred while processing your request. Please try again.',
   },
   [ErrorCode.DATABASE_CONNECTION_ERROR]: {
     message: 'Database connection error',
@@ -300,12 +305,14 @@ export const ErrorCodeMetadata: Record<
   [ErrorCode.DATABASE_QUERY_ERROR]: {
     message: 'Database query error',
     httpStatus: 500,
-    userMessage: 'An error occurred while processing your request. Please try again.',
+    userMessage:
+      'An error occurred while processing your request. Please try again.',
   },
   [ErrorCode.DATABASE_TRANSACTION_ERROR]: {
     message: 'Database transaction error',
     httpStatus: 500,
-    userMessage: 'An error occurred while processing your request. Please try again.',
+    userMessage:
+      'An error occurred while processing your request. Please try again.',
   },
   [ErrorCode.CONSTRAINT_VIOLATION]: {
     message: 'Database constraint violation',
@@ -317,22 +324,26 @@ export const ErrorCodeMetadata: Record<
   [ErrorCode.PAYMENT_ERROR]: {
     message: 'Payment error',
     httpStatus: 500,
-    userMessage: 'An error occurred while processing your payment. Please try again.',
+    userMessage:
+      'An error occurred while processing your payment. Please try again.',
   },
   [ErrorCode.PAYMENT_FAILED]: {
     message: 'Payment failed',
     httpStatus: 402,
-    userMessage: 'Your payment could not be processed. Please check your payment method.',
+    userMessage:
+      'Your payment could not be processed. Please check your payment method.',
   },
   [ErrorCode.PAYMENT_DECLINED]: {
     message: 'Payment declined',
     httpStatus: 402,
-    userMessage: 'Your payment was declined. Please try a different payment method.',
+    userMessage:
+      'Your payment was declined. Please try a different payment method.',
   },
   [ErrorCode.PAYMENT_PROCESSING_ERROR]: {
     message: 'Payment processing error',
     httpStatus: 500,
-    userMessage: 'An error occurred while processing your payment. Please try again.',
+    userMessage:
+      'An error occurred while processing your payment. Please try again.',
   },
   [ErrorCode.INVALID_PAYMENT_METHOD]: {
     message: 'Invalid payment method',

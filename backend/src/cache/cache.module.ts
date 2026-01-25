@@ -20,7 +20,8 @@ export class CacheModule {
         NestCacheModule.registerAsync({
           imports: [ConfigModule],
           useFactory: async (configService: ConfigService) => {
-            const cacheConfig = configService.get<ReturnType<typeof cacheConfig>>('cache');
+            const cacheConfig =
+              configService.get<ReturnType<typeof cacheConfig>>('cache');
 
             if (!cacheConfig) {
               throw new Error('Cache configuration not found');

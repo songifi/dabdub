@@ -34,10 +34,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Handle custom BaseHttpException
     if (exception instanceof BaseHttpException) {
-      errorResponse = exception.toErrorResponse(
-        requestId,
-        isDevelopment,
-      );
+      errorResponse = exception.toErrorResponse(requestId, isDevelopment);
     } else {
       // Handle standard NestJS HttpException
       const exceptionResponse = exception.getResponse();

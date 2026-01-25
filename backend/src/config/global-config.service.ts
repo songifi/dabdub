@@ -20,7 +20,7 @@ export class GlobalConfigService {
   private validateConfiguration(): void {
     try {
       const nodeEnv = process.env.NODE_ENV || 'development';
-      
+
       // In development, we're more lenient; in production, we're strict
       if (nodeEnv === 'production') {
         const requiredConfigs = [
@@ -59,8 +59,9 @@ export class GlobalConfigService {
 
   // App Configuration
   getAppConfig(): AppConfig {
-    return this.getCachedConfig('app', () =>
-      this.configService.get<AppConfig>('app') || ({} as AppConfig),
+    return this.getCachedConfig(
+      'app',
+      () => this.configService.get<AppConfig>('app') || ({} as AppConfig),
     );
   }
 
@@ -90,8 +91,11 @@ export class GlobalConfigService {
 
   // Database Configuration
   getDatabaseConfig(): DatabaseConfig {
-    return this.getCachedConfig('database', () =>
-      this.configService.get<DatabaseConfig>('database') || ({} as DatabaseConfig),
+    return this.getCachedConfig(
+      'database',
+      () =>
+        this.configService.get<DatabaseConfig>('database') ||
+        ({} as DatabaseConfig),
     );
   }
 
@@ -101,8 +105,11 @@ export class GlobalConfigService {
 
   // Blockchain Configuration
   getBlockchainConfig(): BlockchainConfig {
-    return this.getCachedConfig('blockchain', () =>
-      this.configService.get<BlockchainConfig>('blockchain') || ({} as BlockchainConfig),
+    return this.getCachedConfig(
+      'blockchain',
+      () =>
+        this.configService.get<BlockchainConfig>('blockchain') ||
+        ({} as BlockchainConfig),
     );
   }
 
@@ -128,8 +135,9 @@ export class GlobalConfigService {
 
   // API Configuration
   getApiConfig(): ApiConfig {
-    return this.getCachedConfig('api', () =>
-      this.configService.get<ApiConfig>('api') || ({} as ApiConfig),
+    return this.getCachedConfig(
+      'api',
+      () => this.configService.get<ApiConfig>('api') || ({} as ApiConfig),
     );
   }
 

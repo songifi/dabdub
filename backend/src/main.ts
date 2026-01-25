@@ -11,7 +11,7 @@ async function bootstrap() {
   initSentry();
 
   const app = await NestFactory.create(AppModule);
-  
+
   // Use Winston logger
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 

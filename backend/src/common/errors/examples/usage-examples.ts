@@ -1,6 +1,6 @@
 /**
  * Error Handling Usage Examples
- * 
+ *
  * This file demonstrates how to use the error handling system in your services and controllers.
  * These are examples only and should not be executed directly.
  */

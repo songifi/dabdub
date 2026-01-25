@@ -16,7 +16,8 @@ export class BaseHttpException extends HttpException {
     metadata?: Record<string, any>,
   ) {
     const metadataForCode = ErrorCodeMetadata[errorCode];
-    const httpStatus = metadataForCode?.httpStatus || HttpStatus.INTERNAL_SERVER_ERROR;
+    const httpStatus =
+      metadataForCode?.httpStatus || HttpStatus.INTERNAL_SERVER_ERROR;
     const defaultMessage = metadataForCode?.message || 'An error occurred';
     const userMessage = metadataForCode?.userMessage || defaultMessage;
 
@@ -45,7 +46,8 @@ export class BaseHttpException extends HttpException {
     return new ErrorResponseDto({
       errorCode: this.errorCode,
       message: this.userMessage,
-      details: response.message !== this.userMessage ? response.message : undefined,
+      details:
+        response.message !== this.userMessage ? response.message : undefined,
       requestId,
       timestamp: response.timestamp,
       stack: includeStack ? this.stack : undefined,

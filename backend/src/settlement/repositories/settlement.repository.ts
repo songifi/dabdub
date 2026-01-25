@@ -54,12 +54,12 @@ export class SettlementRepository {
     });
   }
 
-  async findPendingSettlements(
-    limit?: number,
-  ): Promise<Settlement[]> {
+  async findPendingSettlements(limit?: number): Promise<Settlement[]> {
     const query = this.repository
       .createQueryBuilder('settlement')
-      .where('settlement.status = :status', { status: SettlementStatus.PENDING })
+      .where('settlement.status = :status', {
+        status: SettlementStatus.PENDING,
+      })
       .andWhere('settlement.retryCount < settlement.maxRetries')
       .orderBy('settlement.createdAt', 'ASC');
 
@@ -70,9 +70,7 @@ export class SettlementRepository {
     return query.getMany();
   }
 
-  async findRetryableSettlements(
-    limit?: number,
-  ): Promise<Settlement[]> {
+  async findRetryableSettlements(limit?: number): Promise<Settlement[]> {
     const query = this.repository
       .createQueryBuilder('settlement')
       .where('settlement.status = :status', { status: SettlementStatus.FAILED })

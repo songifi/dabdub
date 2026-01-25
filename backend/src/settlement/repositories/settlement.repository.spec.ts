@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SettlementRepository } from './settlement.repository';
-import { Settlement, SettlementStatus, SettlementProvider } from '../entities/settlement.entity';
+import {
+  Settlement,
+  SettlementStatus,
+  SettlementProvider,
+} from '../entities/settlement.entity';
 
 describe('SettlementRepository', () => {
   let repository: SettlementRepository;
@@ -82,8 +86,8 @@ describe('SettlementRepository', () => {
         currency: mockSettlement.currency,
       };
 
-      mockRepository.create.mockReturnValue(mockSettlement as Settlement);
-      mockRepository.save.mockResolvedValue(mockSettlement as Settlement);
+      mockRepository.create.mockReturnValue(mockSettlement);
+      mockRepository.save.mockResolvedValue(mockSettlement);
 
       const result = await repository.create(settlementData);
 
@@ -95,7 +99,7 @@ describe('SettlementRepository', () => {
 
   describe('findOne', () => {
     it('should find a settlement by id', async () => {
-      mockRepository.findOne.mockResolvedValue(mockSettlement as Settlement);
+      mockRepository.findOne.mockResolvedValue(mockSettlement);
 
       const result = await repository.findOne(mockSettlement.id);
 
@@ -116,7 +120,7 @@ describe('SettlementRepository', () => {
 
   describe('findByPaymentRequestId', () => {
     it('should find a settlement by payment request id', async () => {
-      mockRepository.findOne.mockResolvedValue(mockSettlement as Settlement);
+      mockRepository.findOne.mockResolvedValue(mockSettlement);
 
       const result = await repository.findByPaymentRequestId(
         mockSettlement.paymentRequestId,
@@ -132,9 +136,11 @@ describe('SettlementRepository', () => {
   describe('findByMerchantId', () => {
     it('should find settlements by merchant id', async () => {
       const settlements = [mockSettlement];
-      mockRepository.find.mockResolvedValue(settlements as Settlement[]);
+      mockRepository.find.mockResolvedValue(settlements);
 
-      const result = await repository.findByMerchantId(mockSettlement.merchantId);
+      const result = await repository.findByMerchantId(
+        mockSettlement.merchantId,
+      );
 
       expect(mockRepository.find).toHaveBeenCalledWith({
         where: { merchantId: mockSettlement.merchantId },
@@ -146,7 +152,7 @@ describe('SettlementRepository', () => {
   describe('findByStatus', () => {
     it('should find settlements by status', async () => {
       const settlements = [mockSettlement];
-      mockRepository.find.mockResolvedValue(settlements as Settlement[]);
+      mockRepository.find.mockResolvedValue(settlements);
 
       const result = await repository.findByStatus(SettlementStatus.PENDING);
 
@@ -191,7 +197,9 @@ describe('SettlementRepository', () => {
       };
 
       mockRepository.update.mockResolvedValue({ affected: 1 } as any);
-      mockRepository.findOne.mockResolvedValue(completedSettlement as Settlement);
+      mockRepository.findOne.mockResolvedValue(
+        completedSettlement as Settlement,
+      );
 
       const result = await repository.updateStatus(
         mockSettlement.id,
@@ -216,7 +224,7 @@ describe('SettlementRepository', () => {
         retryCount: 1,
       };
 
-      mockRepository.findOne.mockResolvedValue(mockSettlement as Settlement);
+      mockRepository.findOne.mockResolvedValue(mockSettlement);
       mockRepository.save.mockResolvedValue(settlementWithRetry as Settlement);
 
       const result = await repository.incrementRetryCount(mockSettlement.id);

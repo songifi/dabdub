@@ -17,9 +17,10 @@ const dataSource = new DataSource({
   synchronize: false,
   logging: true,
   logger: 'advanced-console',
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl:
+    process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 (async () => {

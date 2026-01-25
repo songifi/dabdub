@@ -35,7 +35,9 @@ export interface RetryOptions {
   onRetry?: (attempt: number, error: any) => void;
 }
 
-const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'isRetryable' | 'onRetry'>> & {
+const DEFAULT_OPTIONS: Required<
+  Omit<RetryOptions, 'isRetryable' | 'onRetry'>
+> & {
   isRetryable: (error: any) => boolean;
   onRetry?: (attempt: number, error: any) => void;
 } = {

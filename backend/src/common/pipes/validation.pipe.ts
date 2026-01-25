@@ -1,8 +1,4 @@
-import {
-  PipeTransform,
-  Injectable,
-  ArgumentMetadata,
-} from '@nestjs/common';
+import { PipeTransform, Injectable, ArgumentMetadata } from '@nestjs/common';
 import { validate, ValidationError } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ValidationException } from '../errors/exceptions/http-exceptions';
@@ -35,7 +31,8 @@ export class CustomValidationPipe implements PipeTransform<any> {
       forbidNonWhitelisted: this.options?.forbidNonWhitelisted ?? true,
       transform: this.options?.transform ?? true,
       transformOptions: {
-        enableImplicitConversion: this.options?.transformOptions?.enableImplicitConversion ?? true,
+        enableImplicitConversion:
+          this.options?.transformOptions?.enableImplicitConversion ?? true,
       },
     };
 
@@ -44,11 +41,9 @@ export class CustomValidationPipe implements PipeTransform<any> {
 
     if (errors.length > 0) {
       const validationErrors = this.formatValidationErrors(errors);
-      throw new ValidationException(
-        validationErrors,
-        'Validation failed',
-        { value },
-      );
+      throw new ValidationException(validationErrors, 'Validation failed', {
+        value,
+      });
     }
 
     return object;

@@ -1,6 +1,6 @@
 /**
  * Example usage of the Redis Cache Service
- * 
+ *
  * This file demonstrates various ways to use the cache service
  * in your application. These are examples and should be adapted
  * to your specific use cases.
@@ -27,7 +27,7 @@ export class UserServiceExample {
     const cacheKey = CacheKeyBuilder.user.profile(id);
 
     // Try cache first
-    let user = await this.cacheService.get(cacheKey);
+    const user = await this.cacheService.get(cacheKey);
     if (user) {
       return user;
     }
@@ -133,7 +133,11 @@ export class PaymentServiceExample {
 export class RateLimitServiceExample {
   constructor(private readonly cacheService: CacheService) {}
 
-  async checkRateLimit(ip: string, endpoint: string, limit: number): Promise<boolean> {
+  async checkRateLimit(
+    ip: string,
+    endpoint: string,
+    limit: number,
+  ): Promise<boolean> {
     const key = CacheKeyBuilder.rateLimit.ip(ip, endpoint);
     const count = await this.cacheService.increment(key);
 

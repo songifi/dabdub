@@ -1,6 +1,6 @@
 /**
  * Cache key naming conventions and builder utility
- * 
+ *
  * Format: {prefix}:{entity}:{identifier}:{suffix?}
  * Examples:
  * - user:profile:123
@@ -16,7 +16,9 @@ export class CacheKeyBuilder {
    * Build a cache key with consistent naming convention
    */
   static build(...parts: (string | number | undefined)[]): string {
-    const validParts = parts.filter((part) => part !== undefined && part !== null);
+    const validParts = parts.filter(
+      (part) => part !== undefined && part !== null,
+    );
     return [this.PREFIX, ...validParts.map(String)].join(':');
   }
 
@@ -43,17 +45,26 @@ export class CacheKeyBuilder {
     status: (paymentId: string): string =>
       this.build('payment', 'status', paymentId),
     history: (userId: string | number, page?: number): string =>
-      this.build('payment', 'history', userId, page ? `page:${page}` : undefined),
+      this.build(
+        'payment',
+        'history',
+        userId,
+        page ? `page:${page}` : undefined,
+      ),
     byMerchant: (merchantId: string | number, page?: number): string =>
-      this.build('payment', 'merchant', merchantId, page ? `page:${page}` : undefined),
+      this.build(
+        'payment',
+        'merchant',
+        merchantId,
+        page ? `page:${page}` : undefined,
+      ),
   };
 
   /**
    * Build transaction-related cache keys
    */
   static transaction = {
-    detail: (txId: string): string =>
-      this.build('transaction', 'detail', txId),
+    detail: (txId: string): string => this.build('transaction', 'detail', txId),
     list: (userId: string | number, filters?: string): string =>
       this.build('transaction', 'list', userId, filters),
     blockchain: (txHash: string, network?: string): string =>

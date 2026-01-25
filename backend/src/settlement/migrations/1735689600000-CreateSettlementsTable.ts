@@ -1,4 +1,10 @@
-import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  Table,
+  TableIndex,
+  TableForeignKey,
+} from 'typeorm';
 
 export class CreateSettlementsTable1735689600000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -270,7 +276,7 @@ export class CreateSettlementsTable1735689600000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.dropTable('settlements');
-    
+
     // Drop enum types
     await queryRunner.query(`DROP TYPE IF EXISTS settlement_status_enum;`);
     await queryRunner.query(`DROP TYPE IF EXISTS settlement_provider_enum;`);

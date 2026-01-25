@@ -91,16 +91,16 @@ export class TransactionNotFoundException extends BusinessException {
  * Thrown when attempting to perform operations on a locked wallet
  */
 export class WalletLockedException extends BusinessException {
-  constructor(walletId?: string, reason?: string, metadata?: Record<string, any>) {
-    super(
-      ErrorCode.WALLET_LOCKED,
-      reason || 'Wallet is locked',
-      {
-        walletId,
-        reason,
-        ...metadata,
-      },
-    );
+  constructor(
+    walletId?: string,
+    reason?: string,
+    metadata?: Record<string, any>,
+  ) {
+    super(ErrorCode.WALLET_LOCKED, reason || 'Wallet is locked', {
+      walletId,
+      reason,
+      ...metadata,
+    });
   }
 }
 
@@ -150,7 +150,11 @@ export class InvalidTransactionStateException extends BusinessException {
  * Operation Not Allowed Exception
  */
 export class OperationNotAllowedException extends BusinessException {
-  constructor(operation?: string, reason?: string, metadata?: Record<string, any>) {
+  constructor(
+    operation?: string,
+    reason?: string,
+    metadata?: Record<string, any>,
+  ) {
     super(
       ErrorCode.OPERATION_NOT_ALLOWED,
       reason || `Operation ${operation} is not allowed`,
@@ -167,7 +171,11 @@ export class OperationNotAllowedException extends BusinessException {
  * Resource Already Exists Exception
  */
 export class ResourceAlreadyExistsException extends BusinessException {
-  constructor(resourceType?: string, identifier?: string, metadata?: Record<string, any>) {
+  constructor(
+    resourceType?: string,
+    identifier?: string,
+    metadata?: Record<string, any>,
+  ) {
     super(
       ErrorCode.RESOURCE_ALREADY_EXISTS,
       `${resourceType || 'Resource'} with identifier ${identifier} already exists`,

@@ -31,14 +31,20 @@ export class CacheWarmingService implements OnModuleInit {
 
     // Execute immediately
     strategy.warm().catch((error) => {
-      this.logger.error(`Error warming cache for strategy ${strategy.name}:`, error);
+      this.logger.error(
+        `Error warming cache for strategy ${strategy.name}:`,
+        error,
+      );
     });
 
     // Schedule periodic warming if interval is provided
     if (strategy.interval) {
       const intervalId = setInterval(() => {
         strategy.warm().catch((error) => {
-          this.logger.error(`Error warming cache for strategy ${strategy.name}:`, error);
+          this.logger.error(
+            `Error warming cache for strategy ${strategy.name}:`,
+            error,
+          );
         });
       }, strategy.interval);
 
@@ -83,7 +89,10 @@ export class CacheWarmingService implements OnModuleInit {
   /**
    * Manually warm cache for a specific key pattern
    */
-  async warmPattern(pattern: string, factory: () => Promise<any[]>): Promise<void> {
+  async warmPattern(
+    pattern: string,
+    factory: () => Promise<any[]>,
+  ): Promise<void> {
     try {
       const data = await factory();
       const entries = data.map((item, index) => ({
@@ -93,7 +102,9 @@ export class CacheWarmingService implements OnModuleInit {
       }));
 
       await this.cacheService.mset(entries);
-      this.logger.log(`Warmed cache for pattern: ${pattern} (${entries.length} entries)`);
+      this.logger.log(
+        `Warmed cache for pattern: ${pattern} (${entries.length} entries)`,
+      );
     } catch (error) {
       this.logger.error(`Error warming cache pattern ${pattern}:`, error);
     }

@@ -26,10 +26,7 @@ export class ErrorMonitoringController {
    * Get errors by error code
    */
   @Get('by-code')
-  getErrorsByCode(
-    @Query('code') code: string,
-    @Query('limit') limit?: string,
-  ) {
+  getErrorsByCode(@Query('code') code: string, @Query('limit') limit?: string) {
     const errorCode = code as ErrorCode;
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.errorMonitoringService.getErrorsByCode(errorCode, limitNum);

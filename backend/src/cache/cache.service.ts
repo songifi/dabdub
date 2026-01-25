@@ -10,7 +10,11 @@ import { Cache } from 'cache-manager';
 import Redis from 'ioredis';
 import { CacheMetricsService } from './cache-metrics.service';
 import { CacheKeyBuilder } from './cache-key-builder';
-import { CacheTtl, CacheTtlStrategies, CacheTtlStrategy } from './cache-ttl.config';
+import {
+  CacheTtl,
+  CacheTtlStrategies,
+  CacheTtlStrategy,
+} from './cache-ttl.config';
 
 export interface CacheOptions {
   ttl?: number;
@@ -53,7 +57,10 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
         this.isRedisAvailable = await this.checkRedisConnection();
       }
     } catch (error) {
-      this.logger.warn('Redis connection check failed, using fallback mode', error);
+      this.logger.warn(
+        'Redis connection check failed, using fallback mode',
+        error,
+      );
       this.fallbackMode = true;
       this.isRedisAvailable = false;
     }
@@ -85,7 +92,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   async get<T>(key: string, options?: CacheOptions): Promise<T | undefined> {
     try {
       const value = await this.cacheManager.get<T>(key);
-      
+
       if (!options?.skipMetrics) {
         if (value !== undefined && value !== null) {
           this.metricsService.recordHit();
@@ -98,7 +105,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.metricsService.recordError();
       this.logger.error(`Cache get error for key ${key}:`, error);
-      
+
       // Graceful fallback: return undefined instead of throwing
       if (!this.isRedisAvailable) {
         await this.checkRedisConnection();
@@ -110,22 +117,18 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   /**
    * Set value in cache
    */
-  async set<T>(
-    key: string,
-    value: T,
-    options?: CacheOptions,
-  ): Promise<void> {
+  async set<T>(key: string, value: T, options?: CacheOptions): Promise<void> {
     try {
       const ttl = this.getTtl(options);
       await this.cacheManager.set(key, value, ttl);
-      
+
       if (!options?.skipMetrics) {
         this.metricsService.recordSet();
       }
     } catch (error) {
       this.metricsService.recordError();
       this.logger.error(`Cache set error for key ${key}:`, error);
-      
+
       // Graceful fallback: continue without caching
       if (!this.isRedisAvailable) {
         await this.checkRedisConnection();
@@ -143,7 +146,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.metricsService.recordError();
       this.logger.error(`Cache delete error for key ${key}:`, error);
-      
+
       if (!this.isRedisAvailable) {
         await this.checkRedisConnection();
       }
@@ -202,9 +205,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     entries: Array<{ key: string; value: T; ttl?: number }>,
   ): Promise<void> {
     await Promise.all(
-      entries.map(({ key, value, ttl }) =>
-        this.set(key, value, { ttl }),
-      ),
+      entries.map(({ key, value, ttl }) => this.set(key, value, { ttl })),
     );
   }
 
@@ -249,7 +250,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     options?: CacheOptions,
   ): Promise<T> {
     const cached = await this.get<T>(key, options);
-    
+
     if (cached !== undefined && cached !== null) {
       return cached;
     }

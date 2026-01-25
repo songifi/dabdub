@@ -1,4 +1,8 @@
-import { Settlement, SettlementStatus, SettlementProvider } from './settlement.entity';
+import {
+  Settlement,
+  SettlementStatus,
+  SettlementProvider,
+} from './settlement.entity';
 
 describe('Settlement Entity', () => {
   describe('SettlementStatus enum', () => {
@@ -33,8 +37,12 @@ describe('Settlement Entity', () => {
       settlement.retryCount = 0;
       settlement.maxRetries = 3;
 
-      expect(settlement.paymentRequestId).toBe('123e4567-e89b-12d3-a456-426614174001');
-      expect(settlement.merchantId).toBe('123e4567-e89b-12d3-a456-426614174002');
+      expect(settlement.paymentRequestId).toBe(
+        '123e4567-e89b-12d3-a456-426614174001',
+      );
+      expect(settlement.merchantId).toBe(
+        '123e4567-e89b-12d3-a456-426614174002',
+      );
       expect(settlement.amount).toBe(1000.5);
       expect(settlement.currency).toBe('USD');
       expect(settlement.status).toBe(SettlementStatus.PENDING);

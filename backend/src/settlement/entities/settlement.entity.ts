@@ -54,19 +54,39 @@ export class Settlement {
   status: SettlementStatus;
 
   // Bank transfer details
-  @Column({ name: 'bank_account_number', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'bank_account_number',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   bankAccountNumber: string;
 
-  @Column({ name: 'bank_routing_number', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'bank_routing_number',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   bankRoutingNumber: string;
 
   @Column({ name: 'bank_name', type: 'varchar', length: 255, nullable: true })
   bankName: string;
 
-  @Column({ name: 'bank_account_holder_name', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'bank_account_holder_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   bankAccountHolderName: string;
 
-  @Column({ name: 'bank_swift_code', type: 'varchar', length: 11, nullable: true })
+  @Column({
+    name: 'bank_swift_code',
+    type: 'varchar',
+    length: 11,
+    nullable: true,
+  })
   bankSwiftCode: string;
 
   @Column({ name: 'bank_iban', type: 'varchar', length: 34, nullable: true })
@@ -80,20 +100,43 @@ export class Settlement {
   batchSequence: number;
 
   // Fee calculation and tracking
-  @Column({ name: 'fee_amount', type: 'decimal', precision: 19, scale: 4, default: 0 })
+  @Column({
+    name: 'fee_amount',
+    type: 'decimal',
+    precision: 19,
+    scale: 4,
+    default: 0,
+  })
   feeAmount: number;
 
-  @Column({ name: 'fee_percentage', type: 'decimal', precision: 5, scale: 4, nullable: true })
+  @Column({
+    name: 'fee_percentage',
+    type: 'decimal',
+    precision: 5,
+    scale: 4,
+    nullable: true,
+  })
   feePercentage: number;
 
   @Column({ name: 'net_amount', type: 'decimal', precision: 19, scale: 4 })
   netAmount: number;
 
   // Exchange rate at settlement time
-  @Column({ name: 'exchange_rate', type: 'decimal', precision: 19, scale: 8, nullable: true })
+  @Column({
+    name: 'exchange_rate',
+    type: 'decimal',
+    precision: 19,
+    scale: 8,
+    nullable: true,
+  })
   exchangeRate: number;
 
-  @Column({ name: 'source_currency', type: 'varchar', length: 3, nullable: true })
+  @Column({
+    name: 'source_currency',
+    type: 'varchar',
+    length: 3,
+    nullable: true,
+  })
   sourceCurrency: string;
 
   // Settlement provider
@@ -104,14 +147,30 @@ export class Settlement {
   })
   provider: SettlementProvider;
 
-  @Column({ name: 'provider_reference', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'provider_reference',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   providerReference: string;
 
   // Settlement receipt/reference number
-  @Column({ name: 'settlement_receipt', type: 'varchar', length: 255, nullable: true, unique: true })
+  @Column({
+    name: 'settlement_receipt',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    unique: true,
+  })
   settlementReceipt: string;
 
-  @Column({ name: 'settlement_reference', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'settlement_reference',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   settlementReference: string;
 
   // Failure reason and retry count

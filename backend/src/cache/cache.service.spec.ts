@@ -75,7 +75,11 @@ describe('CacheService', () => {
 
       await service.set(key, value);
 
-      expect(mockCacheManager.set).toHaveBeenCalledWith(key, value, expect.any(Number));
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        key,
+        value,
+        expect.any(Number),
+      );
     });
 
     it('should handle errors gracefully', async () => {

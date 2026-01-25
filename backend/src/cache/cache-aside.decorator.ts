@@ -12,7 +12,7 @@ export interface CacheAsideOptions {
 
 /**
  * Decorator to enable cache-aside pattern on methods
- * 
+ *
  * @example
  * @CacheAside({ key: (args) => `user:${args[0]}`, strategy: 'USER_PROFILE' })
  * async getUser(id: string) { ... }
