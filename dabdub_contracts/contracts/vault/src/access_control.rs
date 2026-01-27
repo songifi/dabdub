@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 // Role constants
 pub const ADMIN_ROLE: Symbol = symbol_short!("ADMIN");
@@ -10,6 +10,18 @@ pub const TREASURER_ROLE: Symbol = symbol_short!("TREASR");
 pub enum RoleKey {
     Admin,
     Roles(Address),
+}
+
+#[contractevent(topics = ["VAULT", "role"])]
+pub struct RoleGrantedEvent {
+    pub account: Address,
+    pub role: Symbol,
+}
+
+#[contractevent(topics = ["VAULT", "role"])]
+pub struct RoleRevokedEvent {
+    pub account: Address,
+    pub role: Symbol,
 }
 
 /// Grant a role to an address
@@ -33,8 +45,7 @@ pub fn grant_role(env: &Env, account: Address, role: Symbol) {
         .set(&RoleKey::Roles(account.clone()), &roles);
 
     // Emit event
-    env.events()
-        .publish((Symbol::new(env, "role_granted"),), (account, role));
+    RoleGrantedEvent { account, role }.publish(env);
 }
 
 /// Revoke a role from an address
@@ -57,8 +68,7 @@ pub fn revoke_role(env: &Env, account: Address, role: Symbol) {
         .set(&RoleKey::Roles(account.clone()), &new_roles);
 
     // Emit event
-    env.events()
-        .publish((Symbol::new(env, "role_revoked"),), (account, role));
+    RoleRevokedEvent { account, role }.publish(env);
 }
 
 /// Check if address has role

@@ -81,7 +81,7 @@ impl UserWallet {
         let owner_opt: Option<Address> = env.storage().instance().get(&DataKey::Owner);
 
         let is_backend = caller == backend;
-        let is_owner = owner_opt.map_or(false, |owner| caller == owner);
+        let is_owner = owner_opt.is_some_and(|owner| caller == owner);
 
         if !is_backend && !is_owner {
             panic!("Not authorized");

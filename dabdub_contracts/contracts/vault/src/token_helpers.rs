@@ -1,12 +1,14 @@
 use soroban_sdk::{token, Address, Env};
 
 /// Get token balance for an account
+#[allow(dead_code)]
 pub fn get_token_balance(env: &Env, token_address: &Address, account: &Address) -> i128 {
     let client = token::Client::new(env, token_address);
     client.balance(account)
 }
 
 /// Transfer tokens from one account to another
+#[allow(dead_code)]
 pub fn transfer_token(
     env: &Env,
     token_address: &Address,
@@ -19,6 +21,7 @@ pub fn transfer_token(
 }
 
 /// Check if an account has sufficient balance
+#[allow(dead_code)]
 pub fn has_sufficient_balance(
     env: &Env,
     token_address: &Address,
@@ -30,6 +33,7 @@ pub fn has_sufficient_balance(
 }
 
 /// Approve spender to spend tokens on behalf of owner
+#[allow(dead_code)]
 pub fn approve_token(
     env: &Env,
     token_address: &Address,
@@ -46,11 +50,6 @@ pub fn approve_token(
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token, Address, Env};
-
-    #[test]
-    fn test_contract_compiles() {
-        assert!(true);
-    }
 
     #[test]
     fn test_token_transfer() {
@@ -119,11 +118,11 @@ mod tests {
 
         // Check if user has enough for 50 USDC payment - should be true
         let has_enough = has_sufficient_balance(&env, &token_address, &user, 50_0000000);
-        assert_eq!(has_enough, true);
+        assert!(has_enough);
 
         // Check if user has enough for 200 USDC payment - should be false
         let has_enough = has_sufficient_balance(&env, &token_address, &user, 200_0000000);
-        assert_eq!(has_enough, false);
+        assert!(!has_enough);
     }
 
     #[test]

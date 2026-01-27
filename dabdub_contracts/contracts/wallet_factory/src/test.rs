@@ -19,7 +19,7 @@ fn test_constructor() {
     assert_eq!(client.get_backend(), backend);
     assert_eq!(client.get_vault(), vault);
     assert_eq!(client.get_total_wallets(), 0);
-    assert_eq!(client.is_paused(), false);
+    assert!(!client.is_paused());
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_has_wallet_returns_false() {
     let client = WalletFactoryClient::new(&env, &contract_id);
 
     let user_id = String::from_str(&env, "user@example.com");
-    assert_eq!(client.has_wallet(&user_id), false);
+    assert!(!client.has_wallet(&user_id));
     assert_eq!(client.get_wallet(&user_id), None);
 }
 
@@ -115,10 +115,10 @@ fn test_pause_unpause() {
     let client = WalletFactoryClient::new(&env, &contract_id);
 
     client.pause(&admin);
-    assert_eq!(client.is_paused(), true);
+    assert!(client.is_paused());
 
     client.unpause(&admin);
-    assert_eq!(client.is_paused(), false);
+    assert!(!client.is_paused());
 }
 
 #[test]

@@ -4,7 +4,9 @@ mod access_control;
 mod test;
 mod token_helpers;
 
-use soroban_sdk::{contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
+};
 
 #[contracttype]
 #[derive(Clone)]
@@ -30,6 +32,32 @@ struct PaymentProcessedEvent {
     payment_id: BytesN<32>,
     payment_amount: i128,
     fee_amount: i128,
+}
+
+#[contractevent(topics = ["VAULT", "refund"])]
+struct PaymentRefundedEvent {
+    user_wallet: Address,
+    payment_id: BytesN<32>,
+    refund_amount: i128,
+    fee_refunded: bool,
+}
+
+#[contractevent(topics = ["VAULT", "withdrawal"])]
+struct VaultFundsWithdrawnEvent {
+    to: Address,
+    amount: i128,
+}
+
+#[contractevent(topics = ["VAULT", "config"])]
+struct FeeUpdatedEvent {
+    old_fee: i128,
+    new_fee: i128,
+}
+
+#[contractevent(topics = ["VAULT", "config"])]
+struct MinDepositUpdatedEvent {
+    old_min_deposit: i128,
+    new_min_deposit: i128,
 }
 
 #[contract]
@@ -165,6 +193,149 @@ impl Vault {
             payment_id: payment_id.clone(),
             payment_amount,
             fee_amount,
+        }
+        .publish(&env);
+    }
+
+    /// Refund payment (admin only)
+    pub fn refund_payment(
+        env: Env,
+        caller: Address,
+        user_wallet: Address,
+        payment_amount: i128,
+        refund_fee: bool,
+        payment_id: BytesN<32>,
+    ) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        let mut available_payments: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailablePayments)
+            .unwrap_or(0);
+        if available_payments < payment_amount {
+            panic!("Insufficient available payments");
+        }
+
+        let mut refund_amount = payment_amount;
+        let mut available_fees: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailableFees)
+            .unwrap_or(0);
+        let fee_amount: i128 = env.storage().instance().get(&DataKey::FeeAmount).unwrap();
+
+        if refund_fee {
+            if available_fees < fee_amount {
+                panic!("Insufficient available fees for refund");
+            }
+            refund_amount += fee_amount;
+            available_fees -= fee_amount;
+        }
+
+        available_payments -= payment_amount;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailablePayments, &available_payments);
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailableFees, &available_fees);
+
+        // Transfer USDC back to user
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &user_wallet,
+            &refund_amount,
+        );
+
+        PaymentRefundedEvent {
+            user_wallet,
+            payment_id,
+            refund_amount,
+            fee_refunded: refund_fee,
+        }
+        .publish(&env);
+    }
+
+    /// Withdraw all vault funds (treasurer only)
+    pub fn withdraw_vault_funds(env: Env, caller: Address, to: Address) {
+        access_control::require_role(&env, &caller, access_control::TREASURER_ROLE);
+        caller.require_auth();
+
+        let available_payments: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailablePayments)
+            .unwrap_or(0);
+        let available_fees: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailableFees)
+            .unwrap_or(0);
+        let total_withdrawal = available_payments + available_fees;
+
+        if total_withdrawal <= 0 {
+            panic!("No funds available for withdrawal");
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailablePayments, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailableFees, &0i128);
+
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(&env.current_contract_address(), &to, &total_withdrawal);
+
+        VaultFundsWithdrawnEvent {
+            to,
+            amount: total_withdrawal,
+        }
+        .publish(&env);
+    }
+
+    /// Update fee (admin only)
+    pub fn set_fee(env: Env, caller: Address, new_fee: i128) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        if new_fee > MAX_FEE {
+            panic!("Fee exceeds maximum");
+        }
+
+        let old_fee: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeAmount)
+            .unwrap_or(0);
+        env.storage().instance().set(&DataKey::FeeAmount, &new_fee);
+
+        FeeUpdatedEvent { old_fee, new_fee }.publish(&env);
+    }
+
+    /// Update minimum deposit (admin only)
+    pub fn set_min_deposit(env: Env, caller: Address, new_min_deposit: i128) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        let old_min_deposit: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinDeposit)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::MinDeposit, &new_min_deposit);
+
+        MinDepositUpdatedEvent {
+            old_min_deposit,
+            new_min_deposit,
         }
         .publish(&env);
     }
