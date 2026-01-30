@@ -1,6 +1,7 @@
 import * as winston from 'winston';
 import { utilities as nestWinstonModuleUtilities } from 'nest-winston';
 import DailyRotateFile = require('winston-daily-rotate-file');
+import LokiTransport = require('winston-loki');
 import { maskSensitiveData } from '../common/utils/masking.util';
 
 export const loggerConfig = {
@@ -45,6 +46,19 @@ const getTransports = () => {
       ),
     }),
   ];
+
+  if (process.env.LOKI_HOST) {
+    transports.push(
+      new LokiTransport({
+        host: process.env.LOKI_HOST,
+        labels: { app: 'dabdub-backend', env: process.env.NODE_ENV },
+        json: true,
+        format: winston.format.json(),
+        replaceTimestamp: true,
+        onConnectionError: (err) => console.error(err),
+      }),
+    );
+  }
 
   if (process.env.NODE_ENV === 'production') {
     transports.push(
