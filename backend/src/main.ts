@@ -7,6 +7,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { CustomValidationPipe } from './common/pipes/validation.pipe';
 import { initSentry } from './common/config/sentry.config';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   // Initialize Sentry before creating the app
@@ -24,11 +26,49 @@ async function bootstrap() {
   // Global validation pipe
   app.useGlobalPipes(new CustomValidationPipe());
 
-  // Enable CORS for public access
-  app.enableCors();
+  // Enable CORS with strict config
+  const whitelist = process.env.CORS_WHITELIST ? process.env.CORS_WHITELIST.split(',') : [];
+  app.enableCors({
+    origin: (origin: string, callback: (err: Error | null, origin?: boolean) => void) => {
+      if (!origin || whitelist.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
-  // Use helmet for security headers
-  app.use(helmet());
+  // Use helmet for security headers with CSP
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          connectSrc: ["'self'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+
+  // Global IP-based rate limiting (DoS protection)
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      limit: 100, // Limit each IP to 100 requests per windowMs
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+    }),
+  );
+
+  // Body parser limits
+  app.use(json({ limit: '10mb' }));
+  app.use(urlencoded({ limit: '10mb', extended: true }));
 
   // Swagger Setup
   const config = new DocumentBuilder()

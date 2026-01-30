@@ -1,6 +1,9 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { SentryFilter } from './common/filters/sentry.filter';
 import { BullModule } from '@nestjs/bull';
 // Controllers & Services
 import { AppController } from './app.controller';
@@ -24,22 +27,36 @@ import { PaymentRequestModule } from './payment-request/payment-request.module';
 // Middleware
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { EVMModule } from './evm/evm.module';
+import { StellarModule } from './stellar/stellar.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { MerchantModule } from './merchant/merchant.module';
 
+import { SentryModule } from '@sentry/nestjs/dist';
+
 @Module({
   imports: [
+    SentryModule.forRoot(),
     GlobalConfigModule,
     DatabaseModule,
     CacheModule.register({ isGlobal: true }),
     LoggerModule,
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 10,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [GlobalConfigModule],
+      inject: [GlobalConfigService],
+      useFactory: (configService: GlobalConfigService) => ({
+        throttlers: [
+          {
+            ttl: 60000,
+            limit: 10,
+          },
+        ],
+        storage: new ThrottlerStorageRedisService({
+          host: configService.getRedisConfig().host,
+          port: configService.getRedisConfig().port,
+        }),
+      }),
+    }),
     BullModule.forRootAsync({
       imports: [GlobalConfigModule],
       useFactory: async (configService: GlobalConfigService) => ({
@@ -56,6 +73,7 @@ import { MerchantModule } from './merchant/merchant.module';
     TransactionsModule,
     BlockchainModule,
     AuthModule,
+    StellarModule,
     HealthModule,
     WebhooksModule,
     PublicModule,
@@ -65,7 +83,13 @@ import { MerchantModule } from './merchant/merchant.module';
     MerchantModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: SentryFilter,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
