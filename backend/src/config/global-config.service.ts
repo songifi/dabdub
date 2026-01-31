@@ -8,6 +8,7 @@ import {
   ApiConfig,
   NotificationConfig,
   StellarConfig,
+  StacksConfig,
 } from './interfaces/config.interface';
 
 @Injectable()
@@ -200,6 +201,24 @@ export class GlobalConfigService {
           maxPaymentAmount: 10000,
         } as StellarConfig),
     );
+  }
+
+  // Stacks Configuration
+  getStacksConfig(): StacksConfig {
+    return this.getCachedConfig(
+      'stacks',
+      () =>
+        this.configService.get<StacksConfig>('stacks') ||
+        ({
+          activeNetwork: 'testnet',
+          networks: {},
+        } as StacksConfig),
+    );
+  }
+
+  getActiveStacksNetworkConfig(): any {
+    const config = this.getStacksConfig();
+    return config.networks[config.activeNetwork];
   }
 
   // Caching

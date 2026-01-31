@@ -9,8 +9,11 @@ import {
 import { Exclude } from 'class-transformer';
 import { Settlement } from '../../settlement/entities/settlement.entity';
 import { PaymentRequest } from './payment-request.entity';
-import { KycVerification } from '../../kyc/entities/kyc-verification.entity';
+import { WebhookConfigurationEntity } from './webhook-configuration.entity';
 
+/**
+ * Merchant account status
+ */
 export enum MerchantStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
@@ -25,6 +28,10 @@ export enum KycStatus {
 }
 
 @Entity('merchants')
+@Index(['email'], { unique: true })
+@Index(['status'])
+@Index(['kycStatus'])
+@Index(['createdAt'])
 export class Merchant {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -85,6 +92,35 @@ export class Merchant {
   @OneToMany(() => PaymentRequest, (paymentRequest) => paymentRequest.merchant)
   paymentRequests!: PaymentRequest[];
 
-  @OneToMany(() => KycVerification, (kycVerification) => kycVerification.merchant)
-  kycVerifications!: KycVerification[];
+  @OneToMany(
+    () => WebhookConfigurationEntity,
+    (webhookConfig) => webhookConfig.merchant,
+  )
+  webhookConfigurations!: WebhookConfigurationEntity[];
+}
+
+/**
+ * KYC Document interface
+ */
+export interface KycDocument {
+    type: string;
+    fileName: string;
+    fileUrl: string;
+    uploadedAt: Date;
+    status: 'pending' | 'approved' | 'rejected';
+    rejectionReason?: string;
+}
+
+/**
+ * Notification preferences interface
+ */
+export interface NotificationPreferences {
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    pushNotifications: boolean;
+    paymentReceived: boolean;
+    settlementCompleted: boolean;
+    kycStatusUpdate: boolean;
+    securityAlerts: boolean;
+    marketingEmails: boolean;
 }

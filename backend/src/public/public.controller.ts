@@ -48,7 +48,8 @@ export class PublicController {
   @Header('Cache-Control', 'public, max-age=3600')
   async getQR(@Param('id') id: string, @Res() res: Response) {
     this.logger.log(`Generating QR for payment id: ${id}`);
-    const qrBuffer = await this.paymentService.generateQR(id);
+    const { qrCodeData } = await this.paymentService.generateQrCode(id);
+    const qrBuffer = Buffer.from(qrCodeData, 'base64');
     res.setHeader('Content-Type', 'image/png');
     res.send(qrBuffer);
   }

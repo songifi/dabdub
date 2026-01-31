@@ -7,10 +7,13 @@ import {
   PaymentRequest,
   PaymentRequestStatus,
 } from '../entities/payment-request.entity';
+import { BlockchainType } from '../entities/blockchain-network.entity';
 import { StellarClientService } from './stellar-client.service';
+import { StacksClientService } from './stacks-client.service';
 import {
   BlockchainBlock,
   BlockchainTransaction,
+  IBlockchainClient,
 } from '../interfaces/blockchain-client.interface';
 
 @Injectable()
@@ -25,7 +28,23 @@ export class BlockchainMonitoringService {
     @InjectRepository(PaymentRequest)
     private readonly paymentRequestRepository: Repository<PaymentRequest>,
     private readonly stellarClient: StellarClientService,
-  ) {}
+    private readonly stacksClient: StacksClientService,
+  ) {
+    this.clients = new Map<BlockchainType, IBlockchainClient>([
+      [BlockchainType.STELLAR, this.stellarClient],
+      [BlockchainType.STACKS, this.stacksClient],
+    ]);
+  }
+
+  private readonly clients: Map<BlockchainType, IBlockchainClient>;
+
+  private getClient(type: BlockchainType): IBlockchainClient {
+    const client = this.clients.get(type);
+    if (!client) {
+      throw new Error(`No client implemented for blockchain type: ${type}`);
+    }
+    return client;
+  }
 
   async monitorNetwork(networkId: string) {
     const network = await this.networkRepository.findOne({
@@ -37,7 +56,8 @@ export class BlockchainMonitoringService {
     }
 
     try {
-      const latestBlock = await this.stellarClient.getLatestBlockNumber();
+      const client = this.getClient(network.type);
+      const latestBlock = await client.getLatestBlockNumber();
       let cursor = await this.cursorRepository.findOne({
         where: { networkId },
       });
@@ -73,7 +93,8 @@ export class BlockchainMonitoringService {
   }
 
   private async processBlock(network: BlockchainNetwork, blockNumber: bigint) {
-    const block = await this.stellarClient.getBlock(blockNumber);
+    const client = this.getClient(network.type);
+    const block = await client.getBlock(blockNumber);
     if (!block.transactions || block.transactions.length === 0) return;
 
     for (const tx of block.transactions) {

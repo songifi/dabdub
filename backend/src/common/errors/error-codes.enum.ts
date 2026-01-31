@@ -91,6 +91,36 @@ export enum ErrorCode {
   // Stellar Errors (81xx)
   STELLAR_CONTRACT_ERROR = '8100',
   STELLAR_NETWORK_ERROR = '8101',
+
+  // Merchant Errors (9xxx)
+  MERCHANT_NOT_FOUND = '9000',
+  MERCHANT_ALREADY_EXISTS = '9001',
+  MERCHANT_SUSPENDED = '9002',
+  MERCHANT_CLOSED = '9003',
+  MERCHANT_INACTIVE = '9004',
+  MERCHANT_INVALID_STATUS = '9005',
+  MERCHANT_EMAIL_NOT_VERIFIED = '9006',
+  MERCHANT_EMAIL_ALREADY_VERIFIED = '9007',
+  MERCHANT_VERIFICATION_TOKEN_INVALID = '9008',
+  MERCHANT_VERIFICATION_TOKEN_EXPIRED = '9009',
+
+  // KYC Errors (91xx)
+  KYC_NOT_STARTED = '9100',
+  KYC_ALREADY_SUBMITTED = '9101',
+  KYC_ALREADY_APPROVED = '9102',
+  KYC_DOCUMENT_REQUIRED = '9103',
+  KYC_DOCUMENT_INVALID = '9104',
+  KYC_VERIFICATION_FAILED = '9105',
+  KYC_STATUS_INVALID = '9106',
+
+  // Bank Account Errors (92xx)
+  BANK_ACCOUNT_NOT_FOUND = '9200',
+  BANK_ACCOUNT_VERIFICATION_FAILED = '9201',
+  BANK_ACCOUNT_ALREADY_VERIFIED = '9202',
+  BANK_ACCOUNT_INVALID = '9203',
+
+  // API Quota Errors (93xx)
+  API_QUOTA_EXCEEDED = '9300',
 }
 
 /**
@@ -432,5 +462,123 @@ export const ErrorCodeMetadata: Record<
     httpStatus: 503,
     userMessage:
       'The Stellar network is currently unavailable. Please try again later.',
+  },
+
+  // Merchant Errors
+  [ErrorCode.MERCHANT_NOT_FOUND]: {
+    message: 'Merchant not found',
+    httpStatus: 404,
+    userMessage: 'The merchant account was not found.',
+  },
+  [ErrorCode.MERCHANT_ALREADY_EXISTS]: {
+    message: 'Merchant already exists',
+    httpStatus: 409,
+    userMessage: 'A merchant account with this email already exists.',
+  },
+  [ErrorCode.MERCHANT_SUSPENDED]: {
+    message: 'Merchant account suspended',
+    httpStatus: 403,
+    userMessage: 'Your merchant account has been suspended. Please contact support.',
+  },
+  [ErrorCode.MERCHANT_CLOSED]: {
+    message: 'Merchant account closed',
+    httpStatus: 403,
+    userMessage: 'This merchant account has been closed.',
+  },
+  [ErrorCode.MERCHANT_INACTIVE]: {
+    message: 'Merchant account inactive',
+    httpStatus: 403,
+    userMessage: 'Your merchant account is inactive. Please complete the verification process.',
+  },
+  [ErrorCode.MERCHANT_INVALID_STATUS]: {
+    message: 'Invalid merchant status transition',
+    httpStatus: 400,
+    userMessage: 'This action is not allowed for the current merchant status.',
+  },
+  [ErrorCode.MERCHANT_EMAIL_NOT_VERIFIED]: {
+    message: 'Email not verified',
+    httpStatus: 403,
+    userMessage: 'Please verify your email address to continue.',
+  },
+  [ErrorCode.MERCHANT_EMAIL_ALREADY_VERIFIED]: {
+    message: 'Email already verified',
+    httpStatus: 400,
+    userMessage: 'Your email address has already been verified.',
+  },
+  [ErrorCode.MERCHANT_VERIFICATION_TOKEN_INVALID]: {
+    message: 'Invalid verification token',
+    httpStatus: 400,
+    userMessage: 'The verification token is invalid.',
+  },
+  [ErrorCode.MERCHANT_VERIFICATION_TOKEN_EXPIRED]: {
+    message: 'Verification token expired',
+    httpStatus: 400,
+    userMessage: 'The verification token has expired. Please request a new one.',
+  },
+
+  // KYC Errors
+  [ErrorCode.KYC_NOT_STARTED]: {
+    message: 'KYC not started',
+    httpStatus: 400,
+    userMessage: 'KYC verification has not been started.',
+  },
+  [ErrorCode.KYC_ALREADY_SUBMITTED]: {
+    message: 'KYC already submitted',
+    httpStatus: 400,
+    userMessage: 'KYC documents have already been submitted and are under review.',
+  },
+  [ErrorCode.KYC_ALREADY_APPROVED]: {
+    message: 'KYC already approved',
+    httpStatus: 400,
+    userMessage: 'Your KYC verification has already been approved.',
+  },
+  [ErrorCode.KYC_DOCUMENT_REQUIRED]: {
+    message: 'KYC document required',
+    httpStatus: 400,
+    userMessage: 'Please upload the required KYC documents.',
+  },
+  [ErrorCode.KYC_DOCUMENT_INVALID]: {
+    message: 'KYC document invalid',
+    httpStatus: 400,
+    userMessage: 'The uploaded document is invalid or unreadable.',
+  },
+  [ErrorCode.KYC_VERIFICATION_FAILED]: {
+    message: 'KYC verification failed',
+    httpStatus: 400,
+    userMessage: 'KYC verification failed. Please review and resubmit your documents.',
+  },
+  [ErrorCode.KYC_STATUS_INVALID]: {
+    message: 'Invalid KYC status transition',
+    httpStatus: 400,
+    userMessage: 'This action is not allowed for the current KYC status.',
+  },
+
+  // Bank Account Errors
+  [ErrorCode.BANK_ACCOUNT_NOT_FOUND]: {
+    message: 'Bank account not found',
+    httpStatus: 404,
+    userMessage: 'No bank account found. Please add your bank account details.',
+  },
+  [ErrorCode.BANK_ACCOUNT_VERIFICATION_FAILED]: {
+    message: 'Bank account verification failed',
+    httpStatus: 400,
+    userMessage: 'Bank account verification failed. Please check your details and try again.',
+  },
+  [ErrorCode.BANK_ACCOUNT_ALREADY_VERIFIED]: {
+    message: 'Bank account already verified',
+    httpStatus: 400,
+    userMessage: 'Your bank account has already been verified.',
+  },
+  [ErrorCode.BANK_ACCOUNT_INVALID]: {
+    message: 'Invalid bank account details',
+    httpStatus: 400,
+    userMessage: 'The provided bank account details are invalid.',
+  },
+
+  // API Quota Errors
+  [ErrorCode.API_QUOTA_EXCEEDED]: {
+    message: 'API quota exceeded',
+    httpStatus: 429,
+    userMessage: 'You have exceeded your API quota. Please upgrade your plan or wait for the quota to reset.',
   },
 };

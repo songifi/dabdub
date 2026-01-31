@@ -1,20 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, ValidateNested, IsInt, Min } from 'class-validator';
+import { IsArray, ValidateNested, IsInt, Min, IsObject } from 'class-validator';
 import { PaymentDetailsDto } from './payment-details.dto';
 
-export class PaymentListDto {
-  @ApiProperty({ type: [PaymentDetailsDto] })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PaymentDetailsDto)
-  items: PaymentDetailsDto[];
-
-  @ApiProperty({ description: 'Total number of payments' })
-  @IsInt()
-  @Min(0)
-  total: number;
-
+class PaginationDto {
   @ApiProperty({ description: 'Current page number' })
   @IsInt()
   @Min(1)
@@ -24,4 +13,28 @@ export class PaymentListDto {
   @IsInt()
   @Min(1)
   limit: number;
+
+  @ApiProperty({ description: 'Total number of payments' })
+  @IsInt()
+  @Min(0)
+  total: number;
+
+  @ApiProperty({ description: 'Total number of pages' })
+  @IsInt()
+  @Min(0)
+  totalPages: number;
+}
+
+export class PaymentListDto {
+  @ApiProperty({ type: [PaymentDetailsDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PaymentDetailsDto)
+  data: PaymentDetailsDto[];
+
+  @ApiProperty({ type: PaginationDto })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PaginationDto)
+  pagination: PaginationDto;
 }

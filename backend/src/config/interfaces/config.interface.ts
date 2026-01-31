@@ -63,6 +63,17 @@ export interface StellarNetworkConfig {
   backendSecretKey: string;
 }
 
+export interface StacksNetworkConfig {
+  rpcUrl: string;
+  network: 'mainnet' | 'testnet';
+  usdcAssetIdentifier: string;
+}
+
+export interface StacksConfig {
+  activeNetwork: 'testnet' | 'mainnet';
+  networks: Record<string, StacksNetworkConfig>;
+}
+
 export interface StellarConfig {
   activeNetwork: 'testnet' | 'mainnet' | 'futurenet';
   networks: Record<string, StellarNetworkConfig>;
@@ -79,4 +90,5 @@ export interface Config {
   api: ApiConfig;
   notification: NotificationConfig;
   stellar: StellarConfig;
+  stacks: StacksConfig;
 }

@@ -5,6 +5,7 @@ import { appConfig } from './config.app';
 import { databaseConfig } from './config.database';
 import { blockchainConfig } from './config.blockchain';
 import { apiConfig } from './config.api';
+import { stacksConfig } from './config.stacks';
 import { GlobalConfigService } from './global-config.service';
 
 @Global()
@@ -13,7 +14,7 @@ import { GlobalConfigService } from './global-config.service';
     NestConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
-      load: [appConfig, databaseConfig, blockchainConfig, apiConfig],
+      load: [appConfig, databaseConfig, blockchainConfig, apiConfig, stacksConfig],
       validationSchema,
       validationOptions: {
         abortEarly: false,
@@ -23,4 +24,4 @@ import { GlobalConfigService } from './global-config.service';
   providers: [GlobalConfigService],
   exports: [GlobalConfigService, NestConfigModule],
 })
-export class GlobalConfigModule {}
+export class GlobalConfigModule { }

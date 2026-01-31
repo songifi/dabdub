@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WebhookConfigurationEntity } from '../../database/entities/webhook-configuration.entity';
+import { WebhookConfigurationEntity, WebhookStatus } from '../../database/entities/webhook-configuration.entity';
 import { CreateWebhookDto } from '../dto/webhook.dto';
 import { randomUUID } from 'crypto';
 import {
@@ -55,15 +55,16 @@ export class WebhookService {
       url: createWebhookDto.url,
       events: createWebhookDto.events,
       secret: createWebhookDto.secret,
-      isActive: createWebhookDto.isActive ?? true,
-      retryAttempts: createWebhookDto.retryAttempts ?? 3,
-      retryDelayMs: createWebhookDto.retryDelayMs ?? 1000,
-      timeoutMs: Math.min(createWebhookDto.timeoutMs ?? 5000, 5000),
-      maxFailureCount: createWebhookDto.maxFailureCount ?? 5,
+      status: createWebhookDto.status ?? WebhookStatus.ACTIVE,
+      headers: createWebhookDto.headers,
+      maxRetries: createWebhookDto.maxRetries ?? 3,
+      retryDelay: createWebhookDto.retryDelay ?? 1000,
+      timeout: Math.min(createWebhookDto.timeout ?? 5000, 5000),
       batchEnabled: createWebhookDto.batchEnabled ?? false,
       batchMaxSize: createWebhookDto.batchMaxSize ?? 20,
       batchWindowMs: createWebhookDto.batchWindowMs ?? 2000,
-      failureCount: 0,
+      consecutiveFailures: 0,
+      maxConsecutiveFailures: createWebhookDto.maxConsecutiveFailures ?? 5,
     });
 
     return this.webhookRepository.save(webhook);
@@ -100,20 +101,20 @@ export class WebhookService {
     if (updateWebhookDto.secret !== undefined) {
       webhook.secret = updateWebhookDto.secret;
     }
-    if (updateWebhookDto.isActive !== undefined) {
-      webhook.isActive = updateWebhookDto.isActive;
+    if (updateWebhookDto.status !== undefined) {
+      webhook.status = updateWebhookDto.status;
     }
-    if (updateWebhookDto.retryAttempts !== undefined) {
-      webhook.retryAttempts = updateWebhookDto.retryAttempts;
+    if (updateWebhookDto.headers !== undefined) {
+      webhook.headers = updateWebhookDto.headers;
     }
-    if (updateWebhookDto.retryDelayMs !== undefined) {
-      webhook.retryDelayMs = updateWebhookDto.retryDelayMs;
+    if (updateWebhookDto.maxRetries !== undefined) {
+      webhook.maxRetries = updateWebhookDto.maxRetries;
     }
-    if (updateWebhookDto.timeoutMs !== undefined) {
-      webhook.timeoutMs = Math.min(updateWebhookDto.timeoutMs, 5000);
+    if (updateWebhookDto.retryDelay !== undefined) {
+      webhook.retryDelay = updateWebhookDto.retryDelay;
     }
-    if (updateWebhookDto.maxFailureCount !== undefined) {
-      webhook.maxFailureCount = updateWebhookDto.maxFailureCount;
+    if (updateWebhookDto.timeout !== undefined) {
+      webhook.timeout = Math.min(updateWebhookDto.timeout, 5000);
     }
     if (updateWebhookDto.batchEnabled !== undefined) {
       webhook.batchEnabled = updateWebhookDto.batchEnabled;
@@ -124,6 +125,10 @@ export class WebhookService {
     if (updateWebhookDto.batchWindowMs !== undefined) {
       webhook.batchWindowMs = updateWebhookDto.batchWindowMs;
     }
+    if (updateWebhookDto.maxConsecutiveFailures !== undefined) {
+        webhook.maxConsecutiveFailures = updateWebhookDto.maxConsecutiveFailures;
+    }
+
 
     webhook.updatedAt = new Date();
     return this.webhookRepository.save(webhook);
@@ -135,13 +140,13 @@ export class WebhookService {
   }
 
   async incrementFailureCount(id: string): Promise<void> {
-    await this.webhookRepository.increment({ id }, 'failureCount', 1);
+    await this.webhookRepository.increment({ id }, 'consecutiveFailures', 1);
   }
 
   async resetFailureCount(id: string): Promise<void> {
     await this.webhookRepository.update(
       { id },
-      { failureCount: 0, lastDeliveredAt: new Date() },
+      { consecutiveFailures: 0, lastDeliveredAt: new Date() },
     );
   }
 
@@ -151,7 +156,7 @@ export class WebhookService {
     context: WebhookDeliveryContext = {},
   ): Promise<void> {
     const activeWebhooks = await this.webhookRepository.find({
-      where: { isActive: true },
+      where: { status: WebhookStatus.ACTIVE },
     });
     const targets = activeWebhooks.filter((config) =>
       config.events?.includes(event as any),
@@ -181,7 +186,7 @@ export class WebhookService {
     }
 
     const activeWebhooks = await this.webhookRepository.find({
-      where: { isActive: true },
+      where: { status: WebhookStatus.ACTIVE },
     });
     const byWebhook = new Map<
       string,

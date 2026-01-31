@@ -6,8 +6,11 @@ import {
   UpdateDateColumn,
   Index,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { WebhookDeliveryLogEntity } from './webhook-delivery-log.entity';
+import { Merchant } from './merchant.entity';
 
 export enum WebhookEvent {
   PAYMENT_REQUEST_CREATED = 'payment_request.created',
@@ -18,16 +21,29 @@ export enum WebhookEvent {
   SETTLEMENT_FAILED = 'settlement.failed',
 }
 
+export enum WebhookStatus {
+  ACTIVE = 'active',
+  PAUSED = 'paused',
+  FAILED = 'failed',
+}
+
 @Entity('webhook_configurations')
-@Index(['isActive'])
+@Index(['status'])
 @Index(['createdAt'])
 export class WebhookConfigurationEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ name: 'verification_method', type: 'varchar', nullable: true })
+  verificationMethod?: string;
+
   @Index()
   @Column({ name: 'merchant_id', type: 'uuid' })
   merchantId!: string;
+
+  @ManyToOne(() => Merchant, (merchant) => merchant.webhookConfigurations)
+  @JoinColumn({ name: 'merchant_id' })
+  merchant!: Merchant;
 
   @Column({ type: 'varchar', length: 500 })
   url!: string;
@@ -41,17 +57,27 @@ export class WebhookConfigurationEntity {
   })
   events!: WebhookEvent[];
 
-  @Column({ name: 'is_active', type: 'boolean', default: true })
-  isActive!: boolean;
+  @Column({
+    type: 'enum',
+    enum: WebhookStatus,
+    default: WebhookStatus.ACTIVE,
+  })
+  status!: WebhookStatus;
 
-  @Column({ name: 'failure_count', type: 'int', default: 0 })
-  failureCount!: number;
+  @Column({ name: 'headers', type: 'jsonb', nullable: true })
+  headers?: Record<string, string>;
+
+  @Column({ name: 'consecutive_failures', type: 'int', default: 0 })
+  consecutiveFailures!: number;
+
+  @Column({ name: 'max_consecutive_failures', type: 'int', default: 5 })
+  maxConsecutiveFailures!: number;
 
   @Column({ name: 'last_delivered_at', type: 'timestamp', nullable: true })
   lastDeliveredAt?: Date;
 
-  @Column({ name: 'last_failed_at', type: 'timestamp', nullable: true })
-  lastFailedAt?: Date;
+  @Column({ name: 'last_failure_at', type: 'timestamp', nullable: true })
+  lastFailureAt?: Date;
 
   @Column({ name: 'disabled_at', type: 'timestamp', nullable: true })
   disabledAt?: Date;
@@ -64,8 +90,8 @@ export class WebhookConfigurationEntity {
   })
   disabledReason?: string;
 
-  @Column({ name: 'max_failure_count', type: 'int', default: 5 })
-  maxFailureCount!: number;
+  @Column({ name: 'max_retries', type: 'int', default: 3 })
+  maxRetries!: number;
 
   @Column({ name: 'batch_enabled', type: 'boolean', default: false })
   batchEnabled!: boolean;
@@ -76,14 +102,11 @@ export class WebhookConfigurationEntity {
   @Column({ name: 'batch_window_ms', type: 'int', default: 2000 })
   batchWindowMs!: number;
 
-  @Column({ name: 'retry_attempts', type: 'int', default: 3 })
-  retryAttempts!: number;
+  @Column({ name: 'retry_delay', type: 'int', default: 1000 })
+  retryDelay!: number;
 
-  @Column({ name: 'retry_delay_ms', type: 'int', default: 1000 })
-  retryDelayMs!: number;
-
-  @Column({ name: 'timeout_ms', type: 'int', default: 5000 })
-  timeoutMs!: number;
+  @Column({ name: 'timeout', type: 'int', default: 5000 })
+  timeout!: number;
 
   @CreateDateColumn({
     name: 'created_at',

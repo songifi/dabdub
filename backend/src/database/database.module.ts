@@ -37,8 +37,8 @@ import { DatabaseHealthIndicator } from './health.indicator';
           ssl:
             nodeEnv === 'production'
               ? {
-                  rejectUnauthorized: false,
-                }
+                rejectUnauthorized: false,
+              }
               : false,
           extra: {
             connectionTimeoutMillis: 5000,
@@ -53,4 +53,4 @@ import { DatabaseHealthIndicator } from './health.indicator';
   providers: [DatabaseHealthIndicator],
   exports: [DatabaseHealthIndicator],
 })
-export class DatabaseModule {}
+export class DatabaseModule { }

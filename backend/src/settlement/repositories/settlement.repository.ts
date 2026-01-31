@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, FindManyOptions } from 'typeorm';
+import { Repository, FindOptionsWhere, FindManyOptions, In } from 'typeorm';
 import { Settlement, SettlementStatus } from '../entities/settlement.entity';
 
 @Injectable()
@@ -138,6 +138,12 @@ export class SettlementRepository {
     if (ids.length > 0) {
       await this.repository.update(ids, updateData);
     }
+  }
+
+  async findByIds(ids: string[]): Promise<Settlement[]> {
+    return this.repository.find({
+      where: { id: In(ids) },
+    });
   }
 
   async delete(id: string): Promise<void> {

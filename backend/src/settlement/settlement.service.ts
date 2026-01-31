@@ -8,6 +8,21 @@ import {
 } from './entities/settlement.entity';
 import { IPartnerService } from './interfaces/partner-service.interface';
 import { CreateSettlementDto } from './dto/create-settlement.dto';
+import { SettlementGenericFilterDto } from './dto/settlement-filter.dto';
+import { SettlementPreferencesDto } from './dto/settlement-preferences.dto';
+import { BatchSettlementDto } from './dto/batch-settlement.dto';
+import {
+  FindManyOptions,
+  In,
+  Repository,
+  Between,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+} from 'typeorm';
+import { SettlementStatsDto } from './dto/settlement-response.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Merchant } from '../database/entities/merchant.entity';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class SettlementService {
@@ -17,6 +32,8 @@ export class SettlementService {
     private readonly settlementRepository: SettlementRepository,
     @Inject('IPartnerService')
     private readonly partnerService: IPartnerService,
+    @InjectRepository(Merchant)
+    private readonly merchantRepository: Repository<Merchant>,
   ) {}
 
   /**
@@ -49,6 +66,173 @@ export class SettlementService {
       status: SettlementStatus.PENDING,
       provider: SettlementProvider.BANK_API, // Default to generic bank API
     });
+  }
+
+  async findAll(
+    merchantId: string,
+    filter: SettlementGenericFilterDto,
+  ): Promise<{
+    data: Settlement[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      fromDate,
+      toDate,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = filter;
+
+    const where: any = { merchantId };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (fromDate && toDate) {
+      where.createdAt = Between(new Date(fromDate), new Date(toDate));
+    } else if (fromDate) {
+      where.createdAt = MoreThanOrEqual(new Date(fromDate));
+    } else if (toDate) {
+      where.createdAt = LessThanOrEqual(new Date(toDate));
+    }
+
+    const [data, total] = await this.settlementRepository.findWithPagination({
+      where,
+      order: { [sortBy]: sortOrder.toUpperCase() },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return { data, total, page, limit };
+  }
+
+  async findOne(id: string, merchantId: string): Promise<Settlement> {
+    const settlement = await this.settlementRepository.findOne(id);
+    if (!settlement || settlement.merchantId !== merchantId) {
+      throw new Error('Settlement not found');
+    }
+    return settlement;
+  }
+
+  async findPending(merchantId: string): Promise<Settlement[]> {
+    return this.settlementRepository.findByMerchantAndStatus(
+      merchantId,
+      SettlementStatus.PENDING,
+    );
+  }
+
+  async getStatistics(merchantId: string): Promise<SettlementStatsDto> {
+    return this.settlementRepository.getSettlementStats(merchantId);
+  }
+
+  async generateReceipt(id: string, merchantId: string): Promise<any> {
+    const settlement = await this.findOne(id, merchantId);
+    if (settlement.status !== SettlementStatus.COMPLETED) {
+      throw new Error('Receipt not available for incomplete settlements');
+    }
+    return {
+      receiptId: settlement.settlementReceipt,
+      amount: settlement.amount,
+      currency: settlement.currency,
+      date: settlement.settledAt,
+      merchantId: settlement.merchantId,
+      status: settlement.status,
+    };
+  }
+
+  async createBatch(
+    merchantId: string,
+    batchDto: BatchSettlementDto,
+  ): Promise<void> {
+    const settlements = await this.settlementRepository.findByIds(
+      batchDto.settlementIds,
+    );
+
+    // Validate ownership and status
+    for (const settlement of settlements) {
+      if (settlement.merchantId !== merchantId) {
+        throw new Error(
+          `Settlement ${settlement.id} does not belong to merchant`,
+        );
+      }
+      if (settlement.status !== SettlementStatus.PENDING) {
+        throw new Error(`Settlement ${settlement.id} is not pending`);
+      }
+    }
+
+    // Trigger processing (simplified for now, ideally queue them)
+    // In a real system, we might group them into a batch entity
+    const batchId = randomUUID();
+    await this.settlementRepository.updateBatch(batchDto.settlementIds, {
+      batchId,
+      status: SettlementStatus.PROCESSING,
+      processedAt: new Date(),
+    });
+
+    // Async processing could be triggered here or picked up by cron
+    // For manual batch, we might want to process immediately or let the cron pick it up if status is PENDING.
+    // However, we set to PROCESSING, so cron might skip it unless we handle it.
+    // Let's set back to PENDING but with a batchId so cron picks it up?
+    // Or just call processSingleSettlement for each.
+
+    // For this implementation, let's process them immediately in background
+    for (const settlement of settlements) {
+      this.processSingleSettlement(settlement).catch((err) =>
+        this.logger.error(
+          `Error processing batch settlement ${settlement.id}`,
+          err,
+        ),
+      );
+    }
+  }
+
+  async getSchedule(merchantId: string): Promise<any> {
+    const merchant = await this.merchantRepository.findOne({
+      where: { id: merchantId },
+    });
+    if (!merchant) {
+      throw new Error('Merchant not found');
+    }
+    return merchant.settings?.settlementSchedule || { schedule: 'daily' };
+  }
+
+  async updatePreferences(
+    merchantId: string,
+    preferences: SettlementPreferencesDto,
+  ): Promise<any> {
+    const merchant = await this.merchantRepository.findOne({
+      where: { id: merchantId },
+    });
+    if (!merchant) {
+      throw new Error('Merchant not found');
+    }
+
+    merchant.settings = {
+      ...merchant.settings,
+      settlementSchedule: preferences,
+    };
+
+    await this.merchantRepository.save(merchant);
+    return merchant.settings.settlementSchedule;
+  }
+
+  async getHistory(
+    merchantId: string,
+    filter: SettlementGenericFilterDto,
+  ): Promise<{
+    data: Settlement[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    // Reuse findAll but ensure we only get past settlements if needed?
+    // Actually findAll is generic enough.
+    return this.findAll(merchantId, filter);
   }
 
   /**
