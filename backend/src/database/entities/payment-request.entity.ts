@@ -7,10 +7,12 @@ import {
   ManyToOne,
   JoinColumn,
   OneToOne,
+  OneToMany,
   Index,
 } from 'typeorm';
 import { Merchant } from './merchant.entity';
 import { Settlement } from '../../settlement/entities/settlement.entity';
+import { Transaction } from '../../transactions/entities/transaction.entity';
 
 export enum PaymentRequestStatus {
   PENDING = 'pending',
@@ -177,4 +179,7 @@ export class PaymentRequest {
 
   @OneToOne(() => Settlement, (settlement) => settlement.paymentRequest)
   settlement!: Settlement;
+
+  @OneToMany(() => Transaction, (transaction) => transaction.paymentRequest)
+  transactions!: Transaction[];
 }

@@ -5,23 +5,30 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-
-export enum TransactionStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
-  FAILED = 'failed',
-}
+import { TransactionStatus, TransactionType } from '/home/afolarinwa-soleye/dabdub/backend/src/transactions/transactions.enums';
+import { PaymentRequest } from '/home/afolarinwa-soleye/dabdub/backend/src/database/entities/payment-request.entity';
 
 @Entity('transactions')
 @Index(['txHash'])
 @Index(['network'])
-// Composite index for common filtering
+@Index(['status'])
 @Index(['network', 'status'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  // --- RELATIONSHIP TO PAYMENT REQUEST ---
+  @Column({ name: 'payment_request_id' })
+  paymentRequestId!: string;
+
+  @ManyToOne(() => PaymentRequest, (pr) => pr.transactions)
+  @JoinColumn({ name: 'payment_request_id' })
+  paymentRequest!: PaymentRequest;
+
+  // --- BLOCKCHAIN DATA ---
   @Column({ name: 'tx_hash', type: 'varchar', unique: true })
   txHash!: string;
 
@@ -30,40 +37,61 @@ export class Transaction {
 
   @Column({
     type: 'enum',
+    enum: TransactionType,
+  })
+  type!: TransactionType;
+
+  @Column({
+    type: 'enum',
     enum: TransactionStatus,
     default: TransactionStatus.PENDING,
   })
   status!: TransactionStatus;
 
-  @Column({ type: 'decimal', precision: 36, scale: 18 }) // Large precision for crypto amounts
-  amount!: string; // Using string to avoid precision loss
-
-  @Column({ type: 'varchar', length: 10 })
-  currency!: string;
-
+  // --- ADDRESSES ---
   @Column({ name: 'from_address', type: 'varchar' })
   fromAddress!: string;
 
   @Column({ name: 'to_address', type: 'varchar' })
   toAddress!: string;
 
+  // --- AMOUNT TRACKING ---
+  @Column({ name: 'crypto_amount', type: 'decimal', precision: 36, scale: 18 })
+  cryptoAmount!: string; 
+
+  @Column({ name: 'usd_value', type: 'decimal', precision: 18, scale: 2, nullable: true })
+  usdValue!: number;
+
+  @Column({ name: 'fiat_amount', type: 'decimal', precision: 18, scale: 2, nullable: true })
+  fiatAmount!: number;
+
+  // --- CONFIRMATIONS ---
   @Column({ name: 'block_number', type: 'bigint', nullable: true })
   blockNumber!: number;
 
   @Column({ type: 'int', default: 0 })
   confirmations!: number;
 
-  @Column({
-    name: 'fee_amount',
-    type: 'decimal',
-    precision: 36,
-    scale: 18,
-    nullable: true,
-  })
+  @Column({ name: 'required_confirmations', type: 'int', default: 12 })
+  requiredConfirmations!: number;
+
+  // --- GAS & RECEIPTS ---
+  @Column({ name: 'fee_amount', type: 'decimal', precision: 36, scale: 18, nullable: true })
   feeAmount!: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata!: Record<string, any>;
+  receipt!: Record<string, any>;
+
+  // --- MONITORING & ERROR LOGGING ---
+  @Column({ name: 'retry_count', type: 'int', default: 0 })
+  retryCount!: number;
+
+  @Column({ name: 'error_message', type: 'text', nullable: true })
+  errorMessage!: string;
+
+  // --- TIMESTAMPS ---
+  @Column({ name: 'block_timestamp', type: 'timestamp', nullable: true })
+  blockTimestamp!: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
