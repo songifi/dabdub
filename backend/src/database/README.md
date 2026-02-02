@@ -50,19 +50,25 @@ CREATE DATABASE dabdub_dev;
 \q
 ```
 
-### 4. Run Migrations
+### 4. Run Migrations and Seeds
 
 ```bash
+# Run all migrations and seeds
+npm run db:setup
+
+# Or run separately:
 npm run migration:run
+npm run seed:run
 ```
 
 You should see output like:
 
 ```
-query: SELECT * FROM "typeorm_metadata" WHERE "type" = $1 AND "database" = $2 AND "schema" = $3
-query: CREATE TABLE "users" ...
-query: INSERT INTO "typeorm_metadata" ...
 ✓ Migration completed
+🌱 Starting database seeding...
+✓ Created user: admin@dabdub.com (admin)
+✓ Created merchant: merchant1@test.com
+✅ Database seeding completed successfully!
 ```
 
 ## Database Commands
@@ -76,6 +82,12 @@ npm run migration:run
 # Revert the last migration
 npm run migration:revert
 
+# Check migration status
+npm run migration:status
+
+# Test migrations
+npm run test:migrations
+
 # Generate a new migration from entities (requires build first)
 npm run build
 npx typeorm migration:generate -d dist/typeorm.config.js src/database/migrations/DescriptionOfChange
@@ -86,25 +98,127 @@ npx typeorm migration:generate -d dist/typeorm.config.js src/database/migrations
 ```bash
 # Run database seeds (populate with initial data)
 npm run seed:run
+
+# Check seed status
+npm run seed:status
+```
+
+### Database Management
+
+```bash
+# Setup database (migrations + seeds)
+npm run db:setup
+
+# Reset database (revert, migrate, seed)
+npm run db:reset
 ```
 
 ## Project Structure
 
 ```
 src/database/
-├── database.module.ts          # TypeORM configuration & setup
-├── database-config.ts          # Shared database config for CLI tools
-├── health.indicator.ts         # Database health check provider
-├── DATABASE_CONVENTIONS.md     # Naming conventions & best practices
+├── database.module.ts                    # TypeORM configuration & setup
+├── database-config.ts                    # Shared database config for CLI tools
+├── health.indicator.ts                   # Database health check provider
+├── README.md                             # This file
+├── MIGRATION_CONVENTIONS.md              # Migration naming & best practices
+├── PRODUCTION_MIGRATION_GUIDE.md         # Production deployment guide
 ├── entities/
-│   └── base.entity.ts         # Base class for all entities
+│   ├── base.entity.ts                   # Base class for all entities
+│   ├── user.entity.ts                   # User entity
+│   ├── merchant.entity.ts               # Merchant entity
+│   ├── payment-request.entity.ts        # Payment request entity
+│   ├── settlement.entity.ts             # Settlement entity
+│   ├── wallet.entity.ts                 # Wallet entity
+│   ├── evm-transaction.entity.ts        # EVM transaction entity
+│   └── ...                              # Other entities
 ├── migrations/
 │   ├── 1704067200000-CreateUsersTable.ts
-│   └── ...                    # Add new migrations here
+│   ├── 1738267200000-CreateMerchantsTable.ts
+│   ├── 1738267200001-CreatePaymentRequestsTable.ts
+│   ├── 1738267200002-CreateSettlementsTable.ts
+│   ├── 1738267200003-CreateWalletsTable.ts
+│   ├── 1738267200004-CreateEvmTransactionsTable.ts
+│   ├── 1738267200005-AddIndexes.ts
+│   ├── 1738267200006-AddForeignKeyConstraints.ts
+│   └── ...                              # Add new migrations here
 └── seeds/
-    ├── database.seeder.ts     # Main seeding orchestrator
-    └── ...                    # Add seed data here
+    ├── database.seeder.ts               # Main seeding orchestrator
+    ├── user.seeder.ts                   # User seed data
+    ├── merchant.seeder.ts               # Merchant seed data
+    ├── payment-request.seeder.ts        # Payment request seed data
+    ├── network-config.seeder.ts         # Network configuration seed data
+    ├── exchange-rate.seeder.ts          # Exchange rate seed data
+    ├── seed-version.seeder.ts           # Seed versioning
+    └── ...                              # Add seed data here
 ```
+
+## Migration System
+
+### Available Migrations
+
+1. **CreateMerchantsTable** - Merchants with status tracking
+2. **CreatePaymentRequestsTable** - Payment requests with full lifecycle
+3. **CreateSettlementsTable** - Settlement processing
+4. **CreateWalletsTable** - Wallet management
+5. **CreateEvmTransactionsTable** - EVM blockchain transactions
+6. **AddIndexes** - Performance indexes for all tables
+7. **AddForeignKeyConstraints** - Referential integrity
+
+### Migration Features
+
+- ✅ Automatic rollback support
+- ✅ Transaction-based execution
+- ✅ Comprehensive indexing
+- ✅ Foreign key constraints
+- ✅ Enum type support
+- ✅ JSONB for flexible data
+- ✅ Timestamp tracking
+- ✅ UUID primary keys
+
+## Seed Data
+
+### Default Users
+
+```
+Admin:    admin@dabdub.com / Admin123!
+Merchant: merchant@dabdub.com / Merchant123!
+User:     user@dabdub.com / User123!
+Test:     test@dabdub.com / Test123!
+```
+
+### Test Merchants
+
+- merchant1@test.com - Test Merchant 1 (Active)
+- merchant2@test.com - Test Merchant 2 (Active)
+- merchant3@test.com - Test Merchant 3 (Inactive)
+- coffee@crypto.com - Crypto Coffee Shop (Active)
+- store@digitalgoods.com - Digital Goods Store (Active)
+
+### Network Configurations
+
+- Ethereum Mainnet
+- Polygon Mainnet
+- Stellar Testnet
+- Stellar Mainnet
+- Base Mainnet
+- Arbitrum One
+
+### Exchange Rates
+
+Pre-seeded exchange rates for:
+- USD ↔ BTC, ETH, USDC, USDT, XLM, MATIC
+- Stablecoin pairs (USDC ↔ USDT)
+- Cross-crypto pairs (ETH ↔ BTC)
+
+### Test Payment Requests
+
+5 sample payment requests with different statuses:
+- Completed payment
+- Pending payment
+- Processing payment
+- Failed payment
+- Expired payment
 
 ## Connection Features
 
@@ -151,11 +265,11 @@ Response:
 
 ## Creating New Entities
 
-1. Create entity file in `src/entities/`:
+1. Create entity file in `src/database/entities/`:
 
 ```typescript
 import { Entity, Column } from 'typeorm';
-import { BaseEntity } from './database/entities/base.entity';
+import { BaseEntity } from './base.entity';
 
 @Entity('users')
 export class User extends BaseEntity {
@@ -172,7 +286,11 @@ export class User extends BaseEntity {
 3. Create migration:
 
 ```bash
-npm run migration:generate -- src/database/migrations/AddUserEntity
+# Get timestamp
+node -e "console.log(Date.now())"
+
+# Create migration file
+touch src/database/migrations/{timestamp}-CreateUsersTable.ts
 ```
 
 4. Review & run migration:
@@ -183,13 +301,24 @@ npm run migration:run
 
 ## Naming Conventions
 
-See [DATABASE_CONVENTIONS.md](./DATABASE_CONVENTIONS.md) for:
+See [MIGRATION_CONVENTIONS.md](./MIGRATION_CONVENTIONS.md) for:
 
 - Entity naming patterns
 - Table & column naming rules
 - Relationship conventions
 - Index naming standards
 - Migration best practices
+
+## Production Deployment
+
+See [PRODUCTION_MIGRATION_GUIDE.md](./PRODUCTION_MIGRATION_GUIDE.md) for:
+
+- Pre-migration checklist
+- Backup procedures
+- Migration execution steps
+- Rollback procedures
+- Post-migration verification
+- Monitoring guidelines
 
 ## Troubleshooting
 
@@ -212,32 +341,39 @@ Error: connect ECONNREFUSED 127.0.0.1:5432
 
 - Default timeout is 30 seconds
 - Optimize slow queries with proper indexes
-- Check `DATABASE_CONVENTIONS.md` for indexing patterns
+- Check `MIGRATION_CONVENTIONS.md` for indexing patterns
 
-## Production Deployment
+### Seed Data Already Exists
 
-1. Set environment variables:
+Seeds are idempotent - they check for existing data before inserting:
 
-```bash
-export NODE_ENV=production
-export DB_HOST=your-prod-db.rds.amazonaws.com
-export DB_PASSWORD=secure-password
+```
+- User already exists: admin@dabdub.com
+- Merchant already exists: merchant1@test.com
 ```
 
-2. Run migrations:
+This is normal and safe to ignore.
+
+## Testing
+
+### Run Migration Tests
 
 ```bash
-npm run migration:run
+npm run test:migrations
 ```
 
-3. Start application:
+Tests verify:
+- ✅ All migrations execute successfully
+- ✅ All tables are created
+- ✅ Indexes are properly configured
+- ✅ Foreign keys are enforced
+- ✅ Rollbacks work correctly
+- ✅ Data integrity constraints
 
-```bash
-npm run start:prod
-```
+## Additional Resources
 
-4. Monitor health:
+- [TypeORM Documentation](https://typeorm.io/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Migration Conventions](./MIGRATION_CONVENTIONS.md)
+- [Production Migration Guide](./PRODUCTION_MIGRATION_GUIDE.md)
 
-```bash
-curl https://your-api.com/health
-```

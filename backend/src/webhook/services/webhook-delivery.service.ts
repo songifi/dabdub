@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { gzipSync } from 'zlib';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { WebhookConfigurationEntity } from '../../database/entities/webhook-configuration.entity';
-import { WebhookEvent } from '../../database/entities/webhook-configuration.entity';
+import { WebhookEvent, WebhookStatus } from '../../database/entities/webhook-configuration.entity';
 import {
   WebhookDeliveryLogEntity,
   WebhookDeliveryStatus,
@@ -58,7 +58,7 @@ export class WebhookDeliveryService {
     const config = await this.webhookConfigRepository.findOne({
       where: { id: webhookConfigId },
     });
-    if (!config || !config.isActive) {
+    if (!config || config.status !== WebhookStatus.ACTIVE) {
       return;
     }
 
@@ -88,7 +88,7 @@ export class WebhookDeliveryService {
     const config = await this.webhookConfigRepository.findOne({
       where: { id: webhookConfigId },
     });
-    if (!config || !config.isActive) {
+    if (!config || config.status !== WebhookStatus.ACTIVE) {
       return;
     }
 
@@ -127,7 +127,7 @@ export class WebhookDeliveryService {
     const config = await this.webhookConfigRepository.findOne({
       where: { id: webhookConfigId },
     });
-    if (!config || !config.isActive) {
+    if (!config || config.status !== WebhookStatus.ACTIVE) {
       return;
     }
 
@@ -137,12 +137,12 @@ export class WebhookDeliveryService {
       }
     }
 
-    const maxAttempts = Math.max(1, config.retryAttempts ?? 1);
-    const timeoutMs = Math.min(Math.max(1000, config.timeoutMs ?? 5000), 5000);
-    const retryDelayMs = Math.max(0, config.retryDelayMs ?? 1000);
+    const maxRetries = Math.max(1, config.maxRetries ?? 1);
+    const timeout = Math.min(Math.max(1000, config.timeout ?? 5000), 5000);
+    const retryDelay = Math.max(0, config.retryDelay ?? 1000);
 
     this.logger.debug(
-      `Delivering webhook ${event} to ${config.url} (attempts: ${maxAttempts})`,
+      `Delivering webhook ${event} to ${config.url} (attempts: ${maxRetries})`,
     );
 
     const envelope =
@@ -153,7 +153,7 @@ export class WebhookDeliveryService {
     const payloadSnapshot = gzipSync(Buffer.from(payloadString));
     const payloadSnapshotSize = payloadSnapshot.length;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
       const deliveryId = randomUUID();
       const signatureHeader = this.createSignatureHeader(
         payloadString,
@@ -165,6 +165,10 @@ export class WebhookDeliveryService {
         deliveryId,
       );
 
+      if (config.headers) {
+          Object.assign(requestHeaders, config.headers);
+      }
+
       const log = this.deliveryLogRepository.create({
         id: deliveryId,
         webhookConfigId: config.id,
@@ -173,7 +177,7 @@ export class WebhookDeliveryService {
         payload: envelope,
         status: WebhookDeliveryStatus.PENDING,
         attemptNumber: attempt,
-        maxAttempts,
+        maxAttempts: maxRetries,
         requestHeaders,
         requestBody: payloadString,
         payloadSnapshot,
@@ -195,7 +199,7 @@ export class WebhookDeliveryService {
         const response = await this.sendRequest(
           config.url,
           payloadString,
-          timeoutMs,
+          timeout,
           requestHeaders,
         );
         log.responseTimeMs = Date.now() - startTime;
@@ -221,27 +225,27 @@ export class WebhookDeliveryService {
         log.errorMessage = (error as Error).message;
       }
 
-      if (attempt < maxAttempts) {
+      if (attempt < maxRetries) {
         log.nextRetryAt = new Date(
-          Date.now() + this.calculateBackoffDelay(retryDelayMs, attempt),
+          Date.now() + this.calculateBackoffDelay(retryDelay, attempt),
         );
       }
 
       await this.deliveryLogRepository.save(log);
       await this.recordFailure(config, log.errorMessage ?? 'Delivery failed');
 
-      if (!config.isActive) {
+      if (config.status !== WebhookStatus.ACTIVE) {
         this.logger.warn(`Webhook ${config.id} disabled during retry cycle.`);
         return;
       }
 
-      if (attempt < maxAttempts) {
-        await this.sleep(this.calculateBackoffDelay(retryDelayMs, attempt));
+      if (attempt < maxRetries) {
+        await this.sleep(this.calculateBackoffDelay(retryDelay, attempt));
       }
     }
 
     this.logger.warn(
-      `Webhook delivery failed after ${maxAttempts} attempts for ${config.id}`,
+      `Webhook delivery failed after ${maxRetries} attempts for ${config.id}`,
     );
   }
 
@@ -384,7 +388,7 @@ export class WebhookDeliveryService {
     const config = await this.webhookConfigRepository.findOne({
       where: { id: webhookConfigId },
     });
-    if (!config || !config.isActive) {
+    if (!config || config.status !== WebhookStatus.ACTIVE) {
       return;
     }
 
@@ -512,19 +516,19 @@ export class WebhookDeliveryService {
     config: WebhookConfigurationEntity,
     reason: string,
   ): Promise<void> {
-    const currentFailureCount = Number(config.failureCount ?? 0);
-    config.failureCount = currentFailureCount + 1;
-    config.lastFailedAt = new Date();
+    const currentFailures = Number(config.consecutiveFailures ?? 0);
+    config.consecutiveFailures = currentFailures + 1;
+    config.lastFailureAt = new Date();
 
     if (
-      config.maxFailureCount &&
-      config.failureCount >= config.maxFailureCount
+      config.maxConsecutiveFailures &&
+      config.consecutiveFailures >= config.maxConsecutiveFailures
     ) {
-      config.isActive = false;
+      config.status = WebhookStatus.FAILED;
       config.disabledAt = new Date();
       config.disabledReason = reason;
       this.logger.warn(
-        `Disabling webhook ${config.id} after ${config.failureCount} failures.`,
+        `Disabling webhook ${config.id} after ${config.consecutiveFailures} consecutive failures.`,
       );
     }
 
@@ -534,9 +538,9 @@ export class WebhookDeliveryService {
   private async recordSuccess(
     config: WebhookConfigurationEntity,
   ): Promise<void> {
-    config.failureCount = 0;
+    config.consecutiveFailures = 0;
     config.lastDeliveredAt = new Date();
-    config.lastFailedAt = undefined;
+    config.lastFailureAt = undefined;
     await this.webhookConfigRepository.save(config);
   }
 

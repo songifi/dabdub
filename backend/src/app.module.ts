@@ -24,12 +24,14 @@ import { BlockchainModule } from './blockchain/blockchain.module';
 import { AuthModule } from './auth/auth.module';
 import { PublicModule } from './public/public.module';
 import { PaymentRequestModule } from './payment-request/payment-request.module';
+import { MerchantModule } from './merchant/merchant.module';
 // Middleware
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { EVMModule } from './evm/evm.module';
 import { StellarModule } from './stellar/stellar.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { MerchantModule } from './merchant/merchant.module';
+import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 
 import { SentryModule } from '@sentry/nestjs/dist';
 
@@ -79,8 +81,10 @@ import { SentryModule } from '@sentry/nestjs/dist';
     PublicModule,
     EVMModule,
     PaymentRequestModule,
+    MerchantModule,
     MonitoringModule,
     MerchantModule,
+    ExchangeRateModule,
   ],
   controllers: [AppController],
   providers: [

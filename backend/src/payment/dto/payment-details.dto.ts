@@ -5,6 +5,9 @@ export class PaymentDetailsDto {
   amount!: number;
   currency!: string;
   status!: PaymentStatus;
-  network!: string;
+  network?: string;
+  description?: string;
+  reference?: string;
   createdAt!: Date;
+  updatedAt!: Date;
 }

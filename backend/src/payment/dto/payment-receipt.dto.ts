@@ -5,13 +5,19 @@ import {
   IsNumber,
   IsDate,
   IsOptional,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentStatus } from '../../database/entities/payment.entity';
 
 export class PaymentReceiptDto {
-  @ApiProperty({ description: 'Receipt ID', type: String })
+  @ApiProperty({ description: 'Payment ID', type: String })
   @IsUUID()
   id: string;
+
+  @ApiProperty({ description: 'Payment reference' })
+  @IsString()
+  reference?: string;
 
   @ApiProperty({ description: 'Payment amount' })
   @IsNumber()
@@ -21,20 +27,22 @@ export class PaymentReceiptDto {
   @IsString()
   currency: string;
 
-  @ApiProperty({ description: 'Receipt number' })
-  @IsString()
-  receiptNumber: string;
+  @ApiProperty({ description: 'Payment status' })
+  @IsEnum(PaymentStatus)
+  status: PaymentStatus;
 
-  @ApiProperty({ description: 'Payment date/time' })
+  @ApiProperty({ description: 'Payment description', required: false })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiProperty({ description: 'Payment created date/time' })
   @Type(() => Date)
   @IsDate()
-  paidAt: Date;
+  createdAt: Date;
 
-  @ApiProperty({
-    description: 'Optional line items or extra receipt details',
-    required: false,
-    type: [Object],
-  })
-  @IsOptional()
-  lines?: any[];
+  @ApiProperty({ description: 'Payment completed date/time' })
+  @Type(() => Date)
+  @IsDate()
+  completedAt: Date;
 }

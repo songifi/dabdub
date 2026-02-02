@@ -9,7 +9,7 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { WebhookEvent } from '../../database/entities/webhook-configuration.entity';
+import { WebhookEvent, WebhookStatus } from '../../database/entities/webhook-configuration.entity';
 
 export class CreateWebhookDto {
   @ApiProperty({
@@ -43,21 +43,29 @@ export class CreateWebhookDto {
   secret?: string;
 
   @ApiPropertyOptional({
-    description: 'Whether webhook is active',
-    example: true,
+    description: 'Webhook status',
+    enum: WebhookStatus,
+    example: WebhookStatus.ACTIVE,
   })
   @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  @IsEnum(WebhookStatus)
+  status?: WebhookStatus;
 
   @ApiPropertyOptional({
-    description: 'Maximum number of retry attempts',
+    description: 'Custom headers to send with the webhook',
+    example: { 'X-Custom-Header': 'value' },
+  })
+  @IsOptional()
+  headers?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of retries',
     example: 3,
   })
   @IsOptional()
   @IsInt()
   @Min(1)
-  retryAttempts?: number;
+  maxRetries?: number;
 
   @ApiPropertyOptional({
     description: 'Base retry delay in milliseconds',
@@ -66,7 +74,7 @@ export class CreateWebhookDto {
   @IsOptional()
   @IsInt()
   @Min(0)
-  retryDelayMs?: number;
+  retryDelay?: number;
 
   @ApiPropertyOptional({
     description: 'Webhook timeout in milliseconds (max 5000)',
@@ -75,7 +83,7 @@ export class CreateWebhookDto {
   @IsOptional()
   @IsInt()
   @Min(1000)
-  timeoutMs?: number;
+  timeout?: number;
 
   @ApiPropertyOptional({
     description: 'Maximum consecutive failures before disabling webhook',
@@ -84,7 +92,7 @@ export class CreateWebhookDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  maxFailureCount?: number;
+  maxConsecutiveFailures?: number;
 
   @ApiPropertyOptional({
     description: 'Enable event batching for this webhook',
@@ -133,10 +141,11 @@ export class WebhookResponseDto {
   events: WebhookEvent[];
 
   @ApiProperty({
-    description: 'Webhook active status',
-    example: true,
+    description: 'Webhook status',
+    enum: WebhookStatus,
+    example: WebhookStatus.ACTIVE,
   })
-  isActive: boolean;
+  status: WebhookStatus;
 
   @ApiProperty({
     description: 'Last successful delivery timestamp',
@@ -145,10 +154,16 @@ export class WebhookResponseDto {
   lastDeliveredAt: Date;
 
   @ApiProperty({
-    description: 'Number of failed delivery attempts',
+    description: 'Number of consecutive failed delivery attempts',
     example: 0,
   })
-  failureCount: number;
+  consecutiveFailures: number;
+
+  @ApiProperty({
+    description: 'Maximum consecutive failures allowed',
+    example: 5,
+  })
+  maxConsecutiveFailures: number;
 
   @ApiProperty({
     description: 'Configuration creation timestamp',

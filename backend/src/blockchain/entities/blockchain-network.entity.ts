@@ -10,6 +10,7 @@ export enum BlockchainType {
   STELLAR = 'stellar',
   ETHEREUM = 'ethereum',
   POLYGON = 'polygon',
+  STACKS = 'stacks',
 }
 
 @Entity('blockchain_networks')

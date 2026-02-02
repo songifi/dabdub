@@ -34,6 +34,12 @@ export class Payment {
   @Column({ nullable: true })
   network!: string;
 
+  @Column({ nullable: true })
+  description?: string;
+
+  @Column({ nullable: true })
+  reference?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 
