@@ -19,6 +19,8 @@ import {
 } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { ReportService } from './report.service';
+import { RevenueOverviewService } from './revenue-overview.service';
+import { RevenueExportService } from './revenue-export.service';
 import {
   DateRangeDto,
   DateRangeQueryDto,
@@ -35,6 +37,16 @@ import {
   ReportGenerateDto,
 } from './dto/analytics-response.dto';
 import { GenerateReportDto, ReportFormat } from './dto/report.dto';
+import {
+  RevenueQueryDto,
+  RevenueOverviewResponseDto,
+  RevenueExportQueryDto,
+  RevenueExportResponseDto,
+  RevenueGranularity,
+} from './dto/revenue-overview.dto';
+import { JwtGuard } from '../auth/guards/jwt.guard';
+import { RequirePermissionGuard } from '../auth/guards/require-permission.guard';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 
 @ApiTags('Analytics')
 @Controller('api/v1/analytics')
@@ -42,6 +54,8 @@ export class AnalyticsController {
   constructor(
     private readonly analyticsService: AnalyticsService,
     private readonly reportService: ReportService,
+    private readonly revenueOverviewService: RevenueOverviewService,
+    private readonly revenueExportService: RevenueExportService,
   ) {}
 
   @Get('dashboard')
