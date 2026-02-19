@@ -1,9 +1,10 @@
 import { applyDecorators } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiExtraModels,
   ApiForbiddenResponse,
-  ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../dto/error-response.dto';
 
@@ -13,6 +14,7 @@ import { ErrorResponseDto } from '../../dto/error-response.dto';
  */
 export const ApiStandardErrors = (): MethodDecorator & ClassDecorator =>
   applyDecorators(
+    ApiExtraModels(ErrorResponseDto),
     ApiBadRequestResponse({
       description: 'Validation failed',
       type: ErrorResponseDto,

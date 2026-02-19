@@ -1,5 +1,9 @@
 import { applyDecorators } from '@nestjs/common';
-import { ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiExtraModels,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../dto/error-response.dto';
 
 /**
@@ -8,6 +12,7 @@ import { ErrorResponseDto } from '../../dto/error-response.dto';
  */
 export const ApiAdminAuth = (): MethodDecorator & ClassDecorator =>
   applyDecorators(
+    ApiExtraModels(ErrorResponseDto),
     ApiBearerAuth('JWT'),
     ApiUnauthorizedResponse({
       description: 'Invalid or expired token',
