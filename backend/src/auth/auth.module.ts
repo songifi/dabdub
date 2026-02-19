@@ -15,6 +15,8 @@ import { TwoFactorService } from './services/two-factor.service';
 import { PasswordService } from './services/password.service';
 import { SessionService } from './services/session.service';
 import { ApiKeyService } from './services/api-key.service';
+import { JwtGuard } from './guards/jwt.guard';
+import { RequirePermissionGuard } from './guards/require-permission.guard';
 
 @Module({
   imports: [
@@ -42,7 +44,16 @@ import { ApiKeyService } from './services/api-key.service';
     PasswordService,
     SessionService,
     ApiKeyService,
+    JwtGuard,
+    RequirePermissionGuard,
   ],
-  exports: [AuthService, JwtModule, PassportModule, PasswordService],
+  exports: [
+    AuthService,
+    JwtModule,
+    PassportModule,
+    PasswordService,
+    JwtGuard,
+    RequirePermissionGuard,
+  ],
 })
 export class AuthModule {}

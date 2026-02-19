@@ -31,10 +31,13 @@ export class RevenueExportProcessor {
   @Process('generate')
   async handleExport(job: Job<RevenueExportJobPayload>): Promise<void> {
     const { jobId, startDate, endDate, requestedByEmail } = job.data;
+    this.revenueExportService.setJobStatus(jobId, 'processing');
+
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const rows = await this.settlementRepository
+    try {
+      const rows = await this.settlementRepository
       .createQueryBuilder('s')
       .innerJoin('s.paymentRequest', 'pr')
       .innerJoin('s.merchant', 'm')
@@ -80,12 +83,17 @@ export class RevenueExportProcessor {
           ].join(','),
       ),
     ];
-    const csv = lines.join('\n');
-    this.revenueExportService.setJobStatus(jobId, 'completed', csv);
+      const csv = lines.join('\n');
+      this.revenueExportService.setJobStatus(jobId, 'completed', csv);
 
-    // TODO: send email when ready (e.g. NotificationService.sendMail(requestedByEmail, 'Revenue export ready', ...))
-    if (requestedByEmail) {
-      // Placeholder: integrate with notification module to email link to download
+      // TODO: send email when ready (e.g. NotificationService.sendMail(requestedByEmail, 'Revenue export ready', ...))
+      if (requestedByEmail) {
+        // Placeholder: integrate with notification module to email link to download
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.revenueExportService.setJobStatus(jobId, 'failed', undefined, message);
+      throw err;
     }
   }
 }
