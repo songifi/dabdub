@@ -6,15 +6,18 @@ import {
   ApiInternalServerErrorResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
-import { ErrorResponseDto } from '../../dto/error-response.dto';
+import {
+  ErrorResponseDto,
+  ValidationErrorItemDto,
+} from '../../dto/error-response.dto';
 
 /**
  * Documents common error responses (400, 403, 404, 500) with the standard error shape.
  * Use alongside other response decorators on controller methods.
  */
-export const ApiStandardErrors = (): MethodDecorator & ClassDecorator =>
+export const ApiStandardErrors = (): ReturnType<typeof applyDecorators> =>
   applyDecorators(
-    ApiExtraModels(ErrorResponseDto),
+    ApiExtraModels(ErrorResponseDto, ValidationErrorItemDto),
     ApiBadRequestResponse({
       description: 'Validation failed',
       type: ErrorResponseDto,

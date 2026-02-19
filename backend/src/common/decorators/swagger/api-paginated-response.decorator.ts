@@ -1,5 +1,4 @@
-import { applyDecorators } from '@nestjs/common';
-import { Type } from '@nestjs/common';
+import { applyDecorators, Type } from '@nestjs/common';
 import {
   ApiExtraModels,
   ApiOkResponse,
@@ -42,3 +41,4 @@ export function ApiPaginatedResponse<T extends Type<unknown>>(
       },
     }),
   );
+}

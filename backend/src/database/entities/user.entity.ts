@@ -13,7 +13,19 @@ export enum UserRole {
   ADMIN = 'admin',
   MERCHANT = 'merchant',
   USER = 'user',
+  SUPPORT_ADMIN = 'support_admin',
 }
+
+/** Permissions that SUPPORT_ADMIN does not have (finance-sensitive). */
+export const RESTRICTED_FOR_SUPPORT_ADMIN = new Set(['analytics:revenue']);
+
+/** Role-to-permissions map for admin users. */
+export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
+  [UserRole.ADMIN]: ['analytics:revenue', 'analytics:read'],
+  [UserRole.SUPPORT_ADMIN]: ['analytics:read'],
+  [UserRole.MERCHANT]: [],
+  [UserRole.USER]: [],
+};
 
 @Entity('users')
 export class UserEntity {
