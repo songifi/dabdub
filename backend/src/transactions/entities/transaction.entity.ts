@@ -8,8 +8,8 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { TransactionStatus, TransactionType } from '/home/afolarinwa-soleye/dabdub/backend/src/transactions/transactions.enums';
-import { PaymentRequest } from '/home/afolarinwa-soleye/dabdub/backend/src/database/entities/payment-request.entity';
+import { TransactionStatus, TransactionType } from '../transactions.enums';
+import { PaymentRequest } from '../../database/entities/payment-request.entity';
 
 @Entity('transactions')
 @Index(['txHash'])

@@ -8,6 +8,15 @@ use soroban_sdk::{
     contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
 };
 
+/// Pending claim record: amounts reserved and expiry ledger for cancellation rules.
+#[contracttype]
+#[derive(Clone)]
+pub struct PendingClaim {
+    pub payment_amount: i128,
+    pub fee_amount: i128,
+    pub expiry_ledger: u32,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -21,6 +30,7 @@ pub enum DataKey {
     AvailableFees,
     TotalFees,
     Paused,
+    PendingClaim(BytesN<32>),
 }
 
 const MAX_FEE: i128 = 5_000_000; // $5 in USDC (7 decimals)
@@ -59,6 +69,18 @@ struct MinDepositUpdatedEvent {
     old_min_deposit: i128,
     new_min_deposit: i128,
 }
+
+#[contractevent(topics = ["VAULT", "cancelled"])]
+struct PaymentCancelledEvent {
+    payment_id: BytesN<32>,
+    payment_amount: i128,
+    fee_amount: i128,
+    cancelled_by: Address,
+    force: bool,
+}
+
+/// Ledgers after process_payment after which a claim can be cancelled without force.
+const CLAIM_EXPIRY_LEDGERS: u32 = 10000;
 
 #[contract]
 pub struct Vault;
@@ -188,11 +210,110 @@ impl Vault {
             .instance()
             .set(&DataKey::TotalFees, &total_fees);
 
+        let expiry_ledger = env.ledger().sequence().saturating_add(CLAIM_EXPIRY_LEDGERS);
+        let claim = PendingClaim {
+            payment_amount,
+            fee_amount,
+            expiry_ledger,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingClaim(payment_id.clone()), &claim);
+
         PaymentProcessedEvent {
             user_wallet: user_wallet.clone(),
             payment_id: payment_id.clone(),
             payment_amount,
             fee_amount,
+        }
+        .publish(&env);
+    }
+
+    /// Cancel a pending claim (admin or operator). Returns funds to vault's available pool.
+    /// Without `force`, the claim must have expired (past expiry_ledger).
+    pub fn cancel_pending_claim(
+        env: Env,
+        caller: Address,
+        payment_id: BytesN<32>,
+        force: bool,
+    ) {
+        if !access_control::has_role(&env, &caller, access_control::ADMIN_ROLE)
+            && !access_control::has_role(&env, &caller, access_control::OPERATOR_ROLE)
+        {
+            panic!("Missing required role");
+        }
+        caller.require_auth();
+
+        let claim: PendingClaim = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingClaim(payment_id.clone()))
+            .unwrap_or_else(|| panic!("Pending claim not found"));
+
+        if !force {
+            let current_ledger = env.ledger().sequence();
+            if current_ledger < claim.expiry_ledger {
+                panic!("Claim has not expired");
+            }
+        }
+
+        let mut available_payments: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailablePayments)
+            .unwrap_or(0);
+        let mut total_payments: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalPayments)
+            .unwrap_or(0);
+        let mut available_fees: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailableFees)
+            .unwrap_or(0);
+        let mut total_fees: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalFees)
+            .unwrap_or(0);
+
+        available_payments = available_payments
+            .checked_sub(claim.payment_amount)
+            .unwrap_or_else(|| panic!("Available payments underflow"));
+        total_payments = total_payments
+            .checked_sub(claim.payment_amount)
+            .unwrap_or_else(|| panic!("Total payments underflow"));
+        available_fees = available_fees
+            .checked_sub(claim.fee_amount)
+            .unwrap_or_else(|| panic!("Available fees underflow"));
+        total_fees = total_fees
+            .checked_sub(claim.fee_amount)
+            .unwrap_or_else(|| panic!("Total fees underflow"));
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailablePayments, &available_payments);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalPayments, &total_payments);
+        env.storage()
+            .instance()
+            .set(&DataKey::AvailableFees, &available_fees);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalFees, &total_fees);
+
+        env.storage()
+            .instance()
+            .remove(&DataKey::PendingClaim(payment_id.clone()));
+
+        PaymentCancelledEvent {
+            payment_id: payment_id.clone(),
+            payment_amount: claim.payment_amount,
+            fee_amount: claim.fee_amount,
+            cancelled_by: caller,
+            force,
         }
         .publish(&env);
     }

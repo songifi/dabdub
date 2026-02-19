@@ -8,6 +8,8 @@ import {
   Res,
   HttpStatus,
   UseGuards,
+  Request,
+  NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -38,15 +40,20 @@ import {
 } from './dto/analytics-response.dto';
 import { GenerateReportDto, ReportFormat } from './dto/report.dto';
 import {
-  RevenueQueryDto,
   RevenueOverviewResponseDto,
-  RevenueExportQueryDto,
   RevenueExportResponseDto,
   RevenueGranularity,
 } from './dto/revenue-overview.dto';
+import {
+  SystemAnalyticsResponseDto,
+  AlertsResponseDto,
+  AcknowledgeAlertDto,
+  SystemAlertDto,
+} from './dto/system-analytics.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { RequirePermissionGuard } from '../auth/guards/require-permission.guard';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { SystemAnalyticsService } from './system-analytics.service';
 
 @ApiTags('Analytics')
 @Controller('api/v1/analytics')
@@ -56,6 +63,7 @@ export class AnalyticsController {
     private readonly reportService: ReportService,
     private readonly revenueOverviewService: RevenueOverviewService,
     private readonly revenueExportService: RevenueExportService,
+    private readonly systemAnalyticsService: SystemAnalyticsService,
   ) {}
 
   @Get('dashboard')
@@ -162,6 +170,72 @@ export class AnalyticsController {
       new Date(endDate),
       interval,
     );
+  }
+
+  @Get('system')
+  @UseGuards(JwtGuard, RequirePermissionGuard)
+  @RequirePermission('analytics:read')
+  @ApiOperation({
+    summary: 'System operations metrics',
+    description:
+      'Real-time performance and health: blockchain nodes, transaction processing, settlements, webhooks, API, jobs. Cached 30s.',
+  })
+  @ApiResponse({ status: HttpStatus.OK })
+  async getSystemMetrics(): Promise<SystemAnalyticsResponseDto> {
+    return this.systemAnalyticsService.getSystemMetrics();
+  }
+
+  @Get('alerts')
+  @UseGuards(JwtGuard, RequirePermissionGuard)
+  @RequirePermission('analytics:read')
+  @ApiOperation({
+    summary: 'Active system alerts',
+    description: 'Returns all currently active system alerts',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: AlertsResponseDto })
+  async getAlerts(): Promise<AlertsResponseDto> {
+    return { alerts: this.systemAnalyticsService.getAlerts() };
+  }
+
+  @Post('alerts/:id/acknowledge')
+  @UseGuards(JwtGuard, RequirePermissionGuard)
+  @RequirePermission('analytics:read')
+  @ApiOperation({
+    summary: 'Acknowledge alert',
+    description:
+      'Sets acknowledgedAt, acknowledgedBy, optional note. Logged to audit.',
+  })
+  @ApiParam({ name: 'id', description: 'Alert ID' })
+  @ApiResponse({ status: HttpStatus.OK })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Alert not found' })
+  async acknowledgeAlert(
+    @Param('id') id: string,
+    @Body() body: AcknowledgeAlertDto,
+    @Request() req: { user?: { id: string } },
+  ): Promise<{ acknowledged: boolean; alert: SystemAlertDto }> {
+    const userId = req?.user?.id ?? 'unknown';
+    const alert = this.systemAnalyticsService.acknowledgeAlert(
+      id,
+      userId,
+      body?.note,
+    );
+    if (!alert) {
+      throw new NotFoundException('Alert not found');
+    }
+    return {
+      acknowledged: true,
+      alert: {
+        id: alert.id,
+        type: alert.type,
+        severity: alert.severity,
+        message: alert.message,
+        affectedResource: alert.affectedResource,
+        triggeredAt: alert.triggeredAt.toISOString(),
+        acknowledgedAt: alert.acknowledgedAt?.toISOString() ?? null,
+        acknowledgedBy: alert.acknowledgedBy ?? null,
+        note: alert.note,
+      },
+    };
   }
 
   @Get('transactions/trends')
