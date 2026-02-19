@@ -504,3 +504,216 @@ fn test_refund_insufficient_funds() {
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
     client.refund_payment(&admin, &user_wallet, &10_000_000, &false, &payment_id);
 }
+
+// --- cancel_pending_claim tests ---
+
+#[test]
+fn test_cancel_pending_claim_by_admin_with_force() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let backend = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = asset_contract.address();
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
+
+    let payment_id = BytesN::from_array(&env, &[2u8; 32]);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
+
+    let (payments_before, fees_before, _) = client.get_available_withdrawal();
+    assert_eq!(payments_before, 50_000_000);
+    assert_eq!(fees_before, 500_000);
+
+    client.cancel_pending_claim(&admin, &payment_id, &true);
+
+    let (payments_after, fees_after, total_after) = client.get_available_withdrawal();
+    assert_eq!(payments_after, 0);
+    assert_eq!(fees_after, 0);
+    assert_eq!(total_after, 0);
+}
+
+#[test]
+fn test_cancel_pending_claim_by_operator_with_force() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let backend = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = asset_contract.address();
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
+
+    let payment_id = BytesN::from_array(&env, &[3u8; 32]);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
+
+    client.cancel_pending_claim(&operator, &payment_id, &true);
+
+    let (payments, fees, total) = client.get_available_withdrawal();
+    assert_eq!(payments, 0);
+    assert_eq!(fees, 0);
+    assert_eq!(total, 0);
+}
+
+#[test]
+#[should_panic(expected = "Claim has not expired")]
+fn test_cancel_pending_claim_not_expired_without_force() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let backend = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = asset_contract.address();
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
+
+    let payment_id = BytesN::from_array(&env, &[5u8; 32]);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
+
+    client.cancel_pending_claim(&operator, &payment_id, &false);
+}
+
+#[test]
+#[should_panic(expected = "Missing required role")]
+fn test_cancel_pending_claim_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let random = Address::generate(&env);
+    let backend = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = asset_contract.address();
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
+
+    let payment_id = BytesN::from_array(&env, &[6u8; 32]);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
+
+    client.cancel_pending_claim(&random, &payment_id, &true);
+}
+
+#[test]
+#[should_panic(expected = "Pending claim not found")]
+fn test_cancel_pending_claim_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let payment_id = BytesN::from_array(&env, &[99u8; 32]);
+    client.cancel_pending_claim(&admin, &payment_id, &true);
+}
+
+#[test]
+fn test_cancel_pending_claim_accounting_reversed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let backend = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = asset_contract.address();
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
+
+    let payment_id = BytesN::from_array(&env, &[7u8; 32]);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
+
+    assert!(client.verify_vault_accounting());
+
+    client.cancel_pending_claim(&admin, &payment_id, &true);
+
+    let (payments, fees, total) = client.get_available_withdrawal();
+    assert_eq!(payments, 0);
+    assert_eq!(fees, 0);
+    assert_eq!(total, 0);
+    assert!(client.verify_vault_accounting());
+}
