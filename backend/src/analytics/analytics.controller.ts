@@ -94,35 +94,63 @@ export class AnalyticsController {
     );
   }
 
-  @Get('revenue')
+  @Get('revenue/export')
+  @UseGuards(JwtGuard, RequirePermissionGuard)
+  @RequirePermission('analytics:revenue')
   @ApiOperation({
-    summary: 'Get revenue data with date range support',
+    summary: 'Export revenue report',
     description:
-      'Returns revenue data grouped by time interval with growth metrics',
-  })
-  @ApiQuery({ name: 'merchantId', required: true, description: 'Merchant ID' })
-  @ApiQuery({
-    name: 'startDate',
-    required: true,
-    description: 'Start date (ISO 8601)',
+      'Enqueues a background job to generate a CSV of all fee transactions for the date range. Returns jobId and estimated row count.',
   })
   @ApiQuery({
-    name: 'endDate',
-    required: true,
-    description: 'End date (ISO 8601)',
-  })
-  @ApiQuery({
-    name: 'interval',
+    name: 'period',
     required: false,
-    enum: TimeInterval,
-    description: 'Time interval for grouping',
+    description: 'Period preset (e.g. 7d, 30d)',
+    example: '30d',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Revenue data retrieved successfully',
-    type: RevenueResponseDto,
+    description: 'Export job queued',
+    type: RevenueExportResponseDto,
   })
-  async getRevenue(
+  async getRevenueExport(
+    @Query('period') period?: string,
+  ): Promise<RevenueExportResponseDto> {
+    return this.revenueExportService.enqueueExport(period || '30d');
+  }
+
+  @Get('revenue')
+  @UseGuards(JwtGuard, RequirePermissionGuard)
+  @RequirePermission('analytics:revenue')
+  @ApiOperation({
+    summary: 'Revenue overview (platform)',
+    description:
+      'Platform revenue overview with summary, by fee type, by tier, by chain, and trend. Requires analytics:revenue (SUPPORT_ADMIN gets 403).',
+  })
+  @ApiQuery({ name: 'period', required: false, description: 'e.g. 7d, 30d, 90d', example: '30d' })
+  @ApiQuery({ name: 'granularity', required: false, enum: RevenueGranularity })
+  @ApiResponse({ status: HttpStatus.OK, type: RevenueOverviewResponseDto })
+  async getRevenueOverview(
+    @Query('period') period?: string,
+    @Query('granularity') granularity?: RevenueGranularity,
+  ): Promise<RevenueOverviewResponseDto> {
+    return this.revenueOverviewService.getRevenueOverview(
+      period ?? '30d',
+      granularity ?? RevenueGranularity.DAY,
+    );
+  }
+
+  @Get('revenue/by-merchant')
+  @ApiOperation({
+    summary: 'Get merchant revenue data (date range)',
+    description: 'Returns revenue data for a merchant grouped by time interval',
+  })
+  @ApiQuery({ name: 'merchantId', required: true, description: 'Merchant ID' })
+  @ApiQuery({ name: 'startDate', required: true, description: 'Start date (ISO 8601)' })
+  @ApiQuery({ name: 'endDate', required: true, description: 'End date (ISO 8601)' })
+  @ApiQuery({ name: 'interval', required: false, enum: TimeInterval })
+  @ApiResponse({ status: HttpStatus.OK, type: RevenueResponseDto })
+  async getRevenueByMerchant(
     @Query('merchantId') merchantId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
