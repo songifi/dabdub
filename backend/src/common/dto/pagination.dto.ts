@@ -64,12 +64,12 @@ export class PaginationMetaDto {
 }
 
 /**
- * Generic paginated response wrapper.
- * Use with @ApiPaginatedResponse(ItemDto) to document the items in Swagger.
+ * Paginated response wrapper (base schema for Swagger).
+ * Use @ApiPaginatedResponse(ItemDto) on endpoints to document the concrete item type.
  */
-export class PaginatedResponseDto<T = unknown> {
-  @ApiProperty({ type: 'array', description: 'List of items' })
-  data: T[];
+export class PaginatedResponseDto {
+  @ApiProperty({ type: 'array', items: { type: 'object' }, description: 'List of items' })
+  data: unknown[];
 
   @ApiProperty({
     type: PaginationMetaDto,
