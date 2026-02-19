@@ -55,7 +55,8 @@ export class ErrorResponseDto {
   details?: string;
 
   @ApiPropertyOptional({
-    type: [ValidationErrorItemDto],
+    type: () => ValidationErrorItemDto,
+    isArray: true,
     description: 'Validation errors (for validation failures)',
   })
   validationErrors?: ValidationErrorItemDto[];

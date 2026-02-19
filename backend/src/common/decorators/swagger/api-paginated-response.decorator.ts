@@ -1,4 +1,5 @@
-import { applyDecorators, Type } from '@nestjs/common';
+import { applyDecorators } from '@nestjs/common';
+import { Type } from '@nestjs/common';
 import {
   ApiExtraModels,
   ApiOkResponse,
@@ -19,10 +20,10 @@ import {
  * @Get()
  * async list() { ... }
  */
-export const ApiPaginatedResponse = <T extends Type<unknown>>(
+export function ApiPaginatedResponse<T extends Type<unknown>>(
   dto: T,
-): MethodDecorator =>
-  applyDecorators(
+): ReturnType<typeof applyDecorators> {
+  return applyDecorators(
     ApiExtraModels(PaginatedResponseDto, PaginationMetaDto, dto),
     ApiOkResponse({
       description: 'Paginated list of items',

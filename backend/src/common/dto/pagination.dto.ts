@@ -7,6 +7,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 
 /**
  * Query parameters for paginated list endpoints.
@@ -15,10 +16,11 @@ import { Type } from 'class-transformer';
 export class PaginationQueryDto {
   @ApiProperty({ default: 1, minimum: 1, description: 'Page number (1-based)' })
   @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === '' ? 1 : Number(value)))
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number = 1;
+  page?: number;
 
   @ApiProperty({
     default: 20,
@@ -27,11 +29,12 @@ export class PaginationQueryDto {
     description: 'Number of items per page',
   })
   @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === '' ? 20 : Number(value)))
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number = 20;
+  limit?: number;
 
   @ApiPropertyOptional({
     description: 'Cursor for cursor-based pagination (opaque token)',
