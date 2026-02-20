@@ -13,7 +13,8 @@ export const RedisKeys = {
   // Cache
   merchantList: (hash: string) => `cache:merchants:${hash}`,
   merchantDetail: (id: string) => `cache:merchant:${id}`,
-  dashboardOverview: (period: string) => `cache:dashboard:${period}`,
+  dashboardOverview: (period: string) => `cache:dashboard:overview:${period}`,
+  dashboardAlertThresholds: () => 'dashboard:alert_thresholds',
 
   // Rate limiting
   rateLimit: (key: string) => `ratelimit:${key}`,

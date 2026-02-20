@@ -85,6 +85,7 @@ import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
     EVMModule,
     PaymentRequestModule,
     MerchantModule,
+    DashboardModule,
     MonitoringModule,
     MerchantModule,
     ExchangeRateModule,
