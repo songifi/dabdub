@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: blockchain-config-db
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_DATABASE:-blockchain_config}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blockchain-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blockchain-config-admin
+    ports:
+      - '${PORT:-3000}:3000'
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_DATABASE: ${DB_DATABASE:-blockchain_config}
+      DB_SSL: ${DB_SSL:-false}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-default-encryption-key-32-chars!!}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CACHE_TTL: ${CACHE_TTL:-300000}
+      RPC_TIMEOUT: ${RPC_TIMEOUT:-5000}
+      RPC_MAX_RETRIES: ${RPC_MAX_RETRIES:-3}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - blockchain-net
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/v1/config/chains']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+
+networks:
+  blockchain-net:
+    driver: bridge
