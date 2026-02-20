@@ -13,10 +13,12 @@ import {
 } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckResult } from '@nestjs/terminus';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { SkipThrottle } from '@nestjs/throttler';
 import { HealthService } from '../services/health.service';
 import { JwtGuard } from '../../auth/guards/jwt.guard';
 
 @ApiTags('Health')
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

@@ -3,6 +3,7 @@ import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { RedisService } from './common/redis/redis.service';
 import { SentryFilter } from './common/filters/sentry.filter';
 import { BullModule } from '@nestjs/bull';
 // Controllers & Services
@@ -47,19 +48,14 @@ import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
     LoggerModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
-      imports: [GlobalConfigModule],
-      inject: [GlobalConfigService],
-      useFactory: (configService: GlobalConfigService) => ({
+      inject: [RedisService],
+      useFactory: (redis: RedisService) => ({
         throttlers: [
-          {
-            ttl: 60000,
-            limit: 10,
-          },
+          { name: 'global', ttl: 60_000, limit: 100 },
+          { name: 'auth', ttl: 60_000, limit: 10 },
+          { name: 'sensitive', ttl: 60_000, limit: 5 },
         ],
-        storage: new ThrottlerStorageRedisService({
-          host: configService.getRedisConfig().host,
-          port: configService.getRedisConfig().port,
-        }),
+        storage: new ThrottlerStorageRedisService(redis.client),
       }),
     }),
     BullModule.forRootAsync({

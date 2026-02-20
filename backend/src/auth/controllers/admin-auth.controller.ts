@@ -14,8 +14,10 @@ import {
   ApiBearerAuth,
   ApiHeader,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AdminAuthService } from '../services/admin-auth.service';
 import { AdminJwtGuard } from '../guards/admin-jwt.guard';
+import { AdminThrottlerGuard } from '../../common/guards/admin-throttler.guard';
 import {
   AdminLoginDto,
   AdminLoginResponseDto,
@@ -24,6 +26,7 @@ import {
 import { Request as ExpressRequest } from 'express';
 
 @ApiTags('Admin Authentication')
+@UseGuards(AdminThrottlerGuard)
 @Controller('admin/auth')
 export class AdminAuthController {
   private readonly logger = new Logger(AdminAuthController.name);
@@ -31,6 +34,7 @@ export class AdminAuthController {
   constructor(private readonly adminAuthService: AdminAuthService) {}
 
   @Post('login')
+  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Admin login',
     description: 'Authenticates admin users and returns short-lived JWT tokens with admin claims',

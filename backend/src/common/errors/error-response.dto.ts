@@ -46,6 +46,11 @@ export class ErrorResponseDto {
   stack?: string;
 
   /**
+   * Seconds until the client may retry (set on 429 responses)
+   */
+  retryAfter?: number;
+
+  /**
    * Additional metadata
    */
   metadata?: Record<string, any>;
@@ -59,6 +64,7 @@ export class ErrorResponseDto {
     this.requestId = data.requestId;
     this.timestamp = data.timestamp || new Date().toISOString();
     this.stack = data.stack;
+    this.retryAfter = data.retryAfter;
     this.metadata = data.metadata;
   }
 }

@@ -23,6 +23,7 @@ import { ApiKeyService } from './services/api-key.service';
 import { JwtGuard } from './guards/jwt.guard';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
 import { RequirePermissionGuard } from './guards/require-permission.guard';
+import { AdminThrottlerGuard } from '../common/guards/admin-throttler.guard';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { RequirePermissionGuard } from './guards/require-permission.guard';
     JwtGuard,
     AdminJwtGuard,
     RequirePermissionGuard,
+    AdminThrottlerGuard,
   ],
   exports: [
     AuthService,
@@ -71,14 +73,6 @@ import { RequirePermissionGuard } from './guards/require-permission.guard';
     PasswordService,
     SessionService,
     ApiKeyService,
-  ],
-})
-    AuthService,
-    JwtModule,
-    PassportModule,
-    PasswordService,
-    JwtGuard,
-    RequirePermissionGuard,
   ],
 })
 export class AuthModule {}

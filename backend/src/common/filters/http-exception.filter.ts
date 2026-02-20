@@ -41,16 +41,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const errorCode = this.determineErrorCode(status);
       const metadata = ErrorCodeMetadata[errorCode];
 
+      const retryAfter =
+        status === HttpStatus.TOO_MANY_REQUESTS &&
+        typeof exceptionResponse === 'object'
+          ? (exceptionResponse as any)?.retryAfter
+          : undefined;
+
       errorResponse = new ErrorResponseDto({
         errorCode,
-        message: metadata?.userMessage || 'An error occurred',
+        message:
+          (typeof exceptionResponse === 'object' &&
+            (exceptionResponse as any)?.message) ||
+          metadata?.userMessage ||
+          'An error occurred',
         details:
-          typeof exceptionResponse === 'string'
-            ? exceptionResponse
-            : (exceptionResponse as any)?.message || exception.message,
+          typeof exceptionResponse === 'string' ? exceptionResponse : undefined,
         requestId,
         timestamp: new Date().toISOString(),
         stack: isDevelopment ? exception.stack : undefined,
+        retryAfter,
         metadata:
           typeof exceptionResponse === 'object'
             ? (exceptionResponse as any)

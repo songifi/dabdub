@@ -6,6 +6,10 @@ import { REDIS_CLIENT } from './inject-redis.decorator';
 export class RedisService {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
+  get client(): Redis {
+    return this.redis;
+  }
+
   async get<T = string>(key: string): Promise<T | null> {
     const raw = await this.redis.get(key);
     if (raw == null) return null;

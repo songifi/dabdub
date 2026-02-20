@@ -11,6 +11,7 @@ import {
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -38,6 +39,7 @@ export class ApiKeyController {
   ) {}
 
   @Post()
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Create a new API key' })
   @ApiResponse({
     status: 201,
@@ -70,6 +72,7 @@ export class ApiKeyController {
   }
 
   @Post(':id/rotate')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate API key' })
   @ApiResponse({
@@ -82,6 +85,7 @@ export class ApiKeyController {
   }
 
   @Delete(':id')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke an API key' })
   async revoke(@Param('id') id: string) {

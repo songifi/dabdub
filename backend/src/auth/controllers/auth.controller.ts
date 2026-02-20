@@ -11,6 +11,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -81,6 +82,7 @@ export class AuthController {
 
   @Version('1')
   @Post('login')
+  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'User login',
     description:
@@ -172,6 +174,7 @@ export class AuthController {
 
   @Version('1')
   @Post('password/reset-request')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Request password reset',
     description: 'Sends password reset link to user email',
@@ -191,6 +194,7 @@ export class AuthController {
 
   @Version('1')
   @Post('password/reset')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Reset password',
     description: 'Resets password using reset token from email',
@@ -215,6 +219,7 @@ export class AuthController {
 
   @Version('1')
   @Post('2fa/enable')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @UseGuards(JwtGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -266,6 +271,7 @@ export class AuthController {
 
   @Version('1')
   @Post('2fa/disable')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @UseGuards(JwtGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -283,6 +289,7 @@ export class AuthController {
 
   @Version('1')
   @Post('api-keys')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @UseGuards(JwtGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -330,6 +337,7 @@ export class AuthController {
 
   @Version('1')
   @Post('api-keys/:id/revoke')
+  @Throttle({ sensitive: { limit: 5, ttl: 60_000 } })
   @UseGuards(JwtGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
