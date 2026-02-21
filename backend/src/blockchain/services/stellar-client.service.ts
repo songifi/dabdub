@@ -13,7 +13,9 @@ export class StellarClientService implements IBlockchainClient {
     process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 
   async getLatestBlockNumber(): Promise<bigint> {
-    const response = await axios.get(`${this.horizonUrl}/ledgers?order=desc&limit=1`);
+    const response = await axios.get(
+      `${this.horizonUrl}/ledgers?order=desc&limit=1`,
+    );
     const ledger = response.data._embedded.records[0];
     return BigInt(ledger.sequence);
   }
