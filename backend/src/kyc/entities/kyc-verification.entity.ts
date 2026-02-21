@@ -19,6 +19,7 @@ export enum KycVerificationStatus {
   UNDER_REVIEW = 'under_review',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+  RESUBMISSION_REQUESTED = 'resubmission_requested',
   EXPIRED = 'expired',
   SUSPENDED = 'suspended',
 }
