@@ -1,51 +1,38 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseHealthIndicator } from './health.indicator';
+import { GlobalConfigService } from '../config/global-config.service';
 
 @Module({
   imports: [
-    ConfigModule,
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const host = configService.get<string>('DB_HOST', 'localhost');
-        const port = configService.get<number>('DB_PORT', 5432);
-        const username = configService.get<string>('DB_USERNAME', 'postgres');
-        const password = configService.get<string>('DB_PASSWORD', '');
-        const database = configService.get<string>('DB_NAME', 'dabdub_dev');
-        const poolSize = configService.get<number>('DB_POOL_SIZE', 10);
-        const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+      inject: [GlobalConfigService],
+      useFactory: (config: GlobalConfigService) => {
+        const db = config.getDatabaseConfig();
+        const poolMax = db.poolSize;
+        const poolMin = Math.min(2, db.poolSize);
 
         return {
           type: 'postgres',
-          host,
-          port,
-          username,
-          password,
-          database,
+          host: db.host,
+          port: db.port,
+          database: db.database,
+          username: db.username,
+          password: db.password,
+          ssl: config.isProduction() ? { rejectUnauthorized: false } : false,
           entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-          synchronize: nodeEnv === 'development',
-          logging: nodeEnv === 'development',
-          logger: 'advanced-console',
           migrations: [__dirname + '/migrations/*{.ts,.js}'],
-          migrationsRun: false,
-          dropSchema: false,
-          poolSize,
-          maxQueryExecutionTime: 30000,
-          ssl:
-            nodeEnv === 'production'
-              ? {
-                rejectUnauthorized: false,
-              }
-              : false,
+          migrationsRun: config.isProduction(),
+          synchronize: false,
+          logging: config.isDevelopment() ? ['query', 'error'] : ['error'],
           extra: {
-            connectionTimeoutMillis: 5000,
+            max: poolMax,
+            min: poolMin,
             idleTimeoutMillis: 30000,
-            max: poolSize,
-            statement_timeout: 30000,
+            connectionTimeoutMillis: 2000,
           },
+          retryAttempts: 5,
+          retryDelay: 3000,
         };
       },
     }),
@@ -53,4 +40,4 @@ import { DatabaseHealthIndicator } from './health.indicator';
   providers: [DatabaseHealthIndicator],
   exports: [DatabaseHealthIndicator],
 })
-export class DatabaseModule { }
+export class DatabaseModule {}

@@ -1,8 +1,10 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import * as path from 'path';
 
-const password = process.env.DB_PASSWORD;
+config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
+config({ path: '.env' }); // fallback to .env if env-specific file doesn't exist
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 export default new DataSource({
@@ -10,20 +12,15 @@ export default new DataSource({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   username: process.env.DB_USERNAME || 'postgres',
-  password: password && String(password).trim(),
+  password: process.env.DB_PASSWORD ? String(process.env.DB_PASSWORD).trim() : undefined,
   database: process.env.DB_NAME || 'dabdub_dev',
   entities: isProduction
-    ? [path.join(__dirname, '/database/**/*.entity.js')]
-    : [path.join(__dirname, '/src/database/**/*.entity.ts')],
+    ? [path.join(__dirname, 'dist/**/*.entity.js')]
+    : ['src/**/*.entity.ts'],
   migrations: isProduction
-    ? [path.join(__dirname, '/database/migrations/*.js')]
-    : [path.join(__dirname, '/src/database/migrations/*.ts')],
-  synchronize: process.env.NODE_ENV === 'development',
-  logging: process.env.NODE_ENV === 'development',
-  logger: 'advanced-console',
-  migrationsRun: false,
-  ssl:
-    process.env.NODE_ENV === 'production'
-      ? { rejectUnauthorized: false }
-      : false,
+    ? [path.join(__dirname, 'dist/database/migrations/*.js')]
+    : ['src/database/migrations/*.ts'],
+  synchronize: false,
+  logging: !isProduction,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
