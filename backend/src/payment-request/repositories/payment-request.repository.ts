@@ -79,7 +79,8 @@ export class PaymentRequestRepository {
     sortBy: string;
     sortOrder: 'ASC' | 'DESC';
   }): Promise<[PaymentRequest[], number]> {
-    const query = this.repository.createQueryBuilder('pr');
+    const query = this.repository.createQueryBuilder('pr')
+      .where('pr.isSandbox = :isSandbox', { isSandbox: false });
 
     if (params.merchantId) {
       query.andWhere('pr.merchantId = :merchantId', {
@@ -138,10 +139,11 @@ export class PaymentRequestRepository {
     totalAmount: number;
     totalFees: number;
   }> {
-    const query = this.repository.createQueryBuilder('pr');
+    const query = this.repository.createQueryBuilder('pr')
+      .where('pr.isSandbox = :isSandbox', { isSandbox: false });
 
     if (merchantId) {
-      query.where('pr.merchantId = :merchantId', { merchantId });
+      query.andWhere('pr.merchantId = :merchantId', { merchantId });
     }
 
     const statuses = [
@@ -157,8 +159,9 @@ export class PaymentRequestRepository {
     const [total, ...statusCounts] = await Promise.all([
       query.clone().getCount(),
       ...statuses.map((status) => {
-        const q = this.repository.createQueryBuilder('pr');
-        q.where('pr.status = :status', { status });
+        const q = this.repository.createQueryBuilder('pr')
+          .where('pr.isSandbox = :isSandbox', { isSandbox: false });
+        q.andWhere('pr.status = :status', { status });
         if (merchantId) {
           q.andWhere('pr.merchantId = :merchantId', { merchantId });
         }
@@ -166,9 +169,10 @@ export class PaymentRequestRepository {
       }),
     ]);
 
-    const amountQuery = this.repository.createQueryBuilder('pr');
+    const amountQuery = this.repository.createQueryBuilder('pr')
+      .where('pr.isSandbox = :isSandbox', { isSandbox: false });
     if (merchantId) {
-      amountQuery.where('pr.merchantId = :merchantId', { merchantId });
+      amountQuery.andWhere('pr.merchantId = :merchantId', { merchantId });
     }
 
     const totalAmountResult = await amountQuery
@@ -205,7 +209,8 @@ export class PaymentRequestRepository {
     completedCount: number;
     completedAmount: number;
   }> {
-    const query = this.repository.createQueryBuilder('pr');
+    const query = this.repository.createQueryBuilder('pr')
+      .where('pr.isSandbox = :isSandbox', { isSandbox: false });
 
     if (merchantId) {
       query.andWhere('pr.merchantId = :merchantId', { merchantId });
