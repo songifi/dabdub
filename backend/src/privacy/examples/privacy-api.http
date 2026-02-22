@@ -1,0 +1,153 @@
+### Data Retention Policy Management & GDPR Compliance API Examples
+
+@baseUrl = http://localhost:3000
+@superAdminToken = YOUR_SUPER_ADMIN_JWT_TOKEN
+
+### 1. Get all retention policies
+GET {{baseUrl}}/api/v1/data-retention/policies
+Authorization: Bearer {{superAdminToken}}
+
+### 2. Update retention policy for webhook deliveries
+PATCH {{baseUrl}}/api/v1/data-retention/policies/webhook_deliveries
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "retentionDays": 60,
+  "isEnabled": true,
+  "legalBasis": "Operational requirement for debugging webhook delivery issues within 60-day window",
+  "archiveBeforeDelete": false
+}
+
+### 3. Update retention policy for audit logs
+PATCH {{baseUrl}}/api/v1/data-retention/policies/audit_logs
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "retentionDays": 2555,
+  "isEnabled": true,
+  "legalBasis": "GDPR Article 6(1)(c) - Legal obligation to retain audit logs for compliance and security purposes for 7 years",
+  "archiveBeforeDelete": true
+}
+
+### 4. Trigger manual purge for webhook deliveries
+POST {{baseUrl}}/api/v1/data-retention/policies/webhook_deliveries/run-purge
+Authorization: Bearer {{superAdminToken}}
+
+### 5. Get purge history
+GET {{baseUrl}}/api/v1/data-retention/purge-history
+Authorization: Bearer {{superAdminToken}}
+
+### 6. Get all deletion requests
+GET {{baseUrl}}/api/v1/privacy/deletion-requests
+Authorization: Bearer {{superAdminToken}}
+
+### 7. Get specific deletion request
+GET {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456
+Authorization: Bearer {{superAdminToken}}
+
+### 8. Update deletion request - Move to UNDER_REVIEW
+PATCH {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "status": "UNDER_REVIEW",
+  "reviewNote": "Request received and assigned to legal team for review. Checking for active investigations and legal holds."
+}
+
+### 9. Update deletion request - Place on LEGAL_HOLD
+PATCH {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "status": "LEGAL_HOLD",
+  "reviewNote": "Merchant account is subject to ongoing fraud investigation. Deletion request placed on hold until investigation concludes.",
+  "legalHoldExpiresAt": "2026-03-15T00:00:00Z"
+}
+
+### 10. Update deletion request - APPROVE
+PATCH {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "status": "APPROVED",
+  "reviewNote": "Legal review completed. No active investigations or pending transactions. Merchant account closed. Approved for deletion."
+}
+
+### 11. Update deletion request - REJECT
+PATCH {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "status": "REJECTED",
+  "reviewNote": "Deletion request rejected due to pending settlement obligations. Merchant must resolve outstanding settlements before data deletion."
+}
+
+### 12. Execute approved deletion request
+POST {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456/execute
+Authorization: Bearer {{superAdminToken}}
+
+### 13. Generate merchant data export (GDPR Subject Access Request)
+POST {{baseUrl}}/api/v1/privacy/exports/merchant-789
+Authorization: Bearer {{superAdminToken}}
+
+### 14. Try to update transaction retention below minimum (should fail)
+PATCH {{baseUrl}}/api/v1/data-retention/policies/transaction_records
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "retentionDays": 365,
+  "isEnabled": true,
+  "legalBasis": "Attempting to set below regulatory minimum",
+  "archiveBeforeDelete": true
+}
+
+### 15. Try to execute deletion with active legal hold (should fail)
+# First, ensure the deletion request has a future legalHoldExpiresAt date
+# Then attempt execution - should fail with "Legal hold is still active"
+POST {{baseUrl}}/api/v1/privacy/deletion-requests/abc-123-def-456/execute
+Authorization: Bearer {{superAdminToken}}
+
+### Expected Responses
+
+# Response 1: List of policies
+# [
+#   {
+#     "id": "uuid",
+#     "dataType": "transaction_records",
+#     "retentionDays": 2555,
+#     "isEnabled": true,
+#     "legalBasis": "Financial regulations require 7-year retention",
+#     "archiveBeforeDelete": true,
+#     "lastPurgeRunAt": null,
+#     "lastPurgeDeletedCount": null
+#   }
+# ]
+
+# Response 4: Purge job initiated
+# {
+#   "jobId": "purge-webhook_deliveries-1740100000000",
+#   "estimatedRowsToDelete": 5432
+# }
+
+# Response 12: Deletion executed
+# {
+#   "success": true,
+#   "deletedDataSummary": {
+#     "merchantsAnonymized": 1,
+#     "documentsDeleted": 5,
+#     "webhookDeliveriesDeleted": 234,
+#     "apiKeysDeleted": 3
+#   }
+# }
+
+# Response 13: Export generated
+# {
+#   "downloadLink": "https://exports.dabdub.xyz/merchant-789/export-1740100000000.json"
+# }

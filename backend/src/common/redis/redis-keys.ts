@@ -18,4 +18,9 @@ export const RedisKeys = {
 
   // Rate limiting
   rateLimit: (key: string) => `ratelimit:${key}`,
+
+  // Security
+  ipBlocks: () => 'security:ip_blocks',
+  ipBlock: (cidr: string) => `security:ip_block:${cidr}`,
+  merchantIpAllowlist: (merchantId: string) => `security:merchant_ip_allowlist:${merchantId}`,
 };

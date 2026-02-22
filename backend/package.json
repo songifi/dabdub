@@ -35,6 +35,8 @@
     "db:reset": "npm run migration:revert && npm run migration:run && npm run seed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.995.0",
+    "@aws-sdk/s3-request-presigner": "^3.995.0",
     "@bull-board/api": "^6.19.0",
     "@bull-board/express": "^6.19.0",
     "@bull-board/nestjs": "^6.19.0",

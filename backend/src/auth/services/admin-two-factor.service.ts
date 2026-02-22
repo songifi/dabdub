@@ -370,6 +370,25 @@ export class AdminTwoFactorService {
   }
 
   /**
+   * Verify a TOTP code for a specific admin (used for sensitive actions)
+   */
+  async verify2FACode(adminId: string, totpCode: string): Promise<boolean> {
+    const admin = await this.userRepository.findOne({
+      where: { id: adminId },
+    });
+
+    if (!admin || !admin.twoFactorEnabled || !admin.twoFactorSecret) {
+      return false;
+    }
+
+    const secret = this.cryptoService.decrypt(admin.twoFactorSecret);
+    return authenticator.verify({
+      token: totpCode,
+      secret,
+    });
+  }
+
+  /**
    * Helper: Invalidate all sessions for an admin
    */
   private async invalidateAllSessions(adminId: string): Promise<void> {

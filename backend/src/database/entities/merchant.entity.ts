@@ -13,6 +13,8 @@ import { PaymentRequest } from './payment-request.entity';
 import { WebhookConfigurationEntity } from './webhook-configuration.entity';
 import { MerchantNote } from '../../merchant/entities/merchant-note.entity';
 import { ApiKey } from '../../api-key/entities/api-key.entity';
+import { MerchantDocument } from '../../merchant/entities/merchant-document.entity';
+import { DocumentRequest } from '../../merchant/entities/document-request.entity';
 
 
 
@@ -140,6 +142,9 @@ export class Merchant {
   @Column({ name: 'api_quota_reset_at', type: 'timestamp', nullable: true })
   apiQuotaResetAt?: Date;
 
+  @Column({ name: 'ip_allowlist_enforced', type: 'boolean', default: false })
+  ipAllowlistEnforced!: boolean;
+
   // Relationships
   @OneToMany(() => Settlement, (settlement) => settlement.merchant)
   settlements!: Settlement[];
@@ -164,6 +169,12 @@ export class Merchant {
 
   @OneToMany(() => ApiKey, (apiKey) => apiKey.merchant)
   apiKeys!: ApiKey[];
+
+  @OneToMany(() => MerchantDocument, (document) => document.merchant)
+  merchantDocuments!: MerchantDocument[];
+
+  @OneToMany(() => DocumentRequest, (request) => request.merchant)
+  documentRequests!: DocumentRequest[];
 }
 
 

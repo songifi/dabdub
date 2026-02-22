@@ -40,6 +40,8 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { AuditModule } from './audit/audit.module';
 import { AdminMeModule } from './admin-me/admin-me.module';
+import { SecurityModule } from './security/security.module';
+import { SandboxModule } from './sandbox/sandbox.module';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
 // import { SentryModule } from '@sentry/nestjs';
@@ -90,10 +92,11 @@ import { AdminMeModule } from './admin-me/admin-me.module';
     DashboardModule,
     AuditModule,
     MonitoringModule,
-    MerchantModule,
     KycModule,
     ExchangeRateModule,
     AdminMeModule,
+    SecurityModule,
+    SandboxModule,
   ],
   controllers: [AppController],
   providers: [

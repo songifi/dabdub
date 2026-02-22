@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Merchant } from '../../database/entities/merchant.entity';
 import { PaymentRequest } from '../../database/entities/payment-request.entity';
+import { SettlementRule } from '../../database/entities/settlement-rule.entity';
 
 export enum SettlementStatus {
   PENDING = 'pending',
@@ -206,6 +207,13 @@ export class Settlement {
   @OneToOne(() => PaymentRequest, (paymentRequest) => paymentRequest.settlement)
   @JoinColumn({ name: 'payment_request_id' })
   paymentRequest!: PaymentRequest;
+
+  @Column({ name: 'applied_rule_id', type: 'uuid', nullable: true })
+  appliedRuleId?: string;
+
+  @ManyToOne(() => SettlementRule, { nullable: true })
+  @JoinColumn({ name: 'applied_rule_id' })
+  appliedRule?: SettlementRule;
 
   @ManyToOne(() => Merchant, (merchant) => merchant.settlements)
   @JoinColumn({ name: 'merchant_id' })

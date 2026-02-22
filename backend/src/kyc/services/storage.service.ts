@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface UploadResult {
   path: string;
@@ -13,12 +15,20 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly bucketName: string;
   private readonly region: string;
+  private readonly s3Client: S3Client;
 
   constructor(private readonly configService: ConfigService) {
     this.bucketName =
       this.configService.get<string>('AWS_S3_BUCKET_NAME') || 'kyc-documents';
     this.region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
-    // TODO: Implement actual AWS S3 client initialization with @aws-sdk/client-s3
+    
+    this.s3Client = new S3Client({
+      region: this.region,
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID')!,
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY')!,
+      },
+    });
   }
 
   async uploadFile(
@@ -28,12 +38,20 @@ export class StorageService {
     metadata?: Record<string, string>,
   ): Promise<UploadResult> {
     try {
-      // Placeholder implementation - S3 integration to be implemented
-      this.logger.log(`File queued for upload: ${filePath}`);
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: filePath,
+        Body: fileBuffer,
+        ContentType: mimeType,
+        Metadata: metadata,
+      });
+
+      await this.s3Client.send(command);
+
       return {
         path: filePath,
         url: `s3://${this.bucketName}/${filePath}`,
-        etag: 'placeholder-etag',
+        etag: 'uploaded',
       };
     } catch (error) {
       const err = error as Error;
@@ -77,7 +95,12 @@ export class StorageService {
     expiresIn: number = 3600,
   ): Promise<string> {
     try {
-      return `s3://${this.bucketName}/${filePath}`;
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: filePath,
+      });
+
+      return await getSignedUrl(this.s3Client, command, { expiresIn });
     } catch (error) {
       const err = error as Error;
       this.logger.error(
