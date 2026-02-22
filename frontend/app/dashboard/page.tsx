@@ -47,16 +47,16 @@ export default function Dashboard() {
       <div className="flex flex-col items-center w-[98%] py-[1rem] gap-[1rem] ">
         <div className="w-full flex justify-start">
           <div className="w-[90%]  flex items-center justify-between">
-            <div className="flex items-center justify-between gap-[.2rem] bg-[#FFFCEE] rounded-full px-[.5rem] py-[.25rem]">
+            <Link href="/profile" className="flex items-center justify-between gap-[.2rem] bg-[#FFFCEE] rounded-full px-[.5rem] py-[.25rem] hover:opacity-80 transition-opacity">
               <div className="p-[.25rem] flex items-center justify-center rounded-full text-[#1B7339] text-xs bg-[#C3F1D3] border border-[#1B7339] ">
                 <h3>JD</h3>
               </div>
               <h3 className="font-bold text-base">John Doe</h3>
-            </div>
-            <div className="flex items-center gap-[.2rem] text-base font-bold text-[#ffffff]">
+            </Link>
+            <Link href="/loyalty" className="flex items-center gap-[.2rem] text-base font-bold text-[#ffffff] hover:text-[#FED05C] transition-colors">
               <Star className="text-[#FED05C] stroke-current" />
               <h3>Points</h3>
-            </div>
+            </Link>
           </div>
         </div>
         <div
