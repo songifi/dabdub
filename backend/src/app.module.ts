@@ -39,6 +39,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { AuditModule } from './audit/audit.module';
 import { SecurityModule } from './security/security.module';
+import { SettlementConfigModule } from './settlement-config/settlement-config.module';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
 // import { SentryModule } from '@sentry/nestjs';
@@ -91,6 +92,7 @@ import { SecurityModule } from './security/security.module';
     KycModule,
     ExchangeRateModule,
     SecurityModule,
+    SettlementConfigModule,
   ],
   controllers: [AppController],
   providers: [
