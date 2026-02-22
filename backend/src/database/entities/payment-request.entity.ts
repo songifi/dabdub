@@ -54,9 +54,13 @@ export enum PaymentRequestType {
   unique: true,
   where: '"on_chain_tx_hash" IS NOT NULL AND "stellar_network" IS NOT NULL',
 })
+@Index(['isSandbox'])
 export class PaymentRequest {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'is_sandbox', type: 'boolean', default: false })
+  isSandbox!: boolean;
 
   @Column({ name: 'merchant_id', type: 'uuid' })
   merchantId!: string;

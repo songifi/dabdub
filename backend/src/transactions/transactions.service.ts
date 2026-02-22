@@ -74,7 +74,7 @@ export class TransactionsService {
       sortOrder,
     } = query;
 
-    const where: any = {};
+    const where: any = { isSandbox: false };
 
     if (network) {
       where.network = network;
@@ -197,7 +197,8 @@ export class TransactionsService {
   private buildFilteredQuery(filters: ListTransactionsQueryDto): SelectQueryBuilder<Transaction> {
     const qb = this.transactionRepository
       .createQueryBuilder('t')
-      .leftJoinAndSelect('t.paymentRequest', 'pr');
+      .leftJoinAndSelect('t.paymentRequest', 'pr')
+      .andWhere('t.isSandbox = :isSandbox', { isSandbox: false });
 
     // Exact hash match (highest priority)
     if (filters.txHash) {

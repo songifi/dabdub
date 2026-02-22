@@ -4,6 +4,7 @@ export enum AuditAction {
   DELETE = 'delete',
   VIEW = 'view',
   EXPORT = 'export',
+  SANDBOX_RESET = 'sandbox_reset',
 }
 
 export enum ActorType {

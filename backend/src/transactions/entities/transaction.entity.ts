@@ -22,9 +22,13 @@ import { TransactionStatusHistory } from './transaction-status-history.entity';
 @Index(['status', 'createdAt'])
 @Index(['network', 'tokenSymbol'])
 @Index(['flaggedForReview'])
+@Index(['isSandbox'])
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'is_sandbox', type: 'boolean', default: false })
+  isSandbox!: boolean;
 
   // --- RELATIONSHIP TO PAYMENT REQUEST ---
   @Column({ name: 'payment_request_id' })
