@@ -18,6 +18,7 @@ import { PlatformFeeDefault } from './entities/platform-fee-default.entity';
 import { UserEntity } from '../database/entities/user.entity';
 import { PlatformFeeAuditLog } from './entities/platform-fee-audit-log.entity';
 import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
+import { RedisModule } from '../common/redis';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
 
     AuthModule, // Assuming we might need auth services like PasswordService if exported, or we replicate logic
     ConfigModule,
+    RedisModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],

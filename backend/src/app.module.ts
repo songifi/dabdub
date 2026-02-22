@@ -36,6 +36,7 @@ import { EVMModule } from './evm/evm.module';
 import { StellarModule } from './stellar/stellar.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
+import { MerchantsModule } from './admin/merchants/merchants.module';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
 // import { SentryModule } from '@sentry/nestjs';
@@ -92,6 +93,7 @@ import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
     MerchantModule,
     KycModule,
     ExchangeRateModule,
+    MerchantsModule,
   ],
   controllers: [AppController],
   providers: [

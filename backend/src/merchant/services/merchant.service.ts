@@ -36,6 +36,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Inject } from '@nestjs/common';
 import { ApiKey } from '../../api-key/entities/api-key.entity';
+import { RedisService } from '../../common/redis';
 
 
 const DEFAULT_FEE_STRUCTURES: Record<MerchantTier, FeeStructureDto> = {
@@ -75,6 +76,7 @@ export class MerchantService {
     @InjectRepository(ApiKey)
     private readonly apiKeyRepository: Repository<ApiKey>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly redisService: RedisService,
     private readonly jwtService: JwtService,
     private readonly passwordService: PasswordService,
   ) { }
@@ -100,7 +102,9 @@ export class MerchantService {
       kycStatus: KycStatus.NOT_SUBMITTED,
     });
 
-    return this.merchantRepository.save(merchant);
+    const savedMerchant = await this.merchantRepository.save(merchant);
+    await this.invalidateMerchantListCache();
+    return savedMerchant;
   }
 
   async login(dto: LoginMerchantDto): Promise<{
@@ -347,7 +351,7 @@ export class MerchantService {
 
       // Invalidate cache
       await this.cacheManager.del(`merchant_detail_${id}`);
-      // TODO: Implement wildcard cache invalidation for 'merchant_list_*' if possible with current cache store
+      await this.invalidateMerchantListCache();
     }
 
 
@@ -384,20 +388,26 @@ export class MerchantService {
     const merchant = await this.getProfile(id);
     if (dto.name) merchant.name = dto.name;
     if (dto.businessName) merchant.businessName = dto.businessName;
-    return this.merchantRepository.save(merchant);
+    const updatedMerchant = await this.merchantRepository.save(merchant);
+    await this.invalidateMerchantListCache();
+    return updatedMerchant;
   }
 
   async updateBankDetails(id: string, dto: BankDetailsDto): Promise<Merchant> {
     const merchant = await this.getProfile(id);
     // In a real app, encrypt these details
     merchant.bankDetails = dto as any;
-    return this.merchantRepository.save(merchant);
+    const updatedMerchant = await this.merchantRepository.save(merchant);
+    await this.invalidateMerchantListCache();
+    return updatedMerchant;
   }
 
   async updateSettings(id: string, dto: SettingsDto): Promise<Merchant> {
     const merchant = await this.getProfile(id);
     merchant.settings = { ...merchant.settings, ...dto };
-    return this.merchantRepository.save(merchant);
+    const updatedMerchant = await this.merchantRepository.save(merchant);
+    await this.invalidateMerchantListCache();
+    return updatedMerchant;
   }
 
   async uploadKycDocuments(
@@ -407,7 +417,13 @@ export class MerchantService {
     const merchant = await this.getProfile(id);
     merchant.documents = { ...merchant.documents, ...dto };
     merchant.kycStatus = KycStatus.PENDING; // Set to pending verification
-    return this.merchantRepository.save(merchant);
+    const updatedMerchant = await this.merchantRepository.save(merchant);
+    await this.invalidateMerchantListCache();
+    return updatedMerchant;
+  }
+
+  private async invalidateMerchantListCache(): Promise<void> {
+    await this.redisService.delPattern('cache:merchants:list:*');
   }
 
   async getKycStatus(
