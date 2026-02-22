@@ -37,7 +37,7 @@ export class AdminAuthService {
     private readonly configService: ConfigService,
     private readonly passwordService: PasswordService,
     private readonly cacheService: CacheService,
-  ) {}
+  ) { }
 
   async login(
     loginDto: AdminLoginDto,
@@ -51,8 +51,8 @@ export class AdminAuthService {
 
     // Find admin user
     const user = await this.userRepository.findOne({
-      where: { 
-        email, 
+      where: {
+        email,
         isActive: true,
       },
     });
@@ -140,11 +140,6 @@ export class AdminAuthService {
 
       const refreshToken = this.jwtService.sign(refreshTokenPayload, {
         expiresIn: refreshTokenExpiresIn as any,
-        expiresIn: this.parseExpirationTime(adminJwtExpiresIn),
-      });
-
-      const refreshToken = this.jwtService.sign(refreshTokenPayload, {
-        expiresIn: this.parseExpirationTime(refreshTokenExpiresIn),
       });
 
       // Create admin session
@@ -182,7 +177,7 @@ export class AdminAuthService {
 
     try {
       const payload = this.jwtService.verify(token);
-      
+
       if (payload.type !== 'admin_refresh' || !payload.sessionId) {
         throw new UnauthorizedException('Invalid refresh token type or missing session');
       }
@@ -215,7 +210,7 @@ export class AdminAuthService {
       // Generate new access token
       const adminJwtExpiresIn = this.configService.get<string>('ADMIN_JWT_EXPIRES_IN') || '2h';
       const refreshTokenExpiresIn = '7d';
-      
+
       const accessTokenPayload: AdminJwtPayload = {
         sub: user.id,
         email: user.email,
@@ -226,8 +221,6 @@ export class AdminAuthService {
         exp: Math.floor(Date.now() / 1000) + this.parseExpirationTime(adminJwtExpiresIn),
       };
 
-      const accessToken = this.jwtService.sign(accessTokenPayload, {
-        expiresIn: adminJwtExpiresIn as any,
       const refreshTokenPayload = {
         sub: user.id,
         sessionId,
@@ -287,7 +280,7 @@ export class AdminAuthService {
   async logoutAll(adminId: string): Promise<void> {
     const pattern = `auth:refresh:${adminId}:*`;
     await this.cacheService.delPattern(pattern);
-    
+
     // Deleting all sessions from Hash map
     const sessions = await this.cacheService.hgetall(`auth:sessions:${adminId}`);
     if (sessions) {
@@ -322,7 +315,7 @@ export class AdminAuthService {
     if (currentRole === UserRole.SUPER_ADMIN) {
       const sessionRaw = await this.cacheService.hget(`auth:sessions:${currentAdminId}`, sessionIdToRevoke);
       if (!sessionRaw) {
-         await this.cacheService.delPattern(`auth:refresh:*:${sessionIdToRevoke}`);
+        await this.cacheService.delPattern(`auth:refresh:*:${sessionIdToRevoke}`);
       }
     }
 
@@ -336,7 +329,7 @@ export class AdminAuthService {
 
   private async checkAccountLockout(email: string, ipAddress?: string): Promise<void> {
     const tenMinutesAgo = new Date(Date.now() - this.attemptWindowMs);
-    
+
     const recentFailedAttempts = await this.adminLoginAttemptRepository.count({
       where: {
         email,
@@ -355,12 +348,12 @@ export class AdminAuthService {
         const lockoutEndTime = new Date(lastFailedAttempt.createdAt.getTime() + this.lockoutDurationMs);
         if (new Date() < lockoutEndTime) {
           const remainingMinutes = Math.ceil((lockoutEndTime.getTime() - Date.now()) / 60000);
-          
+
           this.logger.warn(
             `Admin account lockout triggered for ${email} from ${ipAddress}. ` +
             `${recentFailedAttempts} failed attempts in last 10 minutes.`
           );
-          
+
           throw new ForbiddenException(
             `Account locked due to too many failed login attempts. Try again in ${remainingMinutes} minutes.`
           );
@@ -382,9 +375,9 @@ export class AdminAuthService {
       successful: false,
       failureReason: reason,
     });
-    
+
     await this.adminLoginAttemptRepository.save(attempt);
-    
+
     this.logger.warn(`Failed admin login attempt for ${email} from ${ipAddress}: ${reason}`);
   }
 

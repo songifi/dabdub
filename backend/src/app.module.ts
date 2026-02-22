@@ -6,6 +6,7 @@ import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { RedisService } from './common/redis/redis.service';
 import { SentryFilter } from './common/filters/sentry.filter';
 import { BullModule } from '@nestjs/bull';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 // Controllers & Services
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -38,7 +39,7 @@ import { StellarModule } from './stellar/stellar.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { AuditModule } from './audit/audit.module';
-import { DashboardModule } from './dashboard/dashboard.module';
+import { AdminMeModule } from './admin-me/admin-me.module';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
 // import { SentryModule } from '@sentry/nestjs';
@@ -50,6 +51,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     DatabaseModule,
     RedisModule,
     LoggerModule,
+    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
       inject: [RedisService],
@@ -91,6 +93,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     MerchantModule,
     KycModule,
     ExchangeRateModule,
+    AdminMeModule,
   ],
   controllers: [AppController],
   providers: [

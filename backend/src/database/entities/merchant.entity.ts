@@ -36,7 +36,6 @@ export enum KycStatus {
   NOT_SUBMITTED = 'not_submitted',
   IN_REVIEW = 'in_review',
   UNDER_REVIEW = 'in_review',
-  RESUBMISSION_REQUESTED = 'resubmission_requested',
 }
 
 export enum BankAccountStatus {
@@ -48,7 +47,6 @@ export enum BankAccountStatus {
 @Entity('merchants')
 @Index(['email'], { unique: true })
 @Index(['status'])
-@Index(['kycStatus'])
 @Index(['kycStatus'])
 @Index(['createdAt'])
 export class Merchant {
