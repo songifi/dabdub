@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BlockchainNetwork } from './entities/blockchain-network.entity';
 import { BlockchainBlockCursor } from './entities/blockchain-block-cursor.entity';
 import { PaymentRequest } from './entities/payment-request.entity';
+import { NetworkConfiguration } from './entities/network-configuration.entity';
 import { BlockchainMonitoringService } from './services/blockchain-monitoring.service';
 import { StellarClientService } from './services/stellar-client.service';
 import { StacksService } from './services/stacks.service';
@@ -16,6 +17,7 @@ import { BlockchainMonitoringController } from './controllers/blockchain-monitor
       BlockchainNetwork,
       BlockchainBlockCursor,
       PaymentRequest,
+      NetworkConfiguration,
     ]),
   ],
   controllers: [BlockchainMonitoringController],
@@ -32,4 +34,4 @@ import { BlockchainMonitoringController } from './controllers/blockchain-monitor
     StacksService,
   ],
 })
-export class BlockchainModule { }
+export class BlockchainModule {}
