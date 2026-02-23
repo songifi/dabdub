@@ -47,6 +47,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
 // import { SentryModule } from '@sentry/nestjs';
+import { AlertModule } from './alert/alert.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     SecurityModule,
     SandboxModule,
     MaintenanceModule,
+    AlertModule,
   ],
   controllers: [AppController],
   providers: [
