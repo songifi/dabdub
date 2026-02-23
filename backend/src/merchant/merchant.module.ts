@@ -48,10 +48,11 @@ import { MerchantSuspension } from './entities/merchant-suspension.entity';
 import { MerchantTermination } from './entities/merchant-termination.entity';
 import { MerchantFlag } from './entities/merchant-flag.entity';
 import { UserEntity } from '../database/entities/user.entity';
-import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
+// import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
 import { GlobalConfigService } from '../config/global-config.service';
-import { BullModule } from '@nestjs/bullmq';
+// import { BullModule } from '@nestjs/bullmq';
 import { BullModule } from '@nestjs/bull';
+import { MerchantRepository } from './repositories/merchant.repository';
 
 @Module({
   imports: [
@@ -85,9 +86,6 @@ import { BullModule } from '@nestjs/bull';
     PassportModule,
     JwtModule.registerAsync({
       inject: [GlobalConfigService],
-      useFactory: async (configService: GlobalConfigService) => ({
-        secret: configService.getJwtSecret(),
-      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
@@ -124,6 +122,7 @@ import { BullModule } from '@nestjs/bull';
     SuperAdminGuard,
     MerchantDocumentService,
     DocumentRequestService,
+    MerchantRepository,
   ],
   exports: [
     MerchantService,
@@ -135,6 +134,7 @@ import { BullModule } from '@nestjs/bull';
     MerchantTagService,
     SupportTicketService,
     MerchantOnboardingService,
+    MerchantRepository,
   ],
 })
-export class MerchantModule { }
+export class MerchantModule {}
