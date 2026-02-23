@@ -16,6 +16,7 @@ export enum UserRole {
   MERCHANT = 'merchant',
   USER = 'user',
   SUPPORT_ADMIN = 'support_admin',
+  OPERATIONS_ADMIN = 'operations_admin',
 }
 
 /** Permissions that SUPPORT_ADMIN does not have (finance-sensitive). */
@@ -48,6 +49,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'config:read',
   ],
   [UserRole.FINANCE_ADMIN]: ['analytics:revenue', 'analytics:read'],
+  [UserRole.OPERATIONS_ADMIN]: [
+    'analytics:read',
+    'merchants:kyc:review',
+    'merchants:read',
+    'merchants:write',
+  ],
   [UserRole.MERCHANT]: [],
   [UserRole.USER]: [],
 };

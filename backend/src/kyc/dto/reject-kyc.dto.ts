@@ -1,5 +1,4 @@
 import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
-import { KycRejectionReason } from '../enums/kyc-review.enums';
 import { KycRejectionReason } from '../enums';
 
 export class RejectKycDto {

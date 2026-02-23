@@ -6,6 +6,7 @@ import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { RedisService } from './common/redis/redis.service';
 import { SentryFilter } from './common/filters/sentry.filter';
 import { BullModule } from '@nestjs/bull';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 // Controllers & Services
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -39,6 +40,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { ExchangeRateModule } from './exchange-rate/exchange-rate.module';
 import { MerchantsModule } from './admin/merchants/merchants.module';
 import { AuditModule } from './audit/audit.module';
+import { AdminMeModule } from './admin-me/admin-me.module';
 import { SecurityModule } from './security/security.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 
@@ -52,6 +54,7 @@ import { SandboxModule } from './sandbox/sandbox.module';
     DatabaseModule,
     RedisModule,
     LoggerModule,
+    EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
       inject: [RedisService],
@@ -92,6 +95,7 @@ import { SandboxModule } from './sandbox/sandbox.module';
     MonitoringModule,
     KycModule,
     ExchangeRateModule,
+    AdminMeModule,
     MerchantsModule,
     SecurityModule,
     SandboxModule,

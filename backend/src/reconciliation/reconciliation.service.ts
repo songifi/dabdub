@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Reconciliation, ReconciliationStatus, DiscrepancyType } from './reconciliation.entity';
-import { Transaction, TransactionStatus } from '../transactions/entities/transaction.entity';
+import { Transaction } from '../transactions/entities/transaction.entity';
+import { TransactionStatus } from '../transactions/transactions.enums';
 import { Settlement, SettlementStatus } from '../settlement/entities/settlement.entity';
 
 @Injectable()
@@ -18,7 +19,7 @@ export class ReconciliationService {
     private readonly transactionRepo: Repository<Transaction>,
     @InjectRepository(Settlement)
     private readonly settlementRepo: Repository<Settlement>,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_HOUR)
   async runAutoReconciliation() {

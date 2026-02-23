@@ -41,13 +41,16 @@ import { MerchantOnboardingProgress } from './entities/merchant-onboarding-progr
 import { ApiKey } from '../api-key/entities/api-key.entity';
 import { MerchantFeeConfig } from './entities/merchant-fee-config.entity';
 import { PlatformFeeDefault } from './entities/platform-fee-default.entity';
-import { UserEntity } from '../database/entities/user.entity';
 import { PlatformFeeAuditLog } from './entities/platform-fee-audit-log.entity';
 import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
 import { RedisModule } from '../common/redis';
 import { MerchantSuspension } from './entities/merchant-suspension.entity';
 import { MerchantTermination } from './entities/merchant-termination.entity';
 import { MerchantFlag } from './entities/merchant-flag.entity';
+import { UserEntity } from '../database/entities/user.entity';
+import { SuperAdminGuard } from '../auth/guards/super-admin.guard';
+import { GlobalConfigService } from '../config/global-config.service';
+import { BullModule } from '@nestjs/bullmq';
 import { BullModule } from '@nestjs/bull';
 
 @Module({
@@ -81,6 +84,9 @@ import { BullModule } from '@nestjs/bull';
     RedisModule,
     PassportModule,
     JwtModule.registerAsync({
+      inject: [GlobalConfigService],
+      useFactory: async (configService: GlobalConfigService) => ({
+        secret: configService.getJwtSecret(),
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
@@ -131,4 +137,4 @@ import { BullModule } from '@nestjs/bull';
     MerchantOnboardingService,
   ],
 })
-export class MerchantModule {}
+export class MerchantModule { }
