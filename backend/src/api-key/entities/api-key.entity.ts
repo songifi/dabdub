@@ -21,10 +21,10 @@ export class ApiKey {
 
   @Index({ unique: true })
   @Column()
-  keyHash: string; // Bcrypt hash of the full key
+  keyHash: string; // SHA-256 hash of the full key (hex)
 
   @Column()
-  prefix: string; // e.g., "st_live_"
+  prefix: string; // e.g., "sk_live_" for masked display
 
   @Column('jsonb', { default: ['stellar:read'] })
   scopes: string[]; // e.g., ["stellar:tx_submit", "stellar:account_manage"]

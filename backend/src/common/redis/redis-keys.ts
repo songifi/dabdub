@@ -18,6 +18,7 @@ export const RedisKeys = {
 
   // Rate limiting
   rateLimit: (key: string) => `ratelimit:${key}`,
+  apiKeyFailedAttempts: (ip: string) => `apikey:failed:${ip}`,
 
   // Exchange rate (TTL 60s for payment request creation)
   exchangeRate: (base: string, quote: string) =>

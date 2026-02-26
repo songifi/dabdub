@@ -2,8 +2,10 @@ import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import * as path from 'path';
 
-config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
-config({ path: '.env' }); // fallback to .env if env-specific file doesn't exist
+// Load env from backend directory (where this config lives)
+const root = path.resolve(__dirname);
+config({ path: path.join(root, `.env.${process.env.NODE_ENV || 'development'}`) });
+config({ path: path.join(root, '.env') });
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -15,11 +17,11 @@ export default new DataSource({
   password: process.env.DB_PASSWORD ? String(process.env.DB_PASSWORD).trim() : undefined,
   database: process.env.DB_NAME || 'dabdub_dev',
   entities: isProduction
-    ? [path.join(__dirname, 'dist/**/*.entity.js')]
-    : ['src/**/*.entity.ts'],
+    ? [path.join(root, 'dist', '**', '*.entity.js')]
+    : [path.join(root, 'src', '**', '*.entity.ts')],
   migrations: isProduction
-    ? [path.join(__dirname, 'dist/database/migrations/*.js')]
-    : ['src/database/migrations/*.ts'],
+    ? [path.join(root, 'dist', 'database', 'migrations', '*.js')]
+    : [path.join(root, 'src', 'database', 'migrations', '*.ts')],
   synchronize: false,
   logging: !isProduction,
   ssl: isProduction ? { rejectUnauthorized: false } : false,

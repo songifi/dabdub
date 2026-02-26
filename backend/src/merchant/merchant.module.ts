@@ -38,6 +38,11 @@ import { SupportTicket } from './entities/support-ticket.entity';
 import { SupportTicketMessage } from './entities/support-ticket-message.entity';
 import { MerchantOnboardingProgress } from './entities/merchant-onboarding-progress.entity';
 import { ApiKey } from '../api-key/entities/api-key.entity';
+import { ApiKeyUsage } from '../api-key/entities/api-key-usage.entity';
+import { ApiKeyController } from '../api-key/api-key.controller';
+import { ApiKeyService } from '../api-key/api-key.service';
+import { ApiKeyUsageService } from '../api-key/usage.service';
+import { ApiKeyGuard } from '../api-key/guards/api-key.guard';
 import { MerchantFeeConfig } from './entities/merchant-fee-config.entity';
 import { PlatformFeeDefault } from './entities/platform-fee-default.entity';
 import { PlatformFeeAuditLog } from './entities/platform-fee-audit-log.entity';
@@ -65,6 +70,7 @@ import { MerchantRepository } from './repositories/merchant.repository';
       SupportTicketMessage,
       MerchantOnboardingProgress,
       ApiKey,
+      ApiKeyUsage,
       MerchantFeeConfig,
       PlatformFeeDefault,
       PlatformFeeAuditLog,
@@ -105,6 +111,7 @@ import { MerchantRepository } from './repositories/merchant.repository';
     MerchantFollowUpController,
     SupportTicketController,
     MerchantOnboardingController,
+    ApiKeyController,
   ],
   providers: [
     MerchantService,
@@ -120,6 +127,9 @@ import { MerchantRepository } from './repositories/merchant.repository';
     MerchantDocumentService,
     DocumentRequestService,
     MerchantRepository,
+    ApiKeyService,
+    ApiKeyUsageService,
+    ApiKeyGuard,
   ],
   exports: [
     MerchantService,

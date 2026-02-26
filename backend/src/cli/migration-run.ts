@@ -3,6 +3,9 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import * as path from 'path';
 
+const root = path.resolve(__dirname, '..', '..'); // backend root when run from backend/
+const migrationsDir = path.join(root, 'src', 'database', 'migrations');
+
 const dataSource = new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST || 'localhost',
@@ -12,8 +15,8 @@ const dataSource = new DataSource({
     ? String(process.env.DB_PASSWORD).trim()
     : undefined,
   database: process.env.DB_NAME || 'dabdub_dev',
-  entities: [path.join(__dirname, '/../database/**/*.entity.ts')],
-  migrations: [path.join(__dirname, '/../database/migrations/*.ts')],
+  entities: [path.join(root, 'src', '**', '*.entity.ts')],
+  migrations: [path.join(migrationsDir, '*.ts')],
   synchronize: false,
   logging: true,
   logger: 'advanced-console',
