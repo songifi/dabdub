@@ -10,6 +10,15 @@ import {
   WebhookDeliveryStatus,
 } from '../../database/entities/webhook-delivery-log.entity';
 
+// Retry schedule: immediately, 30s, 5min, 30min, 2h (max 5 attempts)
+const RETRY_SCHEDULE_MS = [
+  0,        // Immediate (attempt 1)
+  30000,    // 30 seconds (attempt 2)
+  300000,   // 5 minutes (attempt 3)
+  1800000,  // 30 minutes (attempt 4)
+  7200000,  // 2 hours (attempt 5)
+];
+
 export interface WebhookDeliveryContext {
   paymentRequestId?: string;
   requestId?: string;
