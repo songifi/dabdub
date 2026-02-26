@@ -55,6 +55,7 @@ export class PaymentRequestService {
     private readonly qrCodeService: QrCodeService,
     private readonly stellarContractService: StellarContractService,
     private readonly configService: GlobalConfigService,
+    private readonly expirationScheduler: ExpirationSchedulerService,
   ) {}
 
   async create(dto: CreatePaymentRequestDto): Promise<PaymentRequest> {
@@ -115,6 +116,11 @@ export class PaymentRequestService {
       statusHistory,
       status: PaymentRequestStatus.PENDING,
     });
+
+    await this.expirationScheduler.scheduleExpiry(
+      paymentRequest.id,
+      expiresAt,
+    );
 
     return paymentRequest;
   }
@@ -202,6 +208,8 @@ export class PaymentRequestService {
       status: PaymentRequestStatus.PROCESSING,
       timestamp: new Date().toISOString(),
     });
+
+    await this.expirationScheduler.cancelExpiry(id);
 
     return this.repository.update(id, {
       status: PaymentRequestStatus.PROCESSING,

@@ -17,6 +17,7 @@ export enum WebhookEvent {
   PAYMENT_REQUEST_UPDATED = 'payment_request.updated',
   PAYMENT_REQUEST_COMPLETED = 'payment_request.completed',
   PAYMENT_REQUEST_FAILED = 'payment_request.failed',
+  PAYMENT_REQUEST_EXPIRED = 'payment.expired',
   SETTLEMENT_COMPLETED = 'settlement.completed',
   SETTLEMENT_FAILED = 'settlement.failed',
 }

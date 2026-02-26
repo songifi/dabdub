@@ -1,54 +1,65 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PaymentRequestRepository } from '../repositories/payment-request.repository';
-import { PaymentRequestStatus } from '../../database/entities/payment-request.entity';
+import { PAYMENT_EXPIRY_QUEUE } from '../processors/payment-expiry.processor';
 
 @Injectable()
 export class ExpirationSchedulerService {
   private readonly logger = new Logger(ExpirationSchedulerService.name);
 
   constructor(
-    private readonly paymentRequestRepository: PaymentRequestRepository,
+    @InjectQueue(PAYMENT_EXPIRY_QUEUE)
+    private readonly expiryQueue: Queue,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
-  async handleExpiredRequests(): Promise<void> {
-    this.logger.debug('Checking for expired payment requests...');
+  async scheduleExpiry(
+    paymentRequestId: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    const delay = expiresAt.getTime() - Date.now();
 
-    const now = new Date();
-    const expiredRequests =
-      await this.paymentRequestRepository.findExpired(now);
-
-    if (expiredRequests.length === 0) {
-      this.logger.debug('No expired payment requests found.');
+    if (delay <= 0) {
+      this.logger.warn(
+        `Payment request ${paymentRequestId} already expired, processing immediately`,
+      );
+      await this.expiryQueue.add(
+        'expire',
+        { paymentRequestId },
+        { jobId: paymentRequestId },
+      );
       return;
     }
 
-    this.logger.log(
-      `Found ${expiredRequests.length} expired payment requests.`,
+    await this.expiryQueue.add(
+      'expire',
+      { paymentRequestId },
+      {
+        jobId: paymentRequestId,
+        delay,
+      },
     );
 
-    const ids = expiredRequests.map((r) => r.id);
-
-    await this.paymentRequestRepository.updateBatchStatus(
-      ids,
-      PaymentRequestStatus.EXPIRED,
+    this.logger.debug(
+      `Scheduled expiry for payment request ${paymentRequestId} in ${delay}ms`,
     );
+  }
 
-    // Update status history for each expired request
-    for (const request of expiredRequests) {
-      const statusHistory = request.statusHistory || [];
-      statusHistory.push({
-        status: PaymentRequestStatus.EXPIRED,
-        timestamp: now.toISOString(),
-        reason: 'Expired by scheduler',
-      });
-
-      await this.paymentRequestRepository.update(request.id, {
-        statusHistory,
-      });
+  async cancelExpiry(paymentRequestId: string): Promise<void> {
+    const job = await this.expiryQueue.getJob(paymentRequestId);
+    if (job) {
+      await job.remove();
+      this.logger.debug(
+        `Cancelled expiry job for payment request ${paymentRequestId}`,
+      );
     }
+  }
 
-    this.logger.log(`Marked ${ids.length} payment requests as expired.`);
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async cleanStaleJobs(): Promise<void> {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    await this.expiryQueue.clean(oneDayAgo, 100, 'completed');
+    await this.expiryQueue.clean(oneDayAgo, 100, 'failed');
+    this.logger.log('Cleaned stale expiry jobs');
   }
 }
