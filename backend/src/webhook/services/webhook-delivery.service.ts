@@ -146,9 +146,9 @@ export class WebhookDeliveryService {
       }
     }
 
-    const maxRetries = Math.max(1, config.maxRetries ?? 1);
+    // Use fixed retry schedule: immediately, 30s, 5min, 30min, 2h (max 5 attempts)
+    const maxRetries = Math.min(Math.max(1, config.maxRetries ?? 5), 5);
     const timeout = Math.min(Math.max(1000, config.timeout ?? 5000), 5000);
-    const retryDelay = Math.max(0, config.retryDelay ?? 1000);
 
     this.logger.debug(
       `Delivering webhook ${event} to ${config.url} (attempts: ${maxRetries})`,
