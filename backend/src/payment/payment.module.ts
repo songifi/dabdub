@@ -3,12 +3,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { makeCounterProvider } from '@willsoto/nestjs-prometheus';
 import { Payment } from '../database/entities/payment.entity';
 import { PaymentRequest } from '../database/entities/payment-request.entity';
+import { PlatformWallet } from '../treasury/entities/platform-wallet.entity';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
 import { PaymentMetrics } from './payment.metrics';
+import { ExchangeRateModule } from '../exchange-rate/exchange-rate.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Payment, PaymentRequest])],
+  imports: [
+    TypeOrmModule.forFeature([Payment, PaymentRequest, PlatformWallet]),
+    ExchangeRateModule,
+  ],
   controllers: [PaymentController],
   providers: [
     PaymentService,
