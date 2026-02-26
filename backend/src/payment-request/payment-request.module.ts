@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import { PaymentRequest } from '../database/entities/payment-request.entity';
 import { Merchant } from '../database/entities/merchant.entity';
+import { WebhookConfigurationEntity } from '../database/entities/webhook-configuration.entity';
 import { PaymentRequestRepository } from './repositories/payment-request.repository';
 import { PaymentRequestService } from './payment-request.service';
 import { PaymentRequestController } from './payment-request.controller';
@@ -13,7 +15,15 @@ import { JobsModule } from '../modules/jobs/jobs.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PaymentRequest, Merchant]),
+    TypeOrmModule.forFeature([
+      PaymentRequest,
+      Merchant,
+      WebhookConfigurationEntity,
+      WebhookDeliveryLogEntity,
+    ]),
+    BullModule.registerQueue({
+      name: PAYMENT_EXPIRY_QUEUE,
+    }),
     GlobalConfigModule,
     JobsModule,
   ],
@@ -24,6 +34,8 @@ import { JobsModule } from '../modules/jobs/jobs.module';
     QrCodeService,
     ExpirationSchedulerService,
     StellarContractService,
+    PaymentExpiryProcessor,
+    WebhookDeliveryService,
   ],
   exports: [PaymentRequestService, PaymentRequestRepository],
 })
