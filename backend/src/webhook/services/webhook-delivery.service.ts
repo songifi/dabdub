@@ -10,6 +10,15 @@ import {
   WebhookDeliveryStatus,
 } from '../../database/entities/webhook-delivery-log.entity';
 
+// Retry schedule: immediately, 30s, 5min, 30min, 2h (max 5 attempts)
+const RETRY_SCHEDULE_MS = [
+  0,        // Immediate (attempt 1)
+  30000,    // 30 seconds (attempt 2)
+  300000,   // 5 minutes (attempt 3)
+  1800000,  // 30 minutes (attempt 4)
+  7200000,  // 2 hours (attempt 5)
+];
+
 export interface WebhookDeliveryContext {
   paymentRequestId?: string;
   requestId?: string;
@@ -137,9 +146,9 @@ export class WebhookDeliveryService {
       }
     }
 
-    const maxRetries = Math.max(1, config.maxRetries ?? 1);
+    // Use fixed retry schedule: immediately, 30s, 5min, 30min, 2h (max 5 attempts)
+    const maxRetries = Math.min(Math.max(1, config.maxRetries ?? 5), 5);
     const timeout = Math.min(Math.max(1000, config.timeout ?? 5000), 5000);
-    const retryDelay = Math.max(0, config.retryDelay ?? 1000);
 
     this.logger.debug(
       `Delivering webhook ${event} to ${config.url} (attempts: ${maxRetries})`,
@@ -226,9 +235,8 @@ export class WebhookDeliveryService {
       }
 
       if (attempt < maxRetries) {
-        log.nextRetryAt = new Date(
-          Date.now() + this.calculateBackoffDelay(retryDelay, attempt),
-        );
+        const retryDelay = RETRY_SCHEDULE_MS[attempt] ?? RETRY_SCHEDULE_MS[RETRY_SCHEDULE_MS.length - 1];
+        log.nextRetryAt = new Date(Date.now() + retryDelay);
       }
 
       await this.deliveryLogRepository.save(log);
@@ -240,7 +248,9 @@ export class WebhookDeliveryService {
       }
 
       if (attempt < maxRetries) {
-        await this.sleep(this.calculateBackoffDelay(retryDelay, attempt));
+        const retryDelay = RETRY_SCHEDULE_MS[attempt] ?? RETRY_SCHEDULE_MS[RETRY_SCHEDULE_MS.length - 1];
+        this.logger.debug(`Retry ${attempt} scheduled in ${retryDelay}ms for webhook ${config.id}`);
+        await this.sleep(retryDelay);
       }
     }
 
