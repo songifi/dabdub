@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, Job, JobsOptions } from 'bullmq';
 import type { JobStatusResponseDto } from './dto/job-status-response.dto';
@@ -11,12 +11,14 @@ export const QUEUE_NAMES = [
   'refunds',
   'compliance-reports',
   'webhooks',
+  'payment-expiry',
 ] as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
   private readonly queues: Map<QueueName, Queue>;
 
   constructor(
@@ -26,6 +28,7 @@ export class JobsService {
     @InjectQueue('refunds') private refundsQueue: Queue,
     @InjectQueue('compliance-reports') private complianceReportsQueue: Queue,
     @InjectQueue('webhooks') private webhooksQueue: Queue,
+    @InjectQueue('payment-expiry') private paymentExpiryQueue: Queue,
   ) {
     this.queues = new Map([
       ['settlements', this.settlementsQueue],
@@ -34,6 +37,7 @@ export class JobsService {
       ['refunds', this.refundsQueue],
       ['compliance-reports', this.complianceReportsQueue],
       ['webhooks', this.webhooksQueue],
+      ['payment-expiry', this.paymentExpiryQueue],
     ]);
   }
 
@@ -129,5 +133,78 @@ export class JobsService {
       QUEUE_NAMES.map(async (name) => [name, await this.getQueueStats(name)] as const),
     );
     return Object.fromEntries(entries);
+  }
+
+  /**
+   * Schedule a payment expiry job with a delay
+   * @param paymentRequestId - The payment request ID
+   * @param expiresAt - When the payment should expire
+   * @param data - Additional data for the job
+   */
+  async schedulePaymentExpiry(
+    paymentRequestId: string,
+    expiresAt: Date,
+    data: {
+      merchantId: string;
+      webhookUrl?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<Job> {
+    const delay = Math.max(0, expiresAt.getTime() - Date.now());
+    
+    return this.paymentExpiryQueue.add(
+      'expire',
+      {
+        paymentRequestId,
+        merchantId: data.merchantId,
+        expiresAt: expiresAt.toISOString(),
+        webhookUrl: data.webhookUrl,
+        metadata: data.metadata,
+      },
+      {
+        delay,
+        jobId: `payment-expiry-${paymentRequestId}`,
+        removeOnComplete: true,
+        removeOnFail: { count: 100 },
+      },
+    );
+  }
+
+  /**
+   * Cancel a payment expiry job
+   * @param paymentRequestId - The payment request ID
+   */
+  async cancelPaymentExpiry(paymentRequestId: string): Promise<void> {
+    const job = await this.paymentExpiryQueue.getJob(
+      `payment-expiry-${paymentRequestId}`,
+    );
+    if (job) {
+      await job.remove();
+    }
+  }
+
+  /**
+   * Clean up stale payment expiry jobs older than 24 hours
+   * This should be called periodically (e.g., daily) to remove old delayed jobs
+   */
+  async cleanStalePaymentExpiryJobs(): Promise<number> {
+    const staleThreshold = Date.now() - 24 * 60 * 60 * 1000; // 24 hours ago
+    let cleanedCount = 0;
+
+    // Get all delayed jobs
+    const delayedJobs = await this.paymentExpiryQueue.getDelayed();
+
+    for (const job of delayedJobs) {
+      // If the job is older than 24 hours, remove it
+      if (job.timestamp < staleThreshold) {
+        await job.remove();
+        cleanedCount++;
+        this.logger.log(
+          `Removed stale payment expiry job ${job.id} for payment ${job.data.paymentRequestId}`,
+        );
+      }
+    }
+
+    return cleanedCount;
   }
 }

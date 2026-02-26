@@ -9,11 +9,13 @@ import { QrCodeService } from './services/qr-code.service';
 import { ExpirationSchedulerService } from './services/expiration-scheduler.service';
 import { StellarContractService } from './services/stellar-contract.service';
 import { GlobalConfigModule } from '../config/config.module';
+import { JobsModule } from '../modules/jobs/jobs.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PaymentRequest, Merchant]),
     GlobalConfigModule,
+    JobsModule,
   ],
   controllers: [PaymentRequestController],
   providers: [

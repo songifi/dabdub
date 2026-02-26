@@ -23,6 +23,7 @@ import {
   PaymentRequestAmountTooHighException,
   PaymentRequestCannotCancelException,
 } from './exceptions/payment-request.exceptions';
+import { JobsService } from '../modules/jobs/jobs.service';
 
 /** Allowed status transitions */
 const STATUS_TRANSITIONS: Record<PaymentRequestStatus, PaymentRequestStatus[]> =
@@ -55,6 +56,7 @@ export class PaymentRequestService {
     private readonly qrCodeService: QrCodeService,
     private readonly stellarContractService: StellarContractService,
     private readonly configService: GlobalConfigService,
+    private readonly jobsService: JobsService,
   ) {}
 
   async create(dto: CreatePaymentRequestDto): Promise<PaymentRequest> {
@@ -115,6 +117,29 @@ export class PaymentRequestService {
       statusHistory,
       status: PaymentRequestStatus.PENDING,
     });
+
+    // Schedule payment expiry job
+    if (expiresAt > new Date()) {
+      try {
+        await this.jobsService.schedulePaymentExpiry(
+          paymentRequest.id,
+          expiresAt,
+          {
+            merchantId: dto.merchantId,
+            webhookUrl: dto.webhookUrl ?? undefined,
+            metadata: dto.metadata,
+          },
+        );
+        this.logger.debug(
+          `Scheduled expiry job for payment ${paymentRequest.id} at ${expiresAt}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to schedule expiry job for payment ${paymentRequest.id}`,
+          error,
+        );
+      }
+    }
 
     return paymentRequest;
   }
@@ -186,6 +211,14 @@ export class PaymentRequestService {
       reason,
     });
 
+    // Cancel the expiry job since payment is cancelled
+    try {
+      await this.jobsService.cancelPaymentExpiry(id);
+      this.logger.debug(`Cancelled expiry job for payment ${id}`);
+    } catch (error) {
+      this.logger.error(`Failed to cancel expiry job for payment ${id}`, error);
+    }
+
     return this.repository.update(id, {
       status: PaymentRequestStatus.CANCELLED,
       cancelledAt: new Date(),
@@ -202,6 +235,14 @@ export class PaymentRequestService {
       status: PaymentRequestStatus.PROCESSING,
       timestamp: new Date().toISOString(),
     });
+
+    // Cancel the expiry job since payment is being processed
+    try {
+      await this.jobsService.cancelPaymentExpiry(id);
+      this.logger.debug(`Cancelled expiry job for payment ${id}`);
+    } catch (error) {
+      this.logger.error(`Failed to cancel expiry job for payment ${id}`, error);
+    }
 
     return this.repository.update(id, {
       status: PaymentRequestStatus.PROCESSING,
