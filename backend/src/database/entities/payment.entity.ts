@@ -43,6 +43,27 @@ export class Payment {
   @Column({ nullable: true })
   reference?: string;
 
+  @Column({ name: 'depositAddress', nullable: true })
+  depositAddress?: string;
+
+  @Column({
+    name: 'usdcAmount',
+    type: 'decimal',
+    precision: 18,
+    scale: 8,
+    nullable: true,
+  })
+  usdcAmount?: number;
+
+  @Column({ name: 'expiresAt', type: 'timestamp', nullable: true })
+  expiresAt?: Date;
+
+  @Column({ name: 'idempotencyKey', nullable: true })
+  idempotencyKey?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata?: Record<string, unknown>;
+
   @CreateDateColumn()
   createdAt!: Date;
 

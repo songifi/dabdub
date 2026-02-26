@@ -5,6 +5,7 @@ import {
   Param,
   Query,
   Body,
+  Headers,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -27,6 +28,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { MerchantGuard } from '../auth/guards/merchant.guard';
 import { PaymentService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { CreatePaymentRequestDto } from './dto/create-payment-request.dto';
+import { PaymentRequestResponseDto } from './dto/payment-request-response.dto';
 import { PaymentDetailsDto } from './dto/payment-details.dto';
 import { PaymentListDto } from './dto/payment-list.dto';
 import { PaymentStatusDto } from './dto/payment-status.dto';
@@ -46,25 +49,53 @@ export class PaymentController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new payment request' })
+  @ApiOperation({
+    summary:
+      'Create a payment request (amount, currency, chain) or legacy payment',
+  })
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'Payment request created successfully',
-    type: PaymentDetailsDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid input data',
+    description: 'Invalid input data or unsupported chain',
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
     description: 'Payment with this idempotency key already exists',
   })
-  @ApiBody({ type: CreatePaymentDto })
+  @ApiBody({
+    type: CreatePaymentRequestDto,
+    description:
+      'Amount (fiat), currency, chain (supported chains), optional metadata and expiresInMinutes (default 30, max 1440). Idempotency-Key header supported.',
+  })
   async createPayment(
-    @Body() createPaymentDto: CreatePaymentDto,
-  ): Promise<CommonResponseDto<PaymentDetailsDto>> {
-    const payment = await this.paymentService.createPayment(createPaymentDto);
+    @Body() body: CreatePaymentRequestDto | CreatePaymentDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ): Promise<
+    | CommonResponseDto<PaymentRequestResponseDto>
+    | CommonResponseDto<PaymentDetailsDto>
+  > {
+    const isNewFlow =
+      'chain' in body &&
+      typeof (body as CreatePaymentRequestDto).chain === 'string';
+
+    if (isNewFlow) {
+      const data = await this.paymentService.createPaymentRequest(
+        body as CreatePaymentRequestDto,
+        idempotencyKey,
+      );
+      return {
+        success: true,
+        data,
+        message: 'Payment request created successfully',
+      };
+    }
+
+    const payment = await this.paymentService.createPayment(
+      body as CreatePaymentDto,
+    );
     return {
       success: true,
       data: payment,

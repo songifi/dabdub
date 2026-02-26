@@ -19,6 +19,10 @@ export const RedisKeys = {
   // Rate limiting
   rateLimit: (key: string) => `ratelimit:${key}`,
 
+  // Exchange rate (TTL 60s for payment request creation)
+  exchangeRate: (base: string, quote: string) =>
+    `exchange:rate:${base}:${quote}`,
+
   // Security
   ipBlocks: () => 'security:ip_blocks',
   ipBlock: (cidr: string) => `security:ip_block:${cidr}`,
