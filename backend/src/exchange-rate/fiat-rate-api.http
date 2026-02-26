@@ -1,0 +1,38 @@
+### Fiat Exchange Rate API Examples
+### Use with REST Client extension in VS Code
+
+@baseUrl = http://localhost:3000
+@apiPrefix = /exchange-rates
+
+### 1. Get USD to EUR rate
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=EUR
+
+### 2. Get USD to NGN rate (Nigerian Naira)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=NGN
+
+### 3. Get USD to KES rate (Kenyan Shilling)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=KES
+
+### 4. Get USD to GHS rate (Ghanaian Cedi)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=GHS
+
+### 5. Get EUR to GBP rate (cross rate)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=EUR&to=GBP
+
+### 6. Get same currency (should return 1.0)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=USD
+
+### 7. Get supported currencies
+GET {{baseUrl}}{{apiPrefix}}/fiat/supported
+
+### 8. Invalidate cache for USD/EUR
+DELETE {{baseUrl}}{{apiPrefix}}/fiat/cache?from=USD&to=EUR
+
+### 9. Test cache behavior (call twice quickly)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=EUR
+
+### Second call should show fromCache: true
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=EUR
+
+### 10. Test error handling (unsupported currency)
+GET {{baseUrl}}{{apiPrefix}}/fiat?from=USD&to=XYZ

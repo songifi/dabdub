@@ -7,17 +7,26 @@ import { ExchangeRate } from './exchange-rate.entity';
 import { CoinbaseProvider } from './providers/coinbase.provider';
 import { BinanceProvider } from './providers/binance.provider';
 import { CoinGeckoProvider } from './providers/coingecko.provider';
+import { FiatExchangeRateService } from './fiat-exchange-rate.service';
+import {
+  CoinGeckoFiatProvider,
+  OpenExchangeRatesProvider,
+} from './providers/fiat-rate.provider';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ExchangeRate]), HttpModule],
+  imports: [TypeOrmModule.forFeature([ExchangeRate]), HttpModule, CacheModule],
   controllers: [ExchangeRateController],
   providers: [
     ExchangeRateService,
     CoinbaseProvider,
     BinanceProvider,
     CoinGeckoProvider,
+    FiatExchangeRateService,
+    CoinGeckoFiatProvider,
+    OpenExchangeRatesProvider,
   ],
-  exports: [ExchangeRateService],
+  exports: [ExchangeRateService, FiatExchangeRateService],
 })
 export class ExchangeRateModule {}
 // import { Module } from '@nestjs/common';

@@ -5,7 +5,7 @@
 // GET /api/v1/rates/current
 const getCurrentRates = async () => {
   const response = await fetch('http://localhost:3000/api/v1/rates/current', {
-    headers: { 'Authorization': 'Bearer <admin-token>' },
+    headers: { Authorization: 'Bearer <admin-token>' },
   });
   return response.json();
 };
@@ -15,7 +15,7 @@ const setRateOverride = async () => {
   const response = await fetch('http://localhost:3000/api/v1/rates/override', {
     method: 'POST',
     headers: {
-      'Authorization': 'Bearer <finance-admin-token>',
+      Authorization: 'Bearer <finance-admin-token>',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -31,25 +31,31 @@ const setRateOverride = async () => {
 
 // GET /api/v1/liquidity-providers
 const listProviders = async () => {
-  const response = await fetch('http://localhost:3000/api/v1/liquidity-providers', {
-    headers: { 'Authorization': 'Bearer <admin-token>' },
-  });
+  const response = await fetch(
+    'http://localhost:3000/api/v1/liquidity-providers',
+    {
+      headers: { Authorization: 'Bearer <admin-token>' },
+    },
+  );
   return response.json();
 };
 
 // PATCH /api/v1/liquidity-providers/:id
 const updateProvider = async (providerId: string) => {
-  const response = await fetch(`http://localhost:3000/api/v1/liquidity-providers/${providerId}`, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': 'Bearer <super-admin-token>',
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    `http://localhost:3000/api/v1/liquidity-providers/${providerId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer <super-admin-token>',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        priority: 1,
+        feePercentage: '0.0150',
+      }),
     },
-    body: JSON.stringify({
-      priority: 1,
-      feePercentage: '0.0150',
-    }),
-  });
+  );
   return response.json();
 };
 

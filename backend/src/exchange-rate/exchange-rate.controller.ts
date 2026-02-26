@@ -4,13 +4,18 @@ import {
   Query,
   ParseEnumPipe,
   DefaultValuePipe,
+  Delete,
 } from '@nestjs/common';
 import { ExchangeRateService } from './exchange-rate.service';
+import { FiatExchangeRateService } from './fiat-exchange-rate.service';
 import { RateSource } from './enums/rate-source.enum';
 
 @Controller('exchange-rates')
 export class ExchangeRateController {
-  constructor(private readonly service: ExchangeRateService) {}
+  constructor(
+    private readonly service: ExchangeRateService,
+    private readonly fiatService: FiatExchangeRateService,
+  ) {}
 
   @Get()
   async getCurrentRate(
@@ -44,5 +49,41 @@ export class ExchangeRateController {
       new Date(to),
       source,
     );
+  }
+
+  @Get('fiat')
+  async getFiatRate(@Query('from') from: string, @Query('to') to: string) {
+    const result = await this.fiatService.getRate(
+      from.toUpperCase(),
+      to.toUpperCase(),
+    );
+    return {
+      from: from.toUpperCase(),
+      to: to.toUpperCase(),
+      rate: result.rate,
+      fromCache: result.fromCache,
+      isStale: result.isStale,
+    };
+  }
+
+  @Get('fiat/supported')
+  async getSupportedFiatCurrencies() {
+    return {
+      currencies: this.fiatService.getSupportedCurrencies(),
+    };
+  }
+
+  @Delete('fiat/cache')
+  async invalidateFiatCache(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    await this.fiatService.invalidateCache(
+      from.toUpperCase(),
+      to.toUpperCase(),
+    );
+    return {
+      message: `Cache invalidated for ${from.toUpperCase()}/${to.toUpperCase()}`,
+    };
   }
 }
