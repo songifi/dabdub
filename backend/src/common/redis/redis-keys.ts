@@ -18,6 +18,7 @@ export const RedisKeys = {
 
   // Rate limiting
   rateLimit: (key: string) => `ratelimit:${key}`,
+  apiKeyFailedAttempts: (ip: string) => `apikey:failed:${ip}`,
 
   // Security
   ipBlocks: () => 'security:ip_blocks',
