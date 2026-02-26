@@ -11,12 +11,7 @@ import { QrCodeService } from './services/qr-code.service';
 import { ExpirationSchedulerService } from './services/expiration-scheduler.service';
 import { StellarContractService } from './services/stellar-contract.service';
 import { GlobalConfigModule } from '../config/config.module';
-import {
-  PaymentExpiryProcessor,
-  PAYMENT_EXPIRY_QUEUE,
-} from './processors/payment-expiry.processor';
-import { WebhookDeliveryService } from '../webhook/services/webhook-delivery.service';
-import { WebhookDeliveryLogEntity } from '../database/entities/webhook-delivery-log.entity';
+import { JobsModule } from '../modules/jobs/jobs.module';
 
 @Module({
   imports: [
@@ -30,6 +25,7 @@ import { WebhookDeliveryLogEntity } from '../database/entities/webhook-delivery-
       name: PAYMENT_EXPIRY_QUEUE,
     }),
     GlobalConfigModule,
+    JobsModule,
   ],
   controllers: [PaymentRequestController],
   providers: [

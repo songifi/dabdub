@@ -16,6 +16,7 @@ import { NotificationProcessor } from './processors/notification.processor';
 import { RefundProcessor } from './processors/refund.processor';
 import { ComplianceReportProcessor } from './processors/compliance-report.processor';
 import { WebhookProcessor } from './processors/webhook.processor';
+import { PaymentExpiryProcessor } from './processors/payment-expiry.processor';
 import { JobPermanentFailureService } from './job-permanent-failure.service';
 import { ScheduledJobsModule } from './scheduled/scheduled-jobs.module';
 
@@ -90,6 +91,14 @@ import { ScheduledJobsModule } from './scheduled/scheduled-jobs.module';
           backoff: { type: 'exponential', delay: 5000 },
         },
       },
+      {
+        name: 'payment-expiry',
+        defaultJobOptions: {
+          attempts: 1,
+          removeOnComplete: true,
+          removeOnFail: { count: 100 },
+        },
+      },
     ),
     BullBoardModule.forRoot({
       route: '/admin/queues',
@@ -102,6 +111,7 @@ import { ScheduledJobsModule } from './scheduled/scheduled-jobs.module';
       { name: 'refunds', adapter: BullMQAdapter },
       { name: 'compliance-reports', adapter: BullMQAdapter },
       { name: 'webhooks', adapter: BullMQAdapter },
+      { name: 'payment-expiry', adapter: BullMQAdapter },
     ),
     ScheduledJobsModule,
   ],
@@ -116,6 +126,7 @@ import { ScheduledJobsModule } from './scheduled/scheduled-jobs.module';
     RefundProcessor,
     ComplianceReportProcessor,
     WebhookProcessor,
+    PaymentExpiryProcessor,
   ],
   exports: [JobsService, BullModule, BullBoardAuthMiddleware],
 })
