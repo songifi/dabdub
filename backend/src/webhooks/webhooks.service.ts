@@ -17,6 +17,17 @@ import {
   BadRequestException,
 } from '../common/errors/exceptions/http-exceptions';
 
+// Retry schedule: immediately, 30s, 5min, 30min, 2h (max 5 attempts)
+export const WEBHOOK_RETRY_DELAYS_MS = [
+  0,        // Immediate (attempt 1)
+  30000,    // 30 seconds (attempt 2)
+  300000,   // 5 minutes (attempt 3)
+  1800000,  // 30 minutes (attempt 4)
+  7200000,  // 2 hours (attempt 5)
+];
+
+export const MAX_WEBHOOKS_PER_MERCHANT = 5;
+
 @Injectable()
 export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
@@ -32,10 +43,23 @@ export class WebhooksService {
     merchantId: string,
     createDto: CreateWebhookDto,
   ): Promise<WebhookConfigurationEntity> {
+    // Check if merchant has reached the maximum number of webhooks
+    const existingCount = await this.configRepository.count({
+      where: { merchantId },
+    });
+
+    if (existingCount >= MAX_WEBHOOKS_PER_MERCHANT) {
+      throw new BadRequestException(
+        `Maximum number of webhooks (${MAX_WEBHOOKS_PER_MERCHANT}) reached for this merchant. ` +
+        `Please delete an existing webhook before creating a new one.`,
+      );
+    }
+
     const webhook = this.configRepository.create({
       ...createDto,
       merchantId,
       secret: WebhookSigner.generateSecret(),
+      maxRetries: 5, // Set default to 5 for the retry schedule
     });
     return this.configRepository.save(webhook);
   }
