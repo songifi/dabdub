@@ -3,7 +3,8 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class PasswordService {
-  private readonly saltRounds = 10;
+  /** Bcrypt rounds for password hashing (spec: ≥12). */
+  private readonly saltRounds = 12;
   /** Bcrypt rounds for admin users (spec: 12). */
   private readonly adminSaltRounds = 12;
 

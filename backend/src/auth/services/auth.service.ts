@@ -194,12 +194,14 @@ export class AuthService {
       role: user.role,
     };
 
+    // Access token: 15 minutes TTL
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '1h',
+      expiresIn: '15m',
     });
 
+    // Refresh token: 30 days TTL
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      expiresIn: '30d',
       secret: process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
     });
 
