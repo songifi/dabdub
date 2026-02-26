@@ -235,9 +235,8 @@ export class WebhookDeliveryService {
       }
 
       if (attempt < maxRetries) {
-        log.nextRetryAt = new Date(
-          Date.now() + this.calculateBackoffDelay(retryDelay, attempt),
-        );
+        const retryDelay = RETRY_SCHEDULE_MS[attempt] ?? RETRY_SCHEDULE_MS[RETRY_SCHEDULE_MS.length - 1];
+        log.nextRetryAt = new Date(Date.now() + retryDelay);
       }
 
       await this.deliveryLogRepository.save(log);
@@ -249,7 +248,9 @@ export class WebhookDeliveryService {
       }
 
       if (attempt < maxRetries) {
-        await this.sleep(this.calculateBackoffDelay(retryDelay, attempt));
+        const retryDelay = RETRY_SCHEDULE_MS[attempt] ?? RETRY_SCHEDULE_MS[RETRY_SCHEDULE_MS.length - 1];
+        this.logger.debug(`Retry ${attempt} scheduled in ${retryDelay}ms for webhook ${config.id}`);
+        await this.sleep(retryDelay);
       }
     }
 

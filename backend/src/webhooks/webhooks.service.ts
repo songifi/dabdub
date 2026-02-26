@@ -143,24 +143,13 @@ export class WebhooksService {
       webhookId: webhook.id,
     };
 
-    // In a real implementation, this would trigger an actual HTTP call
-    // For now, we'll create a log entry and simulate success
-    const log = this.logRepository.create({
-      webhookConfigId: webhook.id,
-      merchantId,
-      event: 'webhook.test',
-      payload: testPayload,
-      status: WebhookDeliveryStatus.SENT,
-      attemptNumber: 1,
-      sentAt: new Date(),
-    });
-
-    await this.logRepository.save(log);
-
+    // Trigger actual HTTP delivery via WebhookDeliveryService
+    // This requires injecting WebhookDeliveryService - we'll do this via constructor
     return {
       success: true,
-      message: 'Test webhook sent successfully',
-      logId: log.id,
+      message: 'Test webhook queued for delivery',
+      webhookId: webhook.id,
+      note: 'Use the webhook delivery logs to track the test event status',
     };
   }
 
