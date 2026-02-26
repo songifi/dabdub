@@ -10,7 +10,9 @@ import {
   Version,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Response as ExpressResponse, Request as ExpressRequest } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -33,7 +35,7 @@ import {
   LoginResponseDto,
   UserResponseDto,
 } from '../dto/auth.dto';
-import { Request as ExpressRequest } from 'express';
+
 import { PasswordService } from '../services/password.service';
 import { TwoFactorService } from '../services/two-factor.service';
 import { ApiKeyService } from '../services/api-key.service';
@@ -86,7 +88,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'User login',
     description:
-      'Authenticates user with email and password, returns JWT tokens',
+      'Authenticates user with email and password, returns JWT tokens in HTTP-only cookies',
   })
   @ApiHeader({
     name: 'User-Agent',
@@ -95,7 +97,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Login successful, JWT tokens returned',
+    description: 'Login successful, JWT tokens set in HTTP-only cookies',
     type: LoginResponseDto,
   })
   @ApiResponse({
@@ -105,18 +107,47 @@ export class AuthController {
   async login(
     @Body() loginDto: LoginDto,
     @Req() request: ExpressRequest,
-  ): Promise<LoginResponseDto | any> {
+    @Res({ passthrough: true }) response: ExpressResponse,
+  ): Promise<Omit<LoginResponseDto, 'accessToken' | 'refreshToken'> | any> {
     const userAgent = request.get('user-agent');
     const ipAddress = request.ip;
 
-    return this.authService.login(loginDto, userAgent, ipAddress);
+    const result = await this.authService.login(loginDto, userAgent, ipAddress);
+
+    // If 2FA is required, return without setting cookies
+    if (result.requiresTwoFactor) {
+      return result;
+    }
+
+    // Set HTTP-only cookies for tokens
+    // Access token: 15 minutes
+    response.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+    });
+
+    // Refresh token: 30 days
+    response.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/auth/refresh',
+    });
+
+    // Return user info without tokens (tokens are in cookies)
+    const { accessToken, refreshToken, ...responseWithoutTokens } = result;
+    return responseWithoutTokens;
   }
 
   @Version('1')
   @Post('refresh')
   @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Uses refresh token to obtain new access token',
+    description: 'Uses refresh token from HTTP-only cookie to obtain new access token',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -124,8 +155,7 @@ export class AuthController {
     schema: {
       example: {
         accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        expiresIn: 3600,
+        expiresIn: 900,
       },
     },
   })
@@ -133,8 +163,31 @@ export class AuthController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid or expired refresh token',
   })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<any> {
-    return this.authService.refreshToken(refreshTokenDto);
+  async refresh(
+    @Req() request: ExpressRequest,
+    @Res({ passthrough: true }) response: ExpressResponse,
+  ): Promise<{ message: string; expiresIn: number }> {
+    const refreshToken = request.cookies?.refresh_token;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+
+    const result = await this.authService.refreshToken({ refreshToken });
+
+    // Set new HTTP-only cookie for access token
+    response.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+    });
+
+    return {
+      message: 'Token refreshed successfully',
+      expiresIn: 900, // 15 minutes in seconds
+    };
   }
 
   @Version('1')
