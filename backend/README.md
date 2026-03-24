@@ -156,6 +156,84 @@ DB_NAME=dabdub_test pnpm test --testPathPattern=database.integration
 
 ---
 
+## Health Check
+
+### Endpoint
+
+```
+GET /api/v1/health
+```
+
+Used by load balancers, Kubernetes liveness/readiness probes, and CI/CD
+post-deploy smoke tests.
+
+### Response format
+
+```json
+{
+  "status": "ok",
+  "info": {
+    "db":      { "status": "up" },
+    "redis":   { "status": "up" },
+    "stellar": { "status": "up" }
+  },
+  "error": {},
+  "details": {
+    "db":      { "status": "up" },
+    "redis":   { "status": "up" },
+    "stellar": { "status": "up" }
+  }
+}
+```
+
+When a component is degraded the same shape is returned but with the
+failing component reported under `error` and `status` set to `"error"`:
+
+```json
+{
+  "status": "error",
+  "info": {
+    "db": { "status": "up" }
+  },
+  "error": {
+    "redis": { "status": "down", "message": "connect ECONNREFUSED 127.0.0.1:6379" }
+  },
+  "details": {
+    "db":    { "status": "up" },
+    "redis": { "status": "down", "message": "connect ECONNREFUSED 127.0.0.1:6379" }
+  }
+}
+```
+
+### HTTP status codes
+
+| Scenario | Status |
+|---|---|
+| All three components (`db`, `redis`, `stellar`) healthy | **200 OK** |
+| Any component is down or times out | **503 Service Unavailable** |
+
+### Checks performed
+
+| Key | Indicator | How |
+|---|---|---|
+| `db` | `TypeOrmHealthIndicator` | Sends a `SELECT 1` via the active TypeORM connection |
+| `redis` | `RedisHealthIndicator` | Sends `PING` over a dedicated ioredis client (2 s timeout) |
+| `stellar` | `StellarHealthIndicator` | `GET {STELLAR_RPC_URL}/fee_stats` (5 s timeout, native `fetch`) |
+
+### CI/CD smoke test
+
+Add this step to your post-deploy pipeline:
+
+```bash
+curl --fail --silent --show-error \
+  "https://your-api-host/api/v1/health" | jq .status
+```
+
+`--fail` causes `curl` to exit non-zero on HTTP 503, failing the pipeline
+and triggering a rollback or alert.
+
+---
+
 ## Resources
 
 - [NestJS Documentation](https://docs.nestjs.com)

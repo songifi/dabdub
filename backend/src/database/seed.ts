@@ -35,7 +35,7 @@ interface UserSeed {
   displayName: string;
   isAdmin: boolean;
   isTreasury: boolean;
-}
+} 
 
 const USER_SEEDS: UserSeed[] = [
   {
