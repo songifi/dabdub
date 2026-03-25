@@ -48,6 +48,7 @@ pub enum DataKey {
     AllPendingClaims,
     Balance(String),
     StakeBalance(String),
+    UsernameToAddr(String),
     FeeRateBps,
     FeeTreasuryUsername,
 }
@@ -59,6 +60,14 @@ pub struct WithdrawalEvent {
     pub username: String,
     pub to_address: Address,
     pub amount: i128,
+    pub ledger: u32,
+}
+
+#[contractevent(topics = ["VAULT", "deposit"])]
+pub struct DepositEvent {
+    pub username: String,
+    pub amount: i128,
+    pub from_address: Address,
     pub ledger: u32,
 }
 
@@ -245,6 +254,49 @@ impl Vault {
         Ok(())
     }
 
+    pub fn deposit(
+        env: Env,
+        from_address: Address,
+        username: String,
+        amount: i128,
+    ) -> Result<(), Error> {
+        from_address.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        if !env
+            .storage()
+            .instance()
+            .has(&DataKey::UsernameToAddr(username.clone()))
+        {
+            return Err(Error::UserNotFound);
+        }
+
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(&from_address, &env.current_contract_address(), &amount);
+
+        let balance_key = DataKey::Balance(username.clone());
+        let current_balance: i128 = env.storage().instance().get(&balance_key).unwrap_or(0);
+        let new_balance = current_balance + amount;
+        env.storage().instance().set(&balance_key, &new_balance);
+
+        // Bump TTL
+        env.storage().instance().extend_ttl(100, 1000);
+
+        DepositEvent {
+            username,
+            amount,
+            from_address,
+            ledger: env.ledger().sequence(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn withdraw(
         env: Env,
         username: String,
@@ -361,6 +413,15 @@ impl Vault {
         env.storage()
             .instance()
             .set(&DataKey::Balance(username), &balance);
+    }
+
+    pub fn set_user_address(env: Env, caller: Address, username: String, address: Address) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::UsernameToAddr(username), &address);
     }
 
     pub fn get_balance(env: Env, username: String) -> i128 {

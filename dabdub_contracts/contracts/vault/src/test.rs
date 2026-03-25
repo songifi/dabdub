@@ -650,6 +650,78 @@ fn test_set_min_deposit() {
 }
 
 #[test]
+fn test_deposit_happy_path() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let usdc_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(usdc_admin.clone());
+    let usdc = asset_contract.address();
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Register user
+    client.set_user_address(&admin, &username, &user);
+
+    // Mint USDC to user
+    let usdc_client = token::StellarAssetClient::new(&env, &usdc);
+    usdc_client.mint(&user, &10_000_000);
+
+    // Deposit
+    client.deposit(&user, &username, &5_000_000);
+
+    // Verify balances
+    assert_eq!(client.get_balance(&username), 5_000_000);
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&contract_id), 5_000_000);
+    assert_eq!(token_client.balance(&user), 5_000_000);
+}
+
+#[test]
+fn test_deposit_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Try to deposit 0
+    let result = client.try_deposit(&user, &username, &0);
+    assert_eq!(result, Err(Ok(crate::Error::InvalidAmount)));
+
+    // Try to deposit negative
+    let result = client.try_deposit(&user, &username, &-100);
+    assert_eq!(result, Err(Ok(crate::Error::InvalidAmount)));
+}
+
+#[test]
+fn test_deposit_user_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "bob");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Bob is not registered
+    let result = client.try_deposit(&user, &username, &5_000_000);
+    assert_eq!(result, Err(Ok(crate::Error::UserNotFound)));
+}
+
+#[test]
 #[should_panic(expected = "Missing required role")]
 fn test_refund_not_admin() {
     let env = Env::default();
