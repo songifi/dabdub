@@ -252,7 +252,7 @@ fn test_transfer_to_vault_by_backend() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
 
     let wallet_id = env.register(UserWallet, (&backend, &vault_id, &usdc, &None::<Address>));
     let wallet = UserWalletClient::new(&env, &wallet_id);
@@ -284,7 +284,7 @@ fn test_transfer_to_vault_insufficient_balance_including_fee() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let wallet_id = env.register(UserWallet, (&backend, &vault_id, &usdc, &None::<Address>));
     let wallet = UserWalletClient::new(&env, &wallet_id);
 
@@ -309,7 +309,7 @@ fn test_transfer_to_vault_unauthorized() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let vault_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let wallet_id = env.register(UserWallet, (&backend, &vault_id, &usdc, &None::<Address>));
     let wallet = UserWalletClient::new(&env, &wallet_id);
 

@@ -44,6 +44,7 @@ pub enum Error {
     Unauthorized = 3,
     InvalidAmount = 4,
     UserNotFound = 5,
+    SelfTransfer = 6,
 }
 
 #[contracttype]
@@ -62,6 +63,8 @@ pub enum DataKey {
     PendingClaim(BytesN<32>),
     AllPendingClaims,
     Balance(String),
+    FeeRateBps,
+    FeeTreasuryUsername,
 }
 
 const MAX_FEE: i128 = 5_000_000;
@@ -71,6 +74,17 @@ pub struct WithdrawalEvent {
     pub username: String,
     pub to_address: Address,
     pub amount: i128,
+    pub ledger: u32,
+}
+
+#[contractevent(topics = ["VAULT", "transfer"])]
+pub struct TransferEvent {
+    pub from: String,
+    pub to: String,
+    pub amount: i128,
+    pub fee: i128,
+    pub net_amount: i128,
+    pub note: String,
     pub ledger: u32,
 }
 
@@ -133,6 +147,111 @@ pub struct Vault;
 
 #[contractimpl]
 impl Vault {
+    pub fn transfer(
+        env: Env,
+        from_username: String,
+        to_username: String,
+        amount: i128,
+        note: String,
+    ) -> Result<(), Error> {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        if from_username == to_username {
+            return Err(Error::SelfTransfer);
+        }
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let from_balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(from_username.clone()))
+            .ok_or(Error::UserNotFound)?;
+
+        if !env
+            .storage()
+            .instance()
+            .has(&DataKey::Balance(to_username.clone()))
+        {
+            return Err(Error::UserNotFound);
+        }
+
+        if from_balance < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        let fee_rate_bps: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeRateBps)
+            .unwrap_or(0);
+        let fee_treasury_username: String = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeTreasuryUsername)
+            .expect("Fee treasury not set");
+
+        let fee = (amount * fee_rate_bps) / 10_000;
+        let net_amount = amount - fee;
+
+        // Deduct from sender
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(from_username.clone()), &(from_balance - amount));
+
+        // Credit to recipient
+        let to_balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(to_username.clone()))
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(to_username.clone()), &(to_balance + net_amount));
+
+        // Credit fee to treasury
+        let treasury_balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(fee_treasury_username.clone()))
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(
+                &DataKey::Balance(fee_treasury_username),
+                &(treasury_balance + fee),
+            );
+
+        // Bump TTL
+        env.storage().instance().extend_ttl(100, 1000);
+
+        // Emit event
+        TransferEvent {
+            from: from_username,
+            to: to_username,
+            amount,
+            fee,
+            net_amount,
+            note,
+            ledger: env.ledger().sequence(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn withdraw(
         env: Env,
         username: String,
@@ -209,6 +328,8 @@ impl Vault {
         usdc_token: Address,
         fee_amount: i128,
         min_deposit: i128,
+        fee_rate_bps: i128,
+        fee_treasury_username: String,
     ) {
         if fee_amount > MAX_FEE {
             panic!("Fee exceeds maximum");
@@ -224,6 +345,12 @@ impl Vault {
         env.storage()
             .instance()
             .set(&DataKey::MinDeposit, &min_deposit);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRateBps, &fee_rate_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeTreasuryUsername, &fee_treasury_username);
         env.storage()
             .instance()
             .set(&DataKey::AvailablePayments, &0i128);
@@ -242,6 +369,38 @@ impl Vault {
             .set(&DataKey::AllPendingClaims, &empty_vec);
 
         access_control::grant_role(&env, admin, access_control::ADMIN_ROLE);
+    }
+
+    pub fn set_fee_rate(env: Env, caller: Address, fee_rate_bps: i128) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRateBps, &fee_rate_bps);
+    }
+
+    pub fn get_fee_rate(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeRateBps)
+            .unwrap_or(0)
+    }
+
+    pub fn set_fee_treasury(env: Env, caller: Address, fee_treasury_username: String) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeTreasuryUsername, &fee_treasury_username);
+    }
+
+    pub fn get_fee_treasury(env: Env) -> String {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeTreasuryUsername)
+            .expect("Fee treasury not set")
     }
 
     pub fn process_payment(

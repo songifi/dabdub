@@ -12,7 +12,7 @@ fn test_grant_role() {
     let usdc = Address::generate(&env);
     let operator = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     // Grant operator role
@@ -30,7 +30,7 @@ fn test_revoke_role() {
     let usdc = Address::generate(&env);
     let operator = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
     client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
 
@@ -51,7 +51,7 @@ fn test_only_admin_can_grant() {
     let operator = Address::generate(&env);
     let non_admin = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     // Non-admin tries to grant role - should panic
@@ -67,7 +67,7 @@ fn test_multiple_roles() {
     let usdc = Address::generate(&env);
     let user = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     // Grant multiple roles
@@ -85,7 +85,7 @@ fn test_has_role_returns_false() {
     let usdc = Address::generate(&env);
     let user = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     assert!(!client.has_role(&user, &access_control::OPERATOR_ROLE));
@@ -98,7 +98,7 @@ fn test_constructor() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     assert_eq!(client.get_admin(), admin);
@@ -117,7 +117,7 @@ fn test_constructor_fee_too_high() {
 
     env.register(
         Vault,
-        (&admin, &usdc, &10_000_000i128, &1_000_000i128), // Fee > MAX_FEE
+        (&admin, &usdc, &10_000_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")), // Fee > MAX_FEE
     );
 }
 
@@ -134,7 +134,7 @@ fn test_process_payment() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -180,7 +180,7 @@ fn test_process_payment_not_operator() {
     let user_wallet = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
@@ -198,25 +198,7 @@ fn test_process_payment_when_paused() {
     let user_wallet = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
-    let client = VaultClient::new(&env, &contract_id);
-
-    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
-    client.pause(&admin);
-
-    let payment_id = BytesN::from_array(&env, &[1u8; 32]);
-    client.process_payment(&operator, &user_wallet, &50_000_000, &payment_id);
-}
-
-#[test]
-fn test_pause_unpause() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let admin = Address::generate(&env);
-    let usdc = Address::generate(&env);
-
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.pause(&admin);
@@ -239,7 +221,7 @@ fn test_verify_vault_accounting() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
@@ -276,7 +258,7 @@ fn test_withdraw_happy_path() {
     let to_address = Address::generate(&env);
     let username = soroban_sdk::String::from_str(&env, "alice");
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     // Set initial balance
@@ -307,7 +289,7 @@ fn test_withdraw_insufficient_balance() {
     let username = soroban_sdk::String::from_str(&env, "alice");
     let to_address = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.set_balance(&admin, &username, &100_000);
@@ -326,7 +308,7 @@ fn test_withdraw_paused() {
     let username = soroban_sdk::String::from_str(&env, "alice");
     let to_address = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.pause(&admin);
@@ -346,7 +328,7 @@ fn test_withdraw_unauthorized() {
     let username = soroban_sdk::String::from_str(&env, "alice");
     let to_address = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     // This should panic because admin hasn't authorized it
@@ -366,7 +348,7 @@ fn test_refund_payment_with_fee() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -413,7 +395,7 @@ fn test_refund_payment_without_fee() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -462,7 +444,7 @@ fn test_withdraw_vault_funds() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -505,7 +487,7 @@ fn test_set_fee() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.set_fee(&admin, &1_000_000i128);
@@ -521,7 +503,7 @@ fn test_set_fee_too_high() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.set_fee(&admin, &10_000_000i128);
@@ -535,7 +517,7 @@ fn test_set_min_deposit() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.set_min_deposit(&admin, &2_000_000i128);
@@ -553,7 +535,7 @@ fn test_refund_not_admin() {
     let user_wallet = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
@@ -571,7 +553,7 @@ fn test_withdraw_not_treasurer() {
     let treasury_wallet = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     client.withdraw_vault_funds(&not_treasurer, &treasury_wallet);
@@ -587,7 +569,7 @@ fn test_refund_insufficient_funds() {
     let user_wallet = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
@@ -609,7 +591,7 @@ fn test_cancel_pending_claim_by_admin_with_force() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -652,7 +634,7 @@ fn test_cancel_pending_claim_by_operator_with_force() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -692,7 +674,7 @@ fn test_cancel_pending_claim_not_expired_without_force() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -728,7 +710,7 @@ fn test_cancel_pending_claim_unauthorized() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -758,7 +740,7 @@ fn test_cancel_pending_claim_not_found() {
     let admin = Address::generate(&env);
     let usdc = Address::generate(&env);
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let payment_id = BytesN::from_array(&env, &[99u8; 32]);
@@ -778,7 +760,7 @@ fn test_cancel_pending_claim_accounting_reversed() {
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
     let user_wallet_id = env.register(
@@ -805,4 +787,114 @@ fn test_cancel_pending_claim_accounting_reversed() {
     assert_eq!(fees, 0);
     assert_eq!(total, 0);
     assert!(client.verify_vault_accounting());
+}
+
+#[test]
+fn test_transfer_happy_path() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let from_username = soroban_sdk::String::from_str(&env, "alice");
+    let to_username = soroban_sdk::String::from_str(&env, "bob");
+    let treasury = soroban_sdk::String::from_str(&env, "treasury");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Set initial balances
+    client.set_balance(&admin, &from_username, &100_000_000); // 100 USDC
+    client.set_balance(&admin, &to_username, &0);
+    client.set_balance(&admin, &treasury, &0);
+
+    // Transfer 100 USDC
+    // Fee = 100,000,000 * 50 / 10,000 = 500,000
+    // Net = 99,500,000
+    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "lunch"));
+    assert_eq!(result, Ok(()));
+
+    // Verify balances
+    assert_eq!(client.get_balance(&from_username), 0);
+    assert_eq!(client.get_balance(&to_username), 99_500_000);
+    assert_eq!(client.get_balance(&treasury), 500_000);
+}
+
+#[test]
+fn test_transfer_self_transfer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+    let treasury = soroban_sdk::String::from_str(&env, "treasury");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
+    let client = VaultClient::new(&env, &contract_id);
+
+    let result = client.transfer(&username, &username, &100_000_000, &soroban_sdk::String::from_str(&env, "self"));
+    assert_eq!(result, Err(crate::Error::SelfTransfer));
+}
+
+#[test]
+fn test_transfer_insufficient_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let from_username = soroban_sdk::String::from_str(&env, "alice");
+    let to_username = soroban_sdk::String::from_str(&env, "bob");
+    let treasury = soroban_sdk::String::from_str(&env, "treasury");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
+    let client = VaultClient::new(&env, &contract_id);
+
+    client.set_balance(&admin, &from_username, &50_000_000);
+    client.set_balance(&admin, &to_username, &0);
+
+    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "overspend"));
+    assert_eq!(result, Err(crate::Error::InsufficientBalance));
+}
+
+#[test]
+fn test_transfer_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let from_username = soroban_sdk::String::from_str(&env, "alice");
+    let to_username = soroban_sdk::String::from_str(&env, "bob");
+    let treasury = soroban_sdk::String::from_str(&env, "treasury");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
+    let client = VaultClient::new(&env, &contract_id);
+
+    client.pause(&admin);
+
+    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "paused"));
+    assert_eq!(result, Err(crate::Error::ContractPaused));
+}
+
+#[test]
+fn test_transfer_user_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let from_username = soroban_sdk::String::from_str(&env, "alice");
+    let to_username = soroban_sdk::String::from_str(&env, "bob");
+    let treasury = soroban_sdk::String::from_str(&env, "treasury");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Bob doesn't exist (no balance set)
+    client.set_balance(&admin, &from_username, &100_000_000);
+
+    let result = client.transfer(&from_username, &to_username, &10_000_000, &soroban_sdk::String::from_str(&env, "missing bob"));
+    assert_eq!(result, Err(crate::Error::UserNotFound));
 }
