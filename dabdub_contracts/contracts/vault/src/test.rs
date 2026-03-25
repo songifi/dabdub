@@ -201,11 +201,13 @@ fn test_process_payment_when_paused() {
     let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
     let client = VaultClient::new(&env, &contract_id);
 
+    client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
+
     client.pause(&admin);
     assert!(client.is_paused());
 
-    client.unpause(&admin);
-    assert!(!client.is_paused());
+    let payment_id = BytesN::from_array(&env, &[1u8; 32]);
+    client.process_payment(&operator, &user_wallet, &50_000_000, &payment_id);
 }
 
 #[test]
@@ -269,8 +271,7 @@ fn test_withdraw_happy_path() {
     usdc_client.mint(&contract_id, &1_000_000);
 
     // Withdraw
-    let result = client.withdraw(&username, &to_address, &500_000);
-    assert_eq!(result, Ok(()));
+    client.withdraw(&username, &to_address, &500_000);
 
     // Verify balances
     assert_eq!(client.get_balance(&username), 500_000);
@@ -294,8 +295,8 @@ fn test_withdraw_insufficient_balance() {
 
     client.set_balance(&admin, &username, &100_000);
 
-    let result = client.withdraw(&username, &to_address, &500_000);
-    assert_eq!(result, Err(crate::Error::InsufficientBalance));
+    let result = client.try_withdraw(&username, &to_address, &500_000);
+    assert_eq!(result, Err(Ok(crate::Error::InsufficientBalance)));
 }
 
 #[test]
@@ -313,8 +314,8 @@ fn test_withdraw_paused() {
 
     client.pause(&admin);
 
-    let result = client.withdraw(&username, &to_address, &500_000);
-    assert_eq!(result, Err(crate::Error::ContractPaused));
+    let result = client.try_withdraw(&username, &to_address, &500_000);
+    assert_eq!(result, Err(Ok(crate::Error::ContractPaused)));
 }
 
 #[test]
@@ -492,6 +493,130 @@ fn test_set_fee() {
 
     client.set_fee(&admin, &1_000_000i128);
     assert_eq!(client.get_fee_amount(), 1_000_000);
+}
+
+#[test]
+fn test_unstake_partial() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Set initial stake balance and liquid balance
+    client.set_stake_balance(&admin, &username, &1_000_000);
+    client.set_balance(&admin, &username, &500_000);
+
+    // Unstake partial
+    client.unstake(&username, &400_000);
+
+    // Verify balances
+    assert_eq!(client.get_stake_balance(&username), 600_000);
+    assert_eq!(client.get_balance(&username), 900_000);
+}
+
+#[test]
+fn test_unstake_full() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Set initial stake balance
+    client.set_stake_balance(&admin, &username, &1_000_000);
+    client.set_balance(&admin, &username, &0);
+
+    // Unstake full
+    client.unstake(&username, &1_000_000);
+
+    // Verify balances
+    assert_eq!(client.get_stake_balance(&username), 0);
+    assert_eq!(client.get_balance(&username), 1_000_000);
+}
+
+#[test]
+fn test_unstake_insufficient_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Set initial stake balance
+    client.set_stake_balance(&admin, &username, &100_000);
+
+    // Try to unstake more than available
+    let result = client.try_unstake(&username, &200_000);
+    assert_eq!(result, Err(Ok(crate::Error::InsufficientBalance)));
+}
+
+#[test]
+fn test_unstake_invalid_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Try to unstake 0
+    let result = client.try_unstake(&username, &0);
+    assert_eq!(result, Err(Ok(crate::Error::InvalidAmount)));
+
+    // Try to unstake negative
+    let result = client.try_unstake(&username, &-100);
+    assert_eq!(result, Err(Ok(crate::Error::InvalidAmount)));
+}
+
+#[test]
+fn test_unstake_user_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "bob");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Bob has no stake record
+    let result = client.try_unstake(&username, &100_000);
+    assert_eq!(result, Err(Ok(crate::Error::UserNotFound)));
+}
+
+#[test]
+fn test_unstake_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &soroban_sdk::String::from_str(&env, "treasury")));
+    let client = VaultClient::new(&env, &contract_id);
+
+    client.pause(&admin);
+
+    let result = client.try_unstake(&username, &100_000);
+    assert_eq!(result, Err(Ok(crate::Error::ContractPaused)));
 }
 
 #[test]
@@ -811,8 +936,7 @@ fn test_transfer_happy_path() {
     // Transfer 100 USDC
     // Fee = 100,000,000 * 50 / 10,000 = 500,000
     // Net = 99,500,000
-    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "lunch"));
-    assert_eq!(result, Ok(()));
+    client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "lunch"));
 
     // Verify balances
     assert_eq!(client.get_balance(&from_username), 0);
@@ -833,8 +957,8 @@ fn test_transfer_self_transfer() {
     let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128, &50i128, &treasury));
     let client = VaultClient::new(&env, &contract_id);
 
-    let result = client.transfer(&username, &username, &100_000_000, &soroban_sdk::String::from_str(&env, "self"));
-    assert_eq!(result, Err(crate::Error::SelfTransfer));
+    let result = client.try_transfer(&username, &username, &100_000_000, &soroban_sdk::String::from_str(&env, "self"));
+    assert_eq!(result, Err(Ok(crate::Error::SelfTransfer)));
 }
 
 #[test]
@@ -854,8 +978,8 @@ fn test_transfer_insufficient_balance() {
     client.set_balance(&admin, &from_username, &50_000_000);
     client.set_balance(&admin, &to_username, &0);
 
-    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "overspend"));
-    assert_eq!(result, Err(crate::Error::InsufficientBalance));
+    let result = client.try_transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "overspend"));
+    assert_eq!(result, Err(Ok(crate::Error::InsufficientBalance)));
 }
 
 #[test]
@@ -874,8 +998,8 @@ fn test_transfer_paused() {
 
     client.pause(&admin);
 
-    let result = client.transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "paused"));
-    assert_eq!(result, Err(crate::Error::ContractPaused));
+    let result = client.try_transfer(&from_username, &to_username, &100_000_000, &soroban_sdk::String::from_str(&env, "paused"));
+    assert_eq!(result, Err(Ok(crate::Error::ContractPaused)));
 }
 
 #[test]
@@ -895,6 +1019,6 @@ fn test_transfer_user_not_found() {
     // Bob doesn't exist (no balance set)
     client.set_balance(&admin, &from_username, &100_000_000);
 
-    let result = client.transfer(&from_username, &to_username, &10_000_000, &soroban_sdk::String::from_str(&env, "missing bob"));
-    assert_eq!(result, Err(crate::Error::UserNotFound));
+    let result = client.try_transfer(&from_username, &to_username, &10_000_000, &soroban_sdk::String::from_str(&env, "missing bob"));
+    assert_eq!(result, Err(Ok(crate::Error::UserNotFound)));
 }

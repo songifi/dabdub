@@ -5,8 +5,8 @@ mod test;
 mod token_helpers;
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
-    Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, token, Address, BytesN,
+    Env, String, Symbol, Vec,
 };
 
 /// Pending claim record: amounts reserved and expiry ledger for cancellation rules.
@@ -19,23 +19,7 @@ pub struct PendingClaim {
     pub expiry_ledger: u32,
 }
 
-#[contracttype]
-#[derive(Clone)]
-pub struct PendingClaim {
-    pub payment_amount: i128,
-    pub fee_amount: i128,
-    pub expiry_ledger: u32,
-}
-
-#[contracttype]
-#[derive(Clone)]
-pub struct PendingClaim {
-    pub payment_amount: i128,
-    pub fee_amount: i128,
-    pub expiry_ledger: u32,
-}
-
-#[contracttype]
+#[contracterror]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u32)]
 pub enum Error {
@@ -63,6 +47,7 @@ pub enum DataKey {
     PendingClaim(BytesN<32>),
     AllPendingClaims,
     Balance(String),
+    StakeBalance(String),
     FeeRateBps,
     FeeTreasuryUsername,
 }
@@ -74,6 +59,14 @@ pub struct WithdrawalEvent {
     pub username: String,
     pub to_address: Address,
     pub amount: i128,
+    pub ledger: u32,
+}
+
+#[contractevent(topics = ["VAULT", "unstaked"])]
+pub struct UnstakedEvent {
+    pub username: String,
+    pub amount: i128,
+    pub remaining_stake: i128,
     pub ledger: u32,
 }
 
@@ -306,6 +299,61 @@ impl Vault {
         Ok(())
     }
 
+    pub fn unstake(env: Env, username: String, amount: i128) -> Result<(), Error> {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let stake_balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakeBalance(username.clone()))
+            .ok_or(Error::UserNotFound)?;
+
+        if stake_balance < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        let new_stake_balance = stake_balance - amount;
+        let current_balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(username.clone()))
+            .unwrap_or(0);
+        let new_balance = current_balance + amount;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::StakeBalance(username.clone()), &new_stake_balance);
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(username.clone()), &new_balance);
+
+        env.storage().instance().extend_ttl(100, 1000);
+
+        UnstakedEvent {
+            username: username.clone(),
+            amount,
+            remaining_stake: new_stake_balance,
+            ledger: env.ledger().sequence(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
     pub fn set_balance(env: Env, caller: Address, username: String, balance: i128) {
         access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
         caller.require_auth();
@@ -319,6 +367,22 @@ impl Vault {
         env.storage()
             .instance()
             .get(&DataKey::Balance(username))
+            .unwrap_or(0)
+    }
+
+    pub fn set_stake_balance(env: Env, caller: Address, username: String, balance: i128) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::StakeBalance(username), &balance);
+    }
+
+    pub fn get_stake_balance(env: Env, username: String) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::StakeBalance(username))
             .unwrap_or(0)
     }
 
