@@ -8,6 +8,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { UploadModule } from './uploads/upload.module';
 
 @Module({
   imports: [
@@ -46,6 +47,9 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
     // 5. Auth — register/login/refresh/logout + global JWT guard.
     AuthModule,
+
+    // 6. File uploads — presign + confirm via Cloudflare R2.
+    UploadModule,
   ],
   providers: [
     // Global guard: every route requires a valid JWT unless decorated @Public().
