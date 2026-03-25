@@ -36,6 +36,17 @@ pub struct PendingClaim {
 }
 
 #[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u32)]
+pub enum Error {
+    ContractPaused = 1,
+    InsufficientBalance = 2,
+    Unauthorized = 3,
+    InvalidAmount = 4,
+    UserNotFound = 5,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
@@ -49,9 +60,19 @@ pub enum DataKey {
     TotalFees,
     Paused,
     PendingClaim(BytesN<32>),
+    AllPendingClaims,
+    Balance(String),
 }
 
 const MAX_FEE: i128 = 5_000_000;
+
+#[contractevent(topics = ["VAULT", "withdrawal"])]
+pub struct WithdrawalEvent {
+    pub username: String,
+    pub to_address: Address,
+    pub amount: i128,
+    pub ledger: u32,
+}
 
 #[contractevent(topics = ["VAULT", "payment"])]
 struct PaymentProcessedEvent {
@@ -112,6 +133,76 @@ pub struct Vault;
 
 #[contractimpl]
 impl Vault {
+    pub fn withdraw(
+        env: Env,
+        username: String,
+        to_address: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(username.clone()))
+            .ok_or(Error::UserNotFound)?;
+
+        if balance < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        let new_balance = balance - amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(username.clone()), &new_balance);
+
+        env.storage().instance().extend_ttl(100, 1000);
+
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        token_client.transfer(&env.current_contract_address(), &to_address, &amount);
+
+        WithdrawalEvent {
+            username: username.clone(),
+            to_address,
+            amount,
+            ledger: env.ledger().sequence(),
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    pub fn set_balance(env: Env, caller: Address, username: String, balance: i128) {
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(username), &balance);
+    }
+
+    pub fn get_balance(env: Env, username: String) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::Balance(username))
+            .unwrap_or(0)
+    }
+
     pub fn __constructor(
         env: Env,
         admin: Address,

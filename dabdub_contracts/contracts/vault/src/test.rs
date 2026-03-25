@@ -265,6 +265,95 @@ fn test_verify_vault_accounting() {
 }
 
 #[test]
+fn test_withdraw_happy_path() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(usdc_admin.clone());
+    let usdc = asset_contract.address();
+    let to_address = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // Set initial balance
+    client.set_balance(&admin, &username, &1_000_000);
+
+    // Mint tokens to vault to simulate it having funds
+    let usdc_client = token::StellarAssetClient::new(&env, &usdc);
+    usdc_client.mint(&contract_id, &1_000_000);
+
+    // Withdraw
+    let result = client.withdraw(&username, &to_address, &500_000);
+    assert_eq!(result, Ok(()));
+
+    // Verify balances
+    assert_eq!(client.get_balance(&username), 500_000);
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&to_address), 500_000);
+    assert_eq!(token_client.balance(&contract_id), 500_000);
+}
+
+#[test]
+fn test_withdraw_insufficient_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+    let to_address = Address::generate(&env);
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    client.set_balance(&admin, &username, &100_000);
+
+    let result = client.withdraw(&username, &to_address, &500_000);
+    assert_eq!(result, Err(crate::Error::InsufficientBalance));
+}
+
+#[test]
+fn test_withdraw_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+    let to_address = Address::generate(&env);
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    client.pause(&admin);
+
+    let result = client.withdraw(&username, &to_address, &500_000);
+    assert_eq!(result, Err(crate::Error::ContractPaused));
+}
+
+#[test]
+#[should_panic]
+fn test_withdraw_unauthorized() {
+    let env = Env::default();
+    // No mock_all_auths here to test auth failure
+
+    let admin = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let username = soroban_sdk::String::from_str(&env, "alice");
+    let to_address = Address::generate(&env);
+
+    let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
+    let client = VaultClient::new(&env, &contract_id);
+
+    // This should panic because admin hasn't authorized it
+    client.withdraw(&username, &to_address, &500_000);
+}
+
+#[test]
 fn test_refund_payment_with_fee() {
     let env = Env::default();
     env.mock_all_auths();
