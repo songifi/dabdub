@@ -11,7 +11,11 @@ import { User } from '../users/entities/user.entity';
 import { WsModule } from '../ws/ws.module';
 import { PayLinkController } from './paylink.controller';
 import { PayLink } from './entities/pay-link.entity';
-import { EXPIRE_PAYLINKS_JOB, PAYLINK_QUEUE, PayLinkProcessor } from './paylink.processor';
+import {
+  EXPIRE_PAYLINKS_JOB,
+  PAYLINK_QUEUE,
+  PayLinkProcessor,
+} from './paylink.processor';
 import { PayLinkService } from './paylink.service';
 
 @Module({
@@ -28,7 +32,9 @@ import { PayLinkService } from './paylink.service';
   exports: [PayLinkService],
 })
 export class PayLinkModule implements OnModuleInit {
-  constructor(@InjectQueue(PAYLINK_QUEUE) private readonly payLinkQueue: Queue) {}
+  constructor(
+    @InjectQueue(PAYLINK_QUEUE) private readonly payLinkQueue: Queue,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     await this.payLinkQueue.add(

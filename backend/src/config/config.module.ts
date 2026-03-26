@@ -10,6 +10,7 @@ import { zeptoConfig } from './zepto.config';
 import { r2Config } from './r2.config';
 import { flutterwaveConfig } from './flutterwave.config';
 import { paystackConfig } from './paystack.config';
+import { firebaseConfig } from './firebase.config';
 
 /**
  * Combined Joi validation schema for all environment variables.
@@ -20,40 +21,49 @@ const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
     .default('development')
-    .messages({ 'any.only': 'NODE_ENV must be development | production | test' }),
+    .messages({
+      'any.only': 'NODE_ENV must be development | production | test',
+    }),
   PORT: Joi.number().integer().positive().default(3000),
   API_PREFIX: Joi.string().default('api/v1'),
   THROTTLE_TTL: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
-  FRONTEND_URL: Joi.string().uri().required().messages({ 'any.required': 'FRONTEND_URL is required' }),
+  FRONTEND_URL: Joi.string()
+    .uri()
+    .required()
+    .messages({ 'any.required': 'FRONTEND_URL is required' }),
 
   // ── Database ─────────────────────────────────────────────────────────────
-  DB_HOST: Joi.string().required().messages({ 'any.required': 'DB_HOST is required' }),
+  DB_HOST: Joi.string()
+    .required()
+    .messages({ 'any.required': 'DB_HOST is required' }),
   DB_PORT: Joi.number().integer().positive().default(5432),
-  DB_USER: Joi.string().required().messages({ 'any.required': 'DB_USER is required' }),
-  DB_PASS: Joi.string().required().messages({ 'any.required': 'DB_PASS is required' }),
-  DB_NAME: Joi.string().required().messages({ 'any.required': 'DB_NAME is required' }),
+  DB_USER: Joi.string()
+    .required()
+    .messages({ 'any.required': 'DB_USER is required' }),
+  DB_PASS: Joi.string()
+    .required()
+    .messages({ 'any.required': 'DB_PASS is required' }),
+  DB_NAME: Joi.string()
+    .required()
+    .messages({ 'any.required': 'DB_NAME is required' }),
 
   // ── Redis ─────────────────────────────────────────────────────────────────
-  REDIS_HOST: Joi.string().required().messages({ 'any.required': 'REDIS_HOST is required' }),
+  REDIS_HOST: Joi.string()
+    .required()
+    .messages({ 'any.required': 'REDIS_HOST is required' }),
   REDIS_PORT: Joi.number().integer().positive().default(6379),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
 
   // ── JWT ──────────────────────────────────────────────────────────────────
-  JWT_ACCESS_SECRET: Joi.string()
-    .min(32)
-    .required()
-    .messages({
-      'any.required': 'JWT_ACCESS_SECRET is required',
-      'string.min': 'JWT_ACCESS_SECRET must be at least 32 characters',
-    }),
-  JWT_REFRESH_SECRET: Joi.string()
-    .min(32)
-    .required()
-    .messages({
-      'any.required': 'JWT_REFRESH_SECRET is required',
-      'string.min': 'JWT_REFRESH_SECRET must be at least 32 characters',
-    }),
+  JWT_ACCESS_SECRET: Joi.string().min(32).required().messages({
+    'any.required': 'JWT_ACCESS_SECRET is required',
+    'string.min': 'JWT_ACCESS_SECRET must be at least 32 characters',
+  }),
+  JWT_REFRESH_SECRET: Joi.string().min(32).required().messages({
+    'any.required': 'JWT_REFRESH_SECRET is required',
+    'string.min': 'JWT_REFRESH_SECRET must be at least 32 characters',
+  }),
   JWT_ACCESS_EXPIRY: Joi.string()
     .required()
     .messages({ 'any.required': 'JWT_ACCESS_EXPIRY is required (e.g. "15m")' }),
@@ -72,6 +82,10 @@ const validationSchema = Joi.object({
   STELLAR_CONTRACT_ID: Joi.string()
     .required()
     .messages({ 'any.required': 'STELLAR_CONTRACT_ID is required' }),
+  STELLAR_ADMIN_SECRET_KEY: Joi.string().min(32).required().messages({
+    'any.required': 'STELLAR_ADMIN_SECRET_KEY is required',
+    'string.min': 'STELLAR_ADMIN_SECRET_KEY must be at least 32 characters',
+  }),
   STELLAR_ADMIN_SECRET_KEY: Joi.string()
     .min(32)
     .required()
@@ -79,18 +93,25 @@ const validationSchema = Joi.object({
       'any.required': 'STELLAR_ADMIN_SECRET_KEY is required',
       'string.min': 'STELLAR_ADMIN_SECRET_KEY must be at least 32 characters',
     }),
+  STELLAR_RECEIVE_ADDRESS: Joi.string()
+    .length(56)
+    .pattern(/^G[A-Z2-7]{55}$/)
+    .required()
+    .messages({ 'any.required': 'STELLAR_RECEIVE_ADDRESS is required' }),
+  STELLAR_USDC_ISSUER: Joi.string()
+    .length(56)
+    .pattern(/^G[A-Z2-7]{55}$/)
+    .required()
+    .messages({ 'any.required': 'STELLAR_USDC_ISSUER is required' }),
 
   // ── Zepto Mail ───────────────────────────────────────────────────────────
   ZEPTOMAIL_API_KEY: Joi.string()
     .required()
     .messages({ 'any.required': 'ZEPTOMAIL_API_KEY is required' }),
-  ZEPTOMAIL_FROM_EMAIL: Joi.string()
-    .email()
-    .required()
-    .messages({
-      'any.required': 'ZEPTOMAIL_FROM_EMAIL is required',
-      'string.email': 'ZEPTOMAIL_FROM_EMAIL must be a valid email address',
-    }),
+  ZEPTOMAIL_FROM_EMAIL: Joi.string().email().required().messages({
+    'any.required': 'ZEPTOMAIL_FROM_EMAIL is required',
+    'string.email': 'ZEPTOMAIL_FROM_EMAIL must be a valid email address',
+  }),
 
   // ── Cloudflare R2 ─────────────────────────────────────────────────────────
   R2_ACCOUNT_ID: Joi.string()
@@ -117,13 +138,14 @@ const validationSchema = Joi.object({
     .uri()
     .default('https://api.flutterwave.com'),
 
+  // ── Firebase ─────────────────────────────────────────────────────────────
+  FIREBASE_SERVICE_ACCOUNT: Joi.string().required().messages({ 'any.required': 'FIREBASE_SERVICE_ACCOUNT is required' }),
+
   // ── Paystack ──────────────────────────────────────────────────────────────
   PAYSTACK_SECRET_KEY: Joi.string()
     .required()
     .messages({ 'any.required': 'PAYSTACK_SECRET_KEY is required' }),
-  PAYSTACK_BASE_URL: Joi.string()
-    .uri()
-    .default('https://api.paystack.co'),
+  PAYSTACK_BASE_URL: Joi.string().uri().default('https://api.paystack.co'),
 });
 
 @Module({
@@ -140,6 +162,7 @@ const validationSchema = Joi.object({
         r2Config,
         flutterwaveConfig,
         paystackConfig,
+        firebaseConfig,
       ],
       validationSchema,
       validationOptions: { abortEarly: false },

@@ -1,8 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUserRoleAndAdminPermissions1700000000002
-  implements MigrationInterface
-{
+export class AddUserRoleAndAdminPermissions1700000000002 implements MigrationInterface {
   name = 'AddUserRoleAndAdminPermissions1700000000002';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -68,13 +66,16 @@ export class AddUserRoleAndAdminPermissions1700000000002
     await queryRunner.query(
       `DROP INDEX IF EXISTS "UQ_admin_permissions_admin_permission"`,
     );
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_admin_permissions_admin"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_admin_permissions_admin"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "admin_permissions"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "admin_permissions_permission_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "admin_permissions_permission_enum"`,
+    );
 
     // Keep role column (down migrations are destructive; still remove type if possible).
     await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "role"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "users_role_enum"`);
   }
 }
-

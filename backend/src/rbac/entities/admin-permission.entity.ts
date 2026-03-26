@@ -18,4 +18,3 @@ export class AdminPermission extends BaseEntity {
   @Column({ name: 'granted_at', type: 'timestamptz', default: () => 'NOW()' })
   grantedAt!: Date;
 }
-

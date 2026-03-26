@@ -22,4 +22,3 @@ export enum Permission {
   BroadcastSend = 'broadcast.send',
   ComplianceReview = 'compliance.review',
 }
-

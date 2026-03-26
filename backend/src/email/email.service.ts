@@ -54,11 +54,15 @@ export class EmailService {
       },
     );
 
-    this.logger.log(`Queued email logId=${log.id} to=${to} template=${templateAlias}`);
+    this.logger.log(
+      `Queued email logId=${log.id} to=${to} template=${templateAlias}`,
+    );
     return log;
   }
 
   getBackoffDelay(attemptsMade: number): number {
-    return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
+    return (
+      BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
+    );
   }
 }

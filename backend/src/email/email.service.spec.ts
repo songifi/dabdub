@@ -68,10 +68,18 @@ describe('EmailService', () => {
   });
 
   it('queue() creates log with QUEUED status and enqueues job', async () => {
-    const log = await service.queue('user@example.com', 'welcome', { name: 'Alice' }, 'user-1');
+    const log = await service.queue(
+      'user@example.com',
+      'welcome',
+      { name: 'Alice' },
+      'user-1',
+    );
 
     expect(mockRepo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: EmailStatus.QUEUED, to: 'user@example.com' }),
+      expect.objectContaining({
+        status: EmailStatus.QUEUED,
+        to: 'user@example.com',
+      }),
     );
     expect(mockRepo.save).toHaveBeenCalled();
     expect(mockQueue.add).toHaveBeenCalledWith(
@@ -103,17 +111,28 @@ describe('EmailProcessor', () => {
 
     await processor.handleSend(makeJob());
 
-    expect(mockZepto.send).toHaveBeenCalledWith('user@example.com', 'welcome', {});
+    expect(mockZepto.send).toHaveBeenCalledWith(
+      'user@example.com',
+      'welcome',
+      {},
+    );
     expect(mockRepo.update).toHaveBeenCalledWith(
       'log-1',
-      expect.objectContaining({ status: EmailStatus.SENT, providerMessageId: 'msg-abc' }),
+      expect.objectContaining({
+        status: EmailStatus.SENT,
+        providerMessageId: 'msg-abc',
+      }),
     );
   });
 
   it('ZeptoMail error → throws so Bull retries', async () => {
-    mockZepto.send.mockRejectedValue(new Error('ZeptoMail 500: Internal Server Error'));
+    mockZepto.send.mockRejectedValue(
+      new Error('ZeptoMail 500: Internal Server Error'),
+    );
 
-    await expect(processor.handleSend(makeJob())).rejects.toThrow('ZeptoMail 500');
+    await expect(processor.handleSend(makeJob())).rejects.toThrow(
+      'ZeptoMail 500',
+    );
   });
 
   it('3 retries exhausted → handleFailed sets status=FAILED', async () => {

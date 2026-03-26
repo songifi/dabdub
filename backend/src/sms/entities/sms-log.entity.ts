@@ -24,12 +24,27 @@ export class SmsLog extends BaseEntity {
   @Column({ type: 'varchar', length: 100, default: 'termii' })
   provider!: string;
 
-  @Column({ name: 'provider_ref', type: 'varchar', nullable: true, default: null })
+  @Column({
+    name: 'provider_ref',
+    type: 'varchar',
+    nullable: true,
+    default: null,
+  })
   providerRef!: string | null;
 
-  @Column({ name: 'error_message', type: 'text', nullable: true, default: null })
+  @Column({
+    name: 'error_message',
+    type: 'text',
+    nullable: true,
+    default: null,
+  })
   errorMessage!: string | null;
 
-  @Column({ name: 'sent_at', type: 'timestamptz', nullable: true, default: null })
+  @Column({
+    name: 'sent_at',
+    type: 'timestamptz',
+    nullable: true,
+    default: null,
+  })
   sentAt!: Date | null;
 }

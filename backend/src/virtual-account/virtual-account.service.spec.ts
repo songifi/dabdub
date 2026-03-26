@@ -5,10 +5,17 @@ import { UnauthorizedException } from '@nestjs/common';
 import { of } from 'rxjs';
 import * as crypto from 'crypto';
 import { VirtualAccountService } from './virtual-account.service';
-import { VirtualAccount, VirtualAccountProvider } from './entities/virtual-account.entity';
+import {
+  VirtualAccount,
+  VirtualAccountProvider,
+} from './entities/virtual-account.entity';
 import { flutterwaveConfig } from '../config/flutterwave.config';
 import { redisConfig } from '../config/redis.config';
 import { CheeseGateway, WS_EVENTS } from '../ws/cheese.gateway';
+import { User } from '../users/entities/user.entity';
+import { RatesService } from '../rates/rates.service';
+import { SorobanService } from '../soroban/soroban.service';
+import { DepositsService } from '../deposits/deposits.service';
 
 jest.mock('ioredis', () =>
   jest.fn().mockImplementation(() => ({
@@ -26,6 +33,10 @@ const mockVaRepo = {
   save: jest.fn(),
 };
 
+const mockUserRepo = {
+  findOne: jest.fn(),
+};
+
 const mockHttpService = { post: jest.fn() };
 
 const mockGateway = { emitToUser: jest.fn().mockResolvedValue(undefined) };
@@ -34,7 +45,9 @@ const mockRatesService = { convertNgnToUsdc: jest.fn() };
 
 const mockSorobanService = { deposit: jest.fn().mockResolvedValue(undefined) };
 
-const mockDepositsService = { createDeposit: jest.fn().mockResolvedValue(undefined) };
+const mockDepositsService = {
+  createDeposit: jest.fn().mockResolvedValue(undefined),
+};
 
 const mockFwConfig = {
   secretKey: 'FW-test-key',
@@ -59,6 +72,7 @@ describe('VirtualAccountService', () => {
       providers: [
         VirtualAccountService,
         { provide: getRepositoryToken(VirtualAccount), useValue: mockVaRepo },
+        { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: HttpService, useValue: mockHttpService },
         { provide: flutterwaveConfig.KEY, useValue: mockFwConfig },
         { provide: redisConfig.KEY, useValue: mockRedisConfig },
@@ -82,7 +96,11 @@ describe('VirtualAccountService', () => {
           },
         }),
       );
-      const saved = { id: 'va-1', userId: 'user-1', accountNumber: '0123456789' };
+      const saved = {
+        id: 'va-1',
+        userId: 'user-1',
+        accountNumber: '0123456789',
+      };
       mockVaRepo.create.mockReturnValue(saved);
       mockVaRepo.save.mockResolvedValue(saved);
 
@@ -119,6 +137,10 @@ describe('VirtualAccountService', () => {
         provider: VirtualAccountProvider.FLUTTERWAVE,
       });
       mockRatesService.convertNgnToUsdc.mockResolvedValue(3.25);
+      mockUserRepo.findOne.mockResolvedValue({
+        id: 'user-1',
+        username: 'alice',
+      });
 
       await service.handleWebhook(body, sig);
 
@@ -131,7 +153,7 @@ describe('VirtualAccountService', () => {
         'va_user-1_111',
         undefined,
       );
-      expect(mockSorobanService.deposit).toHaveBeenCalledWith('user-1', 3.25);
+      expect(mockSorobanService.deposit).toHaveBeenCalledWith('alice', '3.25');
       expect(mockGateway.emitToUser).toHaveBeenCalledWith(
         'user-1',
         WS_EVENTS.BALANCE_UPDATED,

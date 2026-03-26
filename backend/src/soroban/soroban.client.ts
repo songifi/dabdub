@@ -37,7 +37,9 @@ export namespace SorobanClient {
   export class Server {
     constructor(public readonly rpcUrl: string) {}
 
-    async simulateTransaction(tx: SimulatedTransaction): Promise<SimulationResult> {
+    async simulateTransaction(
+      tx: SimulatedTransaction,
+    ): Promise<SimulationResult> {
       return { ok: true, result: tx };
     }
 

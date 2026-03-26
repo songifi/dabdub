@@ -2,7 +2,7 @@ import { Reflector } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { Role } from '../../rbac/rbac.types';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;
@@ -31,12 +31,15 @@ describe('RolesGuard', () => {
   });
 
   it('should allow access if user has required role', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([UserRole.ADMIN]);
+    jest
+      .spyOn(reflector, 'getAllAndOverride')
+      .mockReturnValue([UserRole.ADMIN]);
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.Admin]);
     const context = {
       getHandler: () => ({}),
       getClass: () => ({}),
       switchToHttp: () => ({
-        getRequest: () => ({ user: { role: UserRole.ADMIN } }),
+        getRequest: () => ({ user: { role: Role.Admin } }),
       }),
     } as unknown as ExecutionContext;
 
@@ -44,12 +47,15 @@ describe('RolesGuard', () => {
   });
 
   it('should deny access if user does not have required role', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([UserRole.ADMIN]);
+    jest
+      .spyOn(reflector, 'getAllAndOverride')
+      .mockReturnValue([UserRole.ADMIN]);
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.Admin]);
     const context = {
       getHandler: () => ({}),
       getClass: () => ({}),
       switchToHttp: () => ({
-        getRequest: () => ({ user: { role: UserRole.USER } }),
+        getRequest: () => ({ user: { role: Role.User } }),
       }),
     } as unknown as ExecutionContext;
 
@@ -57,7 +63,10 @@ describe('RolesGuard', () => {
   });
 
   it('should deny access if no user in request', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([UserRole.ADMIN]);
+    jest
+      .spyOn(reflector, 'getAllAndOverride')
+      .mockReturnValue([UserRole.ADMIN]);
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([Role.Admin]);
     const context = {
       getHandler: () => ({}),
       getClass: () => ({}),

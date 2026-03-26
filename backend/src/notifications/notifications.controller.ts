@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  Req,
-  Query,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Param, Req, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { NotificationService } from './notifications.service';
@@ -24,7 +16,8 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({
-    summary: 'List notifications (cursor paginated); includes unread count header',
+    summary:
+      'List notifications (cursor paginated); includes unread count header',
   })
   async list(
     @Req() req: RequestWithUser,
@@ -53,7 +46,10 @@ export class NotificationsController {
 
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark a notification as read (ownership enforced)' })
-  async markRead(@Req() req: RequestWithUser, @Param('id') id: string): Promise<void> {
+  async markRead(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<void> {
     const userId = req.user!.id;
     await this.notifications.markRead(userId, id);
   }
@@ -65,4 +61,3 @@ export class NotificationsController {
     await this.notifications.markAllRead(userId);
   }
 }
-

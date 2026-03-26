@@ -10,4 +10,3 @@ export class CreateWebhookDto {
   @IsIn(WEBHOOK_EVENTS, { each: true })
   events!: string[];
 }
-

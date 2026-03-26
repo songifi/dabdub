@@ -20,7 +20,11 @@ export class YieldEntry extends BaseEntity {
   })
   amountUsdc!: string;
 
-  @Column({ type: 'enum', enum: YieldSource, default: YieldSource.STAKING_REWARD })
+  @Column({
+    type: 'enum',
+    enum: YieldSource,
+    default: YieldSource.STAKING_REWARD,
+  })
   source!: YieldSource;
 
   @Column({ length: 255, nullable: true })

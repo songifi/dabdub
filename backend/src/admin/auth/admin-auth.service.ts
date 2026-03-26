@@ -41,11 +41,11 @@ export class AdminAuthService {
     await this.adminRepo.save(admin);
 
     const sessionId = crypto.randomUUID();
-    
+
     // We use a trick here: we create a fake User object to pass to authService.issueTokens
-    // Or we implement issueTokens for Admin. 
+    // Or we implement issueTokens for Admin.
     // Since issueTokens expects a User entity, let's see if we can adapt it.
-    
+
     return this.issueAdminTokens(admin, sessionId, ipAddress, deviceInfo);
   }
 
@@ -76,11 +76,11 @@ export class AdminAuthService {
 
     // We still want to use the same session/token mechanism if possible
     // But AuthService expects User entity.
-    // For now, let's just return the tokens without creating a session in the DB 
+    // For now, let's just return the tokens without creating a session in the DB
     // to keep it simple, or we'd need to modify AuthService to be more generic.
-    
+
     // Actually, the requirement says "separate" so maybe it's fine.
-    
+
     return {
       accessToken,
       refreshToken: rawRefreshToken,

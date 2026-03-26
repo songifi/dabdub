@@ -7,4 +7,3 @@ export const WEBHOOK_EVENTS = [
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
-

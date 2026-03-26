@@ -31,7 +31,10 @@ export class SorobanService {
   constructor(private readonly configService: ConfigService) {
     const rpcUrl = this.requireConfig('STELLAR_RPC_URL');
     const contractId = this.requireConfig('CONTRACT_ID', 'STELLAR_CONTRACT_ID');
-    const adminSecretKey = this.requireConfig('ADMIN_SECRET_KEY', 'STELLAR_ADMIN_SECRET_KEY');
+    const adminSecretKey = this.requireConfig(
+      'ADMIN_SECRET_KEY',
+      'STELLAR_ADMIN_SECRET_KEY',
+    );
     this.networkPassphrase = this.requireConfig(
       'STELLAR_NETWORK_PASSPHRASE',
       'NETWORK_PASSPHRASE',
@@ -81,7 +84,12 @@ export class SorobanService {
     return this.invokeWrite('withdraw', [username, amount]);
   }
 
-  async transfer(from: string, to: string, amount: string, note: string): Promise<unknown> {
+  async transfer(
+    from: string,
+    to: string,
+    amount: string,
+    note: string,
+  ): Promise<unknown> {
     return this.invokeWrite('transfer', [from, to, amount, note]);
   }
 
@@ -91,14 +99,22 @@ export class SorobanService {
     amount: string,
     note: string,
   ): Promise<unknown> {
-    return this.invokeWrite('create_pay_link', [creatorUsername, tokenId, amount, note]);
+    return this.invokeWrite('create_pay_link', [
+      creatorUsername,
+      tokenId,
+      amount,
+      note,
+    ]);
   }
 
   async payPayLink(payerUsername: string, tokenId: string): Promise<unknown> {
     return this.invokeWrite('pay_pay_link', [payerUsername, tokenId]);
   }
 
-  async cancelPayLink(creatorUsername: string, tokenId: string): Promise<unknown> {
+  async cancelPayLink(
+    creatorUsername: string,
+    tokenId: string,
+  ): Promise<unknown> {
     return this.invokeWrite('cancel_pay_link', [creatorUsername, tokenId]);
   }
 
@@ -139,11 +155,16 @@ export class SorobanService {
       case 8:
         return new BadRequestException('Invalid transfer amount');
       default:
-        return new BadGatewayException(`Contract execution failed with code ${code}`);
+        return new BadGatewayException(
+          `Contract execution failed with code ${code}`,
+        );
     }
   }
 
-  private async invokeRead(method: string, args: readonly unknown[]): Promise<unknown> {
+  private async invokeRead(
+    method: string,
+    args: readonly unknown[],
+  ): Promise<unknown> {
     const tx = this.contractClient.buildInvokeTransaction(
       method,
       args,
@@ -154,7 +175,10 @@ export class SorobanService {
     return simulation.result ?? null;
   }
 
-  private async invokeWrite(method: string, args: readonly unknown[]): Promise<unknown> {
+  private async invokeWrite(
+    method: string,
+    args: readonly unknown[],
+  ): Promise<unknown> {
     const tx = this.contractClient.buildInvokeTransaction(
       method,
       args,
@@ -206,7 +230,9 @@ export class SorobanService {
       return undefined;
     }
 
-    const match = value.contractErrorXdr.match(/(?:code|contract(?:_error)?)[^\d]*(\d+)/i);
+    const match = value.contractErrorXdr.match(
+      /(?:code|contract(?:_error)?)[^\d]*(\d+)/i,
+    );
     if (!match) {
       return undefined;
     }
@@ -236,11 +262,19 @@ export class SorobanService {
         return value;
       }
     }
-    throw new Error(`Missing required config value. Checked keys: ${keys.join(', ')}`);
+    throw new Error(
+      `Missing required config value. Checked keys: ${keys.join(', ')}`,
+    );
   }
 }
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { Contract, SorobanRpc, Keypair, nativeToScVal, scValToNative } from 'stellar-sdk';
+import {
+  Contract,
+  SorobanRpc,
+  Keypair,
+  nativeToScVal,
+  scValToNative,
+} from 'stellar-sdk';
 import type { ConfigType } from '@nestjs/config';
 import { stellarConfig } from '../config/stellar.config';
 
@@ -268,7 +302,9 @@ export class SorobanService {
       // 2. Sign it with the admin keypair
       // 3. Submit to the network
 
-      this.logger.log(`Depositing ${usdcAmount} USDC to user ${userId} via Soroban contract`);
+      this.logger.log(
+        `Depositing ${usdcAmount} USDC to user ${userId} via Soroban contract`,
+      );
 
       // Placeholder: simulate the deposit
       // const account = await this.server.getAccount(this.adminKeypair.publicKey());
@@ -287,9 +323,13 @@ export class SorobanService {
       // const result = await this.server.sendTransaction(preparedTx);
 
       // For now, just log success
-      this.logger.log(`Successfully deposited ${usdcAmount} USDC to user ${userId}`);
+      this.logger.log(
+        `Successfully deposited ${usdcAmount} USDC to user ${userId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to deposit USDC for user ${userId}: ${error.message}`);
+      this.logger.error(
+        `Failed to deposit USDC for user ${userId}: ${error.message}`,
+      );
       throw error;
     }
   }

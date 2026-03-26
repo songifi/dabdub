@@ -197,7 +197,9 @@ export class WebhookService {
       );
     }
 
-    this.logger.log(`Dispatched webhook event="${event}" count=${matching.length}`);
+    this.logger.log(
+      `Dispatched webhook event="${event}" count=${matching.length}`,
+    );
     return matching.length;
   }
 
@@ -212,7 +214,9 @@ export class WebhookService {
   }
 
   async deactivateAfterFailures(subscriptionId: string): Promise<void> {
-    const sub = await this.subscriptionRepo.findOne({ where: { id: subscriptionId } });
+    const sub = await this.subscriptionRepo.findOne({
+      where: { id: subscriptionId },
+    });
     if (!sub) return;
 
     if (sub.isActive) {
@@ -259,4 +263,3 @@ function cryptoRandomHex(bytes: number): string {
   const crypto = require('crypto') as typeof import('crypto');
   return crypto.randomBytes(bytes).toString('hex');
 }
-

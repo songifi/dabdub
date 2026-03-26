@@ -5,4 +5,3 @@ export class GrantPermissionDto {
   @IsEnum(Permission)
   permission!: Permission;
 }
-

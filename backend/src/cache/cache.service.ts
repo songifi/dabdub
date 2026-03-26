@@ -23,7 +23,9 @@ export class CacheService {
       await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
       return true;
     } catch (err) {
-      this.logger.warn(`Cache set failed for key "${key}": ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache set failed for key "${key}": ${(err as Error).message}`,
+      );
       return false;
     }
   }
@@ -32,7 +34,9 @@ export class CacheService {
     try {
       await this.redis.unlink(key);
     } catch (err) {
-      this.logger.warn(`Cache del failed for key "${key}": ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache del failed for key "${key}": ${(err as Error).message}`,
+      );
     }
   }
 
@@ -40,12 +44,20 @@ export class CacheService {
     try {
       let cursor = '0';
       do {
-        const [next, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        const [next, keys] = await this.redis.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          100,
+        );
         cursor = next;
         if (keys.length) await this.redis.unlink(...keys);
       } while (cursor !== '0');
     } catch (err) {
-      this.logger.warn(`Cache delPattern failed for "${pattern}": ${(err as Error).message}`);
+      this.logger.warn(
+        `Cache delPattern failed for "${pattern}": ${(err as Error).message}`,
+      );
     }
   }
 
@@ -61,9 +73,11 @@ export class CacheService {
       const key = this.getDauKey();
       await this.redis.sadd(key, userId);
       // Set expiry to 48 hours to have context but clear old data
-      await this.redis.expire(key, 172800); 
+      await this.redis.expire(key, 172800);
     } catch (err) {
-      this.logger.warn(`DAU tracking failed for userId=${userId}: ${(err as Error).message}`);
+      this.logger.warn(
+        `DAU tracking failed for userId=${userId}: ${(err as Error).message}`,
+      );
     }
   }
 

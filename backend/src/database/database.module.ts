@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigType } from '@nestjs/config';
 import { databaseConfig, appConfig } from '../config';
+import { DatabaseMaintenanceService } from './database-maintenance.service';
 
 /**
  * DatabaseModule owns the single TypeORM root connection.
@@ -52,11 +53,16 @@ import { databaseConfig, appConfig } from '../config';
 
           logging: isDev ? ['query', 'error', 'warn'] : ['error'],
 
+          // Log queries that exceed 1 second in non-production environments
+          maxQueryExecutionTime: isDev ? 1000 : undefined,
+
           // Keeps TypeORM CLI aware of where to put generated migration files.
           cli: { migrationsDir: 'src/database/migrations' },
         };
       },
     }),
   ],
+  providers: [DatabaseMaintenanceService],
+  exports: [DatabaseMaintenanceService],
 })
 export class DatabaseModule {}

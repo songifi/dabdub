@@ -2,8 +2,15 @@ import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, Raw } from 'typeorm';
 import { User, KycStatus } from '../users/entities/user.entity';
-import { Transaction, TransactionStatus } from '../transactions/entities/transaction.entity';
-import { FraudFlag, FraudStatus, FraudSeverity } from '../fraud/entities/fraud-flag.entity';
+import {
+  Transaction,
+  TransactionStatus,
+} from '../transactions/entities/transaction.entity';
+import {
+  FraudFlag,
+  FraudStatus,
+  FraudSeverity,
+} from '../fraud/entities/fraud-flag.entity';
 import { Session } from '../auth/entities/session.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { EmailService } from '../email/email.service';
@@ -40,7 +47,15 @@ export class AdminService {
     isActive?: boolean;
     isMerchant?: boolean;
   }) {
-    const { page = 1, limit = 20, search, tier, kycStatus, isActive, isMerchant } = query;
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      tier,
+      kycStatus,
+      isActive,
+      isMerchant,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -55,7 +70,9 @@ export class AdminService {
     if (isMerchant !== undefined) where.isMerchant = isMerchant;
 
     const [data, total] = await this.userRepo.findAndCount({
-      where: search ? [ { email: ILike(`%${search}%`) }, { username: ILike(`%${search}%`) } ] : where,
+      where: search
+        ? [{ email: ILike(`%${search}%`) }, { username: ILike(`%${search}%`) }]
+        : where,
       order: { createdAt: 'DESC' },
       take: limit,
       skip,
@@ -80,14 +97,14 @@ export class AdminService {
 
     // Mocking KYC submission for now as I don't see a specific KYC entity in the list yet
     // but the requirement says "KYC submission"
-    
+
     return {
       ...user,
-      walletBalance: "0.00", // Need to integrate with wallet service if exists
+      walletBalance: '0.00', // Need to integrate with wallet service if exists
       recentTransactions: transactions,
       openFraudFlags: fraudFlags,
       sessions,
-      kycSubmission: null, 
+      kycSubmission: null,
     };
   }
 
@@ -100,8 +117,8 @@ export class AdminService {
 
     // Revoke all sessions
     const sessions = await this.sessionRepo.find({ where: { userId: id } });
-    const sessionIds = sessions.map(s => s.id);
-    const refreshTokenIds = sessions.map(s => s.refreshTokenId);
+    const sessionIds = sessions.map((s) => s.id);
+    const refreshTokenIds = sessions.map((s) => s.refreshTokenId);
 
     if (sessionIds.length > 0) {
       await this.sessionRepo.delete(sessionIds);
@@ -109,20 +126,31 @@ export class AdminService {
     }
 
     // Create FraudFlag
-    await this.fraudRepo.save(this.fraudRepo.create({
-      userId: id,
-      rule: 'MANUAL_FREEZE',
-      severity: FraudSeverity.HIGH,
-      description: reason,
-      status: FraudStatus.OPEN,
-      triggeredBy: 'ADMIN',
-    }));
+    await this.fraudRepo.save(
+      this.fraudRepo.create({
+        userId: id,
+        rule: 'MANUAL_FREEZE',
+        severity: FraudSeverity.HIGH,
+        description: reason,
+        status: FraudStatus.OPEN,
+        triggeredBy: 'ADMIN',
+      }),
+    );
 
     // Audit log
-    await this.auditService.log(adminId, 'USER_FREEZE', `User ${id} frozen for reason: ${reason}`);
+    await this.auditService.log(
+      adminId,
+      'USER_FREEZE',
+      `User ${id} frozen for reason: ${reason}`,
+    );
 
     // Email user
-    await this.emailService.queue(user.email, 'ACCOUNT_FROZEN', { reason }, user.id);
+    await this.emailService.queue(
+      user.email,
+      'ACCOUNT_FROZEN',
+      { reason },
+      user.id,
+    );
 
     return { success: true };
   }
@@ -137,11 +165,20 @@ export class AdminService {
     // Resolve FraudFlags
     await this.fraudRepo.update(
       { userId: id, rule: 'MANUAL_FREEZE', status: FraudStatus.OPEN },
-      { status: FraudStatus.RESOLVED, resolvedBy: adminId, resolvedAt: new Date(), resolutionNote: 'Unfrozen by admin' }
+      {
+        status: FraudStatus.RESOLVED,
+        resolvedBy: adminId,
+        resolvedAt: new Date(),
+        resolutionNote: 'Unfrozen by admin',
+      },
     );
 
     // Audit log
-    await this.auditService.log(adminId, 'USER_UNFREEZE', `User ${id} unfrozen`);
+    await this.auditService.log(
+      adminId,
+      'USER_UNFREEZE',
+      `User ${id} unfrozen`,
+    );
 
     // Email user
     await this.emailService.queue(user.email, 'ACCOUNT_UNFROZEN', {}, user.id);
@@ -161,12 +198,15 @@ export class AdminService {
       txStats,
     ] = await Promise.all([
       this.userRepo.count(),
-      this.userRepo.count({ where: { createdAt: Raw(alias => `${alias} >= :today`, { today }) } }),
+      this.userRepo.count({
+        where: { createdAt: Raw((alias) => `${alias} >= :today`, { today }) },
+      }),
       this.userRepo.count({ where: { kycStatus: KycStatus.PENDING } }),
       this.fraudRepo.count({ where: { status: FraudStatus.OPEN } }),
-      this.txRepo.createQueryBuilder('tx')
+      this.txRepo
+        .createQueryBuilder('tx')
         .select('SUM(tx.amount)', 'totalVolume')
-        // Assuming fees are in a separate column or calculated. 
+        // Assuming fees are in a separate column or calculated.
         // Based on Transaction entity I saw earlier, it only had amountUsdc and amount.
         // Let's assume fees are not yet in the entity or I missed them.
         .where('tx.status = :status', { status: TransactionStatus.COMPLETED })

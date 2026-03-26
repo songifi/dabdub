@@ -26,7 +26,11 @@ export class EmailProcessor {
       attemptCount: job.attemptsMade + 1,
     });
 
-    const { messageId } = await this.zeptoMail.send(to, templateAlias, mergeData);
+    const { messageId } = await this.zeptoMail.send(
+      to,
+      templateAlias,
+      mergeData,
+    );
 
     await this.logRepo.update(logId, {
       status: EmailStatus.SENT,

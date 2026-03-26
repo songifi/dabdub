@@ -11,7 +11,12 @@ export class RatesController {
   @Public()
   @Get('ngn-usdc')
   @ApiOperation({ summary: 'Get current USDC/NGN exchange rate' })
-  getRate(): Promise<{ rate: string; fetchedAt: Date; source: string; isStale: boolean }> {
+  getRate(): Promise<{
+    rate: string;
+    fetchedAt: Date;
+    source: string;
+    isStale: boolean;
+  }> {
     return this.ratesService.getRate('USDC', 'NGN');
   }
 }

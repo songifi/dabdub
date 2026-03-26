@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { User, UserRole, KycStatus } from '../entities/user.entity';
+import { User, KycStatus } from '../entities/user.entity';
 import { TierName } from '../../tier-config/entities/tier-config.entity';
+import { Role } from '../../rbac/rbac.types';
 
 /**
  * DTO for user profile responses
@@ -62,10 +63,10 @@ export class UserResponseDto {
 
   @ApiProperty({
     description: 'User role',
-    enum: UserRole,
-    example: UserRole.USER,
+    enum: Role,
+    example: Role.User,
   })
-  role!: UserRole;
+  role!: Role;
 
   @ApiProperty({
     description: 'Account creation timestamp',

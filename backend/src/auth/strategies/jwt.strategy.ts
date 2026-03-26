@@ -34,7 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: ExtendedJwtPayload): Promise<User | Admin> {
     if (payload.isAdmin) {
-      const admin = await this.adminRepo.findOne({ where: { id: payload.sub } });
+      const admin = await this.adminRepo.findOne({
+        where: { id: payload.sub },
+      });
       if (!admin) {
         throw new Error('Unauthorized');
       }

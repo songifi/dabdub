@@ -13,6 +13,7 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   API_PREFIX: 'api/v1',
   THROTTLE_TTL: '60',
   THROTTLE_LIMIT: '100',
+  FRONTEND_URL: 'http://localhost:3000',
 
   DB_HOST: 'localhost',
   DB_PORT: '5432',
@@ -30,8 +31,11 @@ const VALID_ENV: NodeJS.ProcessEnv = {
 
   STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
   STELLAR_NETWORK_PASSPHRASE: 'Test SDF Network ; September 2015',
-  STELLAR_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+  STELLAR_CONTRACT_ID:
+    'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
   STELLAR_ADMIN_SECRET_KEY: 'stellar-admin-secret-key-that-is-32chars!!',
+  STELLAR_RECEIVE_ADDRESS: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+  STELLAR_USDC_ISSUER: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
 
   ZEPTOMAIL_API_KEY: 'zepto-api-key-value',
   ZEPTOMAIL_FROM_EMAIL: 'no-reply@example.com',
@@ -83,20 +87,28 @@ describe('AppConfigModule', () => {
     expect(config.get<AppConfig['nodeEnv']>('app.nodeEnv')).toBe('test');
     expect(config.get<AppConfig['apiPrefix']>('app.apiPrefix')).toBe('api/v1');
     expect(config.get<AppConfig['throttleTtl']>('app.throttleTtl')).toBe(60);
-    expect(config.get<AppConfig['throttleLimit']>('app.throttleLimit')).toBe(100);
+    expect(config.get<AppConfig['throttleLimit']>('app.throttleLimit')).toBe(
+      100,
+    );
   });
 
   it('returns correct typed DatabaseConfig values', () => {
-    expect(config.get<DatabaseConfig['host']>('database.host')).toBe('localhost');
+    expect(config.get<DatabaseConfig['host']>('database.host')).toBe(
+      'localhost',
+    );
     expect(config.get<DatabaseConfig['port']>('database.port')).toBe(5432);
-    expect(config.get<DatabaseConfig['user']>('database.user')).toBe('testuser');
+    expect(config.get<DatabaseConfig['user']>('database.user')).toBe(
+      'testuser',
+    );
     expect(config.get<DatabaseConfig['name']>('database.name')).toBe('testdb');
   });
 
   it('returns correct typed RedisConfig values', () => {
     expect(config.get<RedisConfig['host']>('redis.host')).toBe('localhost');
     expect(config.get<RedisConfig['port']>('redis.port')).toBe(6379);
-    expect(config.get<RedisConfig['password']>('redis.password')).toBeUndefined();
+    expect(
+      config.get<RedisConfig['password']>('redis.password'),
+    ).toBeUndefined();
   });
 
   it('exposes optional REDIS_PASSWORD when provided', async () => {
@@ -112,13 +124,23 @@ describe('AppConfigModule', () => {
   });
 
   it('returns correct typed JwtConfig values', () => {
-    expect(config.get<JwtConfig['accessExpiry']>('jwt.accessExpiry')).toBe('15m');
-    expect(config.get<JwtConfig['refreshExpiry']>('jwt.refreshExpiry')).toBe('7d');
+    expect(config.get<JwtConfig['accessExpiry']>('jwt.accessExpiry')).toBe(
+      '15m',
+    );
+    expect(config.get<JwtConfig['refreshExpiry']>('jwt.refreshExpiry')).toBe(
+      '7d',
+    );
   });
 
   it('returns correct Stellar, Zepto, and R2 config values', () => {
     expect(config.get<string>('stellar.rpcUrl')).toBe(
       'https://soroban-testnet.stellar.org',
+    );
+    expect(config.get<string>('stellar.receiveAddress')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+    );
+    expect(config.get<string>('stellar.usdcIssuer')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
     );
     expect(config.get<string>('zepto.fromEmail')).toBe('no-reply@example.com');
     expect(config.get<string>('r2.bucketName')).toBe('my-bucket');

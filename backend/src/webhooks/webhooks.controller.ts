@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Req, Delete, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  Delete,
+  Param,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
@@ -20,7 +28,13 @@ export class WebhooksController {
   async create(
     @Req() req: RequestWithUser,
     @Body() dto: CreateWebhookDto,
-  ): Promise<{ id: string; url: string; events: string[]; isActive: boolean; secret: string }> {
+  ): Promise<{
+    id: string;
+    url: string;
+    events: string[];
+    isActive: boolean;
+    secret: string;
+  }> {
     const userId = req.user!.id;
     const { subscription, secretOnce } = await this.webhooks.createSubscription(
       userId,
@@ -38,7 +52,11 @@ export class WebhooksController {
 
   @Get()
   @ApiOperation({ summary: 'List webhook subscriptions' })
-  async list(@Req() req: RequestWithUser): Promise<Array<{ id: string; url: string; events: string[]; isActive: boolean }>> {
+  async list(
+    @Req() req: RequestWithUser,
+  ): Promise<
+    Array<{ id: string; url: string; events: string[]; isActive: boolean }>
+  > {
     const userId = req.user!.id;
     const subs = await this.webhooks.listSubscriptions(userId);
     return subs.map((s) => ({
@@ -51,7 +69,10 @@ export class WebhooksController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Deactivate a webhook subscription' })
-  async remove(@Req() req: RequestWithUser, @Param('id') id: string): Promise<void> {
+  async remove(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+  ): Promise<void> {
     const userId = req.user!.id;
     await this.webhooks.deactivateSubscription(userId, id);
   }
@@ -79,4 +100,3 @@ export class WebhooksController {
     return { deliveryId: delivery.id };
   }
 }
-

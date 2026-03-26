@@ -19,7 +19,10 @@ export class RegisterMerchantDto {
   @MaxLength(80)
   businessName!: string;
 
-  @ApiProperty({ enum: MerchantBusinessType, example: MerchantBusinessType.RETAIL })
+  @ApiProperty({
+    enum: MerchantBusinessType,
+    example: MerchantBusinessType.RETAIL,
+  })
   @IsEnum(MerchantBusinessType)
   businessType!: MerchantBusinessType;
 
@@ -38,7 +41,10 @@ export class RegisterMerchantDto {
   @MaxLength(300)
   description?: string;
 
-  @ApiPropertyOptional({ enum: MerchantSettlementCurrency, default: MerchantSettlementCurrency.NGN })
+  @ApiPropertyOptional({
+    enum: MerchantSettlementCurrency,
+    default: MerchantSettlementCurrency.NGN,
+  })
   @IsOptional()
   @IsEnum(MerchantSettlementCurrency)
   settlementCurrency?: MerchantSettlementCurrency;

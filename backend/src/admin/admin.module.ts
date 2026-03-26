@@ -15,7 +15,14 @@ import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, User, Transaction, FraudFlag, Session, RefreshToken]),
+    TypeOrmModule.forFeature([
+      Admin,
+      User,
+      Transaction,
+      FraudFlag,
+      Session,
+      RefreshToken,
+    ]),
     EmailModule,
     NotificationsModule,
     AdminAuthModule,

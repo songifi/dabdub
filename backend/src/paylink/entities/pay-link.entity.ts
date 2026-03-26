@@ -30,7 +30,12 @@ export class PayLink extends BaseEntity {
   })
   status!: PayLinkStatus;
 
-  @Column({ name: 'paid_by_user_id', type: 'uuid', nullable: true, default: null })
+  @Column({
+    name: 'paid_by_user_id',
+    type: 'uuid',
+    nullable: true,
+    default: null,
+  })
   paidByUserId!: string | null;
 
   @Column({ name: 'expires_at', type: 'timestamptz' })
@@ -39,6 +44,11 @@ export class PayLink extends BaseEntity {
   @Column({ name: 'created_tx_hash', length: 160 })
   createdTxHash!: string;
 
-  @Column({ name: 'payment_tx_hash', length: 160, nullable: true, default: null })
+  @Column({
+    name: 'payment_tx_hash',
+    length: 160,
+    nullable: true,
+    default: null,
+  })
   paymentTxHash!: string | null;
 }

@@ -13,6 +13,8 @@ export class UploadProcessor {
   async handleCleanup(_job: Job): Promise<void> {
     const cutoff = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
     await this.uploadService.deleteUnconfirmedOlderThan(cutoff);
-    this.logger.log(`Cleaned up unconfirmed uploads older than ${cutoff.toISOString()}`);
+    this.logger.log(
+      `Cleaned up unconfirmed uploads older than ${cutoff.toISOString()}`,
+    );
   }
 }

@@ -69,7 +69,11 @@ export class SmsService {
     return this.queue(phone, message, userId);
   }
 
-  async sendAlert(phone: string, summary: string, userId?: string): Promise<SmsLog> {
+  async sendAlert(
+    phone: string,
+    summary: string,
+    userId?: string,
+  ): Promise<SmsLog> {
     const message = `Cheese: ${summary}`;
     return this.queue(phone, message, userId);
   }

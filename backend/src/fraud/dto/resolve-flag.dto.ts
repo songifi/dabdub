@@ -6,11 +6,18 @@ const RESOLVABLE = [FraudStatus.RESOLVED, FraudStatus.FALSE_POSITIVE] as const;
 type ResolvableStatus = (typeof RESOLVABLE)[number];
 
 export class ResolveFlagDto {
-  @ApiProperty({ enum: RESOLVABLE, example: FraudStatus.RESOLVED, description: 'Resolution outcome' })
+  @ApiProperty({
+    enum: RESOLVABLE,
+    example: FraudStatus.RESOLVED,
+    description: 'Resolution outcome',
+  })
   @IsEnum(RESOLVABLE)
   resolution!: ResolvableStatus;
 
-  @ApiPropertyOptional({ example: 'Verified legitimate transaction', description: 'Optional admin note' })
+  @ApiPropertyOptional({
+    example: 'Verified legitimate transaction',
+    description: 'Optional admin note',
+  })
   @IsOptional()
   @IsString()
   note?: string;

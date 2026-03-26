@@ -11,6 +11,7 @@ export const flutterwaveConfig = registerAs(
   (): FlutterwaveConfig => ({
     secretKey: process.env['FLUTTERWAVE_SECRET_KEY']!,
     webhookSecret: process.env['FLUTTERWAVE_WEBHOOK_SECRET']!,
-    baseUrl: process.env['FLUTTERWAVE_BASE_URL'] ?? 'https://api.flutterwave.com',
+    baseUrl:
+      process.env['FLUTTERWAVE_BASE_URL'] ?? 'https://api.flutterwave.com',
   }),
 );

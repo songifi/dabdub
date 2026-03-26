@@ -3,7 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { TierService } from './tier.service';
 import { TierConfig, TierName } from './entities/tier-config.entity';
 import { User } from '../users/entities/user.entity';
-import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 import { TierLimitExceededException } from '../common/exceptions/tier-limit-exceeded.exception';
 import { NotFoundException } from '@nestjs/common';
 
@@ -67,7 +70,9 @@ describe('TierService', () => {
       };
       txRepo.createQueryBuilder.mockReturnValue(queryBuilder);
 
-      await expect(service.checkTransferLimit(userId, 25)).rejects.toThrow(TierLimitExceededException);
+      await expect(service.checkTransferLimit(userId, 25)).rejects.toThrow(
+        TierLimitExceededException,
+      );
     });
 
     it('should allow transfer if within daily limit', async () => {
@@ -86,7 +91,9 @@ describe('TierService', () => {
       };
       txRepo.createQueryBuilder.mockReturnValue(queryBuilder);
 
-      await expect(service.checkTransferLimit(userId, 25)).resolves.not.toThrow();
+      await expect(
+        service.checkTransferLimit(userId, 25),
+      ).resolves.not.toThrow();
     });
   });
 

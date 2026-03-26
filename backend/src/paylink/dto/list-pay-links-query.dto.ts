@@ -19,7 +19,14 @@ export class ListPayLinksQueryDto {
   @Max(100)
   limit?: number = 20;
 
-  @ApiPropertyOptional({ enum: [PayLinkStatus.ACTIVE, PayLinkStatus.PAID, PayLinkStatus.CANCELLED, PayLinkStatus.EXPIRED] })
+  @ApiPropertyOptional({
+    enum: [
+      PayLinkStatus.ACTIVE,
+      PayLinkStatus.PAID,
+      PayLinkStatus.CANCELLED,
+      PayLinkStatus.EXPIRED,
+    ],
+  })
   @IsOptional()
   @IsEnum(PayLinkStatus)
   status?: PayLinkStatus;

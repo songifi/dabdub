@@ -20,7 +20,10 @@ export class UpdateMerchantDto {
   @MaxLength(80)
   businessName?: string;
 
-  @ApiPropertyOptional({ enum: MerchantBusinessType, example: MerchantBusinessType.RETAIL })
+  @ApiPropertyOptional({
+    enum: MerchantBusinessType,
+    example: MerchantBusinessType.RETAIL,
+  })
   @IsOptional()
   @IsEnum(MerchantBusinessType)
   businessType?: MerchantBusinessType;

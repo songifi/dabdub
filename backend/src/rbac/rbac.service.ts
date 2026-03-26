@@ -12,10 +12,17 @@ export class RbacService {
   ) {}
 
   async list(adminId: string): Promise<AdminPermission[]> {
-    return this.permRepo.find({ where: { adminId }, order: { grantedAt: 'DESC' } });
+    return this.permRepo.find({
+      where: { adminId },
+      order: { grantedAt: 'DESC' },
+    });
   }
 
-  async grant(adminId: string, permission: Permission, grantedBy: string): Promise<AdminPermission> {
+  async grant(
+    adminId: string,
+    permission: Permission,
+    grantedBy: string,
+  ): Promise<AdminPermission> {
     const row = this.permRepo.create({
       adminId,
       permission,
@@ -29,4 +36,3 @@ export class RbacService {
     await this.permRepo.delete({ adminId, permission });
   }
 }
-

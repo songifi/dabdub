@@ -9,7 +9,8 @@ import { Notification } from './entities/notification.entity';
 import type { NotificationType } from './notifications.types';
 
 const UNREAD_COUNT_TTL_SECONDS = 30;
-const unreadCountKey = (userId: string) => `notifications:unread-count:${userId}`;
+const unreadCountKey = (userId: string) =>
+  `notifications:unread-count:${userId}`;
 
 type CursorPayload = { createdAt: string; id: string };
 
@@ -18,7 +19,9 @@ function encodeCursor(payload: CursorPayload): string {
 }
 
 function decodeCursor(raw: string): CursorPayload {
-  const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as CursorPayload;
+  const parsed = JSON.parse(
+    Buffer.from(raw, 'base64url').toString('utf8'),
+  ) as CursorPayload;
   if (!parsed?.createdAt || !parsed?.id) {
     throw new Error('Invalid cursor');
   }
@@ -79,7 +82,12 @@ export class NotificationService {
     const count = await this.notificationRepo.count({
       where: { userId, isRead: false },
     });
-    await this.redis.set(unreadCountKey(userId), String(count), 'EX', UNREAD_COUNT_TTL_SECONDS);
+    await this.redis.set(
+      unreadCountKey(userId),
+      String(count),
+      'EX',
+      UNREAD_COUNT_TTL_SECONDS,
+    );
     return count;
   }
 
@@ -108,9 +116,10 @@ export class NotificationService {
     const items = hasNext ? rows.slice(0, limit) : rows;
 
     const last = items[items.length - 1];
-    const nextCursor = hasNext && last
-      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-      : null;
+    const nextCursor =
+      hasNext && last
+        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+        : null;
 
     return { items, nextCursor };
   }
@@ -149,9 +158,10 @@ export class NotificationService {
   }
 
   async broadcast(title: string, body: string, segment: string): Promise<void> {
-    // Basic implementation: log the broadcast. 
+    // Basic implementation: log the broadcast.
     // In a real system, this would trigger a Bull job to notify users in the segment.
-    console.log(`[BROADCAST] Segment: ${segment}, Title: ${title}, Body: ${body}`);
+    console.log(
+      `[BROADCAST] Segment: ${segment}, Title: ${title}, Body: ${body}`,
+    );
   }
 }
-

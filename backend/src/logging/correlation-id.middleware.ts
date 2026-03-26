@@ -8,11 +8,11 @@ type RequestWithCorrelation = Request & { correlationId?: string };
 export class CorrelationIdMiddleware implements NestMiddleware {
   use(req: RequestWithCorrelation, res: Response, next: NextFunction): void {
     const header = req.header('x-correlation-id');
-    const correlationId = header && header.trim().length > 0 ? header : uuidv4();
+    const correlationId =
+      header && header.trim().length > 0 ? header : uuidv4();
 
     req.correlationId = correlationId;
     res.setHeader('x-correlation-id', correlationId);
     next();
   }
 }
-

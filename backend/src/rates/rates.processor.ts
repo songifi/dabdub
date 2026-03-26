@@ -19,7 +19,11 @@ export class RatesProcessor implements OnModuleInit {
     await this.ratesQueue.add(
       FETCH_RATE_JOB,
       {},
-      { repeat: { every: 30_000 }, removeOnComplete: true, removeOnFail: false },
+      {
+        repeat: { every: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
     );
   }
 

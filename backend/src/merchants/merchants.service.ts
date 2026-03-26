@@ -8,7 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { NotificationType } from '../notifications/notifications.types';
 import { NotificationService } from '../notifications/notifications.service';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { RegisterMerchantDto } from './dto/register-merchant.dto';
 import { UpdateMerchantDto } from './dto/update-merchant.dto';
 import { Merchant } from './entities/merchant.entity';
@@ -32,6 +33,30 @@ export class MerchantsService {
       throw new ConflictException('Merchant profile already exists');
     }
 
+    const merchant = await this.dataSource.transaction(
+      async (trx: EntityManager) => {
+        const merchantEntity = trx.getRepository(Merchant).create({
+          userId: user.id,
+          businessName: dto.businessName,
+          businessType: dto.businessType,
+          logoKey: dto.logoKey ?? null,
+          description: dto.description ?? null,
+          settlementCurrency: dto.settlementCurrency,
+          autoSettleEnabled: dto.autoSettleEnabled ?? true,
+          settlementThresholdUsdc: dto.threshold ?? 10,
+        });
+
+        const savedMerchant = await trx
+          .getRepository(Merchant)
+          .save(merchantEntity);
+
+        user.isMerchant = true;
+        user.role = UserRole.MERCHANT;
+        await trx.getRepository(User).save(user);
+
+        return savedMerchant;
+      },
+    );
     const merchant = await this.dataSource.transaction(async (trx: EntityManager) => {
       const merchantEntity = trx.getRepository(Merchant).create({
         userId: user.id,
@@ -47,7 +72,7 @@ export class MerchantsService {
       const savedMerchant = await trx.getRepository(Merchant).save(merchantEntity);
 
       user.isMerchant = true;
-      user.role = UserRole.MERCHANT;
+      user.role = Role.Merchant;
       await trx.getRepository(User).save(user);
 
       return savedMerchant;
@@ -74,8 +99,10 @@ export class MerchantsService {
   async updateMe(user: User, dto: UpdateMerchantDto): Promise<Merchant> {
     const merchant = await this.getMe(user);
 
-    if (dto.businessName !== undefined) merchant.businessName = dto.businessName;
-    if (dto.businessType !== undefined) merchant.businessType = dto.businessType;
+    if (dto.businessName !== undefined)
+      merchant.businessName = dto.businessName;
+    if (dto.businessType !== undefined)
+      merchant.businessType = dto.businessType;
     if (dto.description !== undefined) merchant.description = dto.description;
     if (dto.logoKey !== undefined) merchant.logoKey = dto.logoKey;
     if (dto.settlementCurrency !== undefined) {
@@ -105,7 +132,11 @@ export class MerchantsService {
         'merchant.logoKey AS "logoKey"',
         'merchant.isVerified AS "isVerified"',
       ])
-      .getRawOne<{ businessName: string; logoKey: string | null; isVerified: boolean }>();
+      .getRawOne<{
+        businessName: string;
+        logoKey: string | null;
+        isVerified: boolean;
+      }>();
 
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
@@ -115,7 +146,9 @@ export class MerchantsService {
   }
 
   async verifyMerchant(merchantId: string): Promise<Merchant> {
-    const merchant = await this.merchantRepo.findOne({ where: { id: merchantId } });
+    const merchant = await this.merchantRepo.findOne({
+      where: { id: merchantId },
+    });
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
     }

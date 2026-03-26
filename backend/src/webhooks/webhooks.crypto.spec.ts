@@ -7,10 +7,12 @@ describe('webhooks.crypto', () => {
     const payload = { a: 1, b: 'two' };
     const json = JSON.stringify(payload);
 
-    const expected = crypto.createHmac('sha256', secret).update(json).digest('hex');
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(json)
+      .digest('hex');
     const actual = hmacSha256Hex(json, secret);
 
     expect(actual).toBe(expected);
   });
 });
-

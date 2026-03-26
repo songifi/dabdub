@@ -14,4 +14,3 @@ import { AdminKycController } from './admin-kyc.controller';
   exports: [RolesGuard, PermissionsGuard, RbacService],
 })
 export class RbacModule {}
-

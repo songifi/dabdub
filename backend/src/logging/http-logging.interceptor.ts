@@ -53,7 +53,8 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         };
 
         if (statusCode >= 500) this.logger.error('request completed', entry);
-        else if (statusCode >= 400) this.logger.warn('request completed', entry);
+        else if (statusCode >= 400)
+          this.logger.warn('request completed', entry);
         else this.logger.info('request completed', entry);
       }),
       catchError((err) => {
@@ -77,4 +78,3 @@ export class HttpLoggingInterceptor implements NestInterceptor {
     );
   }
 }
-

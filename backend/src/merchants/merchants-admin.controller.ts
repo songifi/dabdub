@@ -27,10 +27,7 @@ export class MerchantsAdminController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Admin only' })
   @ApiResponse({ status: 404, description: 'Merchant not found' })
-  verify(
-    @Param('id') id: string,
-    @Req() req: Request,
-  ): Promise<Merchant> {
+  verify(@Param('id') id: string, @Req() req: Request): Promise<Merchant> {
     const user = (req as Request & { user?: { isAdmin?: boolean } }).user;
     if (!user?.isAdmin) {
       throw new ForbiddenException('Admin only');

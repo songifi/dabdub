@@ -4,14 +4,25 @@ import { NotFoundException } from '@nestjs/common';
 
 // Mock config to bypass validation during unit tests
 jest.mock('../config', () => ({
-  redisConfig: { KEY: 'redisConfig', host: 'localhost', port: 6379, password: '' },
+  redisConfig: {
+    KEY: 'redisConfig',
+    host: 'localhost',
+    port: 6379,
+    password: '',
+  },
   appConfig: { KEY: 'appConfig' },
 }));
 
 import { EarningsService } from './earnings.service';
 import { User } from '../users/entities/user.entity';
-import { TierConfig, TierName } from '../tier-config/entities/tier-config.entity';
-import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  TierConfig,
+  TierName,
+} from '../tier-config/entities/tier-config.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 import { YieldEntry } from './entities/yield-entry.entity';
 import { CacheService } from '../cache/cache.service';
 
@@ -82,7 +93,11 @@ describe('EarningsService', () => {
   describe('getProjections', () => {
     const userId = 'user-1';
     const user = { id: userId, tier: TierName.GOLD };
-    const tierConfig = { tier: TierName.GOLD, yieldApyPercent: '8.00', stakeLockupDays: 30 };
+    const tierConfig = {
+      tier: TierName.GOLD,
+      yieldApyPercent: '8.00',
+      stakeLockupDays: 30,
+    };
 
     function mockStakeQueryBuilder(stakedAmount: string) {
       const qb: any = {
@@ -102,9 +117,12 @@ describe('EarningsService', () => {
 
       const result = await service.getProjections(userId, 0);
 
-      const expected30 = (1000 * (8 / 100) * (30 / 365));
+      const expected30 = 1000 * (8 / 100) * (30 / 365);
       expect(result.projections[0].days).toBe(30);
-      expect(parseFloat(result.projections[0].projectedYieldUsdc)).toBeCloseTo(expected30, 4);
+      expect(parseFloat(result.projections[0].projectedYieldUsdc)).toBeCloseTo(
+        expected30,
+        4,
+      );
     });
 
     it('should compute 365-day projection with additional stake: (1000 + 500) × 0.08 × 365/365 = 120', async () => {
@@ -144,7 +162,11 @@ describe('EarningsService', () => {
       stakeLockupDays: 30,
     };
 
-    function mockAllQueryBuilders(staked: string, liquid: string, yieldTotal: string) {
+    function mockAllQueryBuilders(
+      staked: string,
+      liquid: string,
+      yieldTotal: string,
+    ) {
       // Three createQueryBuilder calls: staked, liquid, yield
       const makeQb = (result: Record<string, string>) => ({
         select: jest.fn().mockReturnThis(),
@@ -168,7 +190,10 @@ describe('EarningsService', () => {
       // Last stake was 60 days ago (lockup is 30 days)
       const sixtyDaysAgo = new Date();
       sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-      txRepo.findOne.mockResolvedValue({ createdAt: sixtyDaysAgo, type: TransactionType.STAKE });
+      txRepo.findOne.mockResolvedValue({
+        createdAt: sixtyDaysAgo,
+        type: TransactionType.STAKE,
+      });
       cacheService.set.mockResolvedValue(true);
 
       const result = await service.getDashboard(userId);
@@ -186,7 +211,10 @@ describe('EarningsService', () => {
       // Last stake was 5 days ago (lockup is 30 days)
       const fiveDaysAgo = new Date();
       fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      txRepo.findOne.mockResolvedValue({ createdAt: fiveDaysAgo, type: TransactionType.STAKE });
+      txRepo.findOne.mockResolvedValue({
+        createdAt: fiveDaysAgo,
+        type: TransactionType.STAKE,
+      });
       cacheService.set.mockResolvedValue(true);
 
       const result = await service.getDashboard(userId);
@@ -259,7 +287,9 @@ describe('EarningsService', () => {
       cacheService.get.mockResolvedValue(null);
       userRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.getDashboard(userId)).rejects.toThrow(NotFoundException);
+      await expect(service.getDashboard(userId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

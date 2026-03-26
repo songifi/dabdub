@@ -15,7 +15,11 @@ import { EmailAdminController } from './email-admin.controller';
       settings: {
         // Custom backoff: delegate to EmailService.getBackoffDelay
         backoffStrategies: {
-          custom: (attemptsMade: number, _err: Error, _job: { data: EmailJobPayload }) => {
+          custom: (
+            attemptsMade: number,
+            _err: Error,
+            _job: { data: EmailJobPayload },
+          ) => {
             const delays = [30_000, 120_000, 600_000];
             return delays[attemptsMade] ?? delays[delays.length - 1];
           },

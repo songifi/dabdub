@@ -2,7 +2,11 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Deposit, DepositStatus } from './entities/deposit.entity';
-import { Transaction, TransactionType, TransactionStatus } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+  TransactionStatus,
+} from '../transactions/entities/transaction.entity';
 import { VirtualAccount } from '../virtual-account/entities/virtual-account.entity';
 
 @Injectable()
@@ -52,7 +56,9 @@ export class DepositsService {
 
     await this.transactionRepo.save(transaction);
 
-    this.logger.log(`Created deposit and transaction for user ${userId}: ${usdcAmount} USDC`);
+    this.logger.log(
+      `Created deposit and transaction for user ${userId}: ${usdcAmount} USDC`,
+    );
 
     return savedDeposit;
   }

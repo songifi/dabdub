@@ -35,7 +35,11 @@ describe('RatesService.getRate', () => {
   });
 
   it('cache hit → returns Redis value without hitting DB', async () => {
-    mockCache.get.mockResolvedValue({ rate: '1580.00', fetchedAt: new Date().toISOString(), source: 'bybit_p2p' });
+    mockCache.get.mockResolvedValue({
+      rate: '1580.00',
+      fetchedAt: new Date().toISOString(),
+      source: 'bybit_p2p',
+    });
 
     const result = await service.getRate('USDC', 'NGN');
 
@@ -59,13 +63,17 @@ describe('RatesService.getRate', () => {
     mockCache.get.mockResolvedValue(null);
     mockRepo.findOne.mockResolvedValue(staleSnapshot);
 
-    await expect(service.getRate('USDC', 'NGN')).rejects.toBeInstanceOf(StaleRateException);
+    await expect(service.getRate('USDC', 'NGN')).rejects.toBeInstanceOf(
+      StaleRateException,
+    );
   });
 
   it('cache miss + no snapshot → throws StaleRateException', async () => {
     mockCache.get.mockResolvedValue(null);
     mockRepo.findOne.mockResolvedValue(null);
 
-    await expect(service.getRate('USDC', 'NGN')).rejects.toBeInstanceOf(StaleRateException);
+    await expect(service.getRate('USDC', 'NGN')).rejects.toBeInstanceOf(
+      StaleRateException,
+    );
   });
 });

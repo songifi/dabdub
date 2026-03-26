@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { TierConfig } from '../tier-config/entities/tier-config.entity';
-import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 import { YieldEntry } from './entities/yield-entry.entity';
 import { CacheService } from '../cache/cache.service';
 import { EarningsDashboardDto } from './dto/earnings-dashboard.dto';
@@ -49,8 +52,11 @@ export class EarningsService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const tierConfig = await this.tierRepo.findOne({ where: { tier: user.tier } });
-    if (!tierConfig) throw new NotFoundException('Tier configuration not found');
+    const tierConfig = await this.tierRepo.findOne({
+      where: { tier: user.tier },
+    });
+    if (!tierConfig)
+      throw new NotFoundException('Tier configuration not found');
 
     // 3. Sum staked balance (sum of completed stake minus completed unstake)
     const stakeResult = await this.txRepo
@@ -61,7 +67,9 @@ export class EarningsService {
         'staked',
       )
       .where('tx.user_id = :userId', { userId })
-      .andWhere('tx.type IN (:...types)', { types: [TransactionType.STAKE, TransactionType.UNSTAKE] })
+      .andWhere('tx.type IN (:...types)', {
+        types: [TransactionType.STAKE, TransactionType.UNSTAKE],
+      })
       .setParameter('stakeType', TransactionType.STAKE)
       .setParameter('unstakeType', TransactionType.UNSTAKE)
       .getRawOne();
@@ -77,11 +85,19 @@ export class EarningsService {
         'liquid',
       )
       .where('tx.user_id = :userId', { userId })
-      .setParameter('creditTypes', [TransactionType.DEPOSIT, TransactionType.TRANSFER_IN, TransactionType.YIELD_CREDIT])
-      .setParameter('debitTypes', [TransactionType.WITHDRAWAL, TransactionType.TRANSFER_OUT])
+      .setParameter('creditTypes', [
+        TransactionType.DEPOSIT,
+        TransactionType.TRANSFER_IN,
+        TransactionType.YIELD_CREDIT,
+      ])
+      .setParameter('debitTypes', [
+        TransactionType.WITHDRAWAL,
+        TransactionType.TRANSFER_OUT,
+      ])
       .getRawOne();
 
-    const liquidBalance = parseFloat(liquidResult?.liquid || '0') - stakedBalance;
+    const liquidBalance =
+      parseFloat(liquidResult?.liquid || '0') - stakedBalance;
 
     // 5. Sum total yield earned (yield_credit transactions only)
     const yieldResult = await this.txRepo
@@ -157,7 +173,10 @@ export class EarningsService {
     // Running total: sum of ALL yield entries for the user
     const runningResult = await this.yieldRepo
       .createQueryBuilder('ye')
-      .select('COALESCE(SUM(CAST(ye.amount_usdc AS NUMERIC)), 0)', 'runningTotal')
+      .select(
+        'COALESCE(SUM(CAST(ye.amount_usdc AS NUMERIC)), 0)',
+        'runningTotal',
+      )
       .where('ye.user_id = :userId', { userId })
       .getRawOne();
 
@@ -166,7 +185,9 @@ export class EarningsService {
       total,
       page,
       limit,
-      runningTotalUsdc: parseFloat(runningResult?.runningTotal || '0').toFixed(8),
+      runningTotalUsdc: parseFloat(runningResult?.runningTotal || '0').toFixed(
+        8,
+      ),
     };
   }
 
@@ -179,8 +200,11 @@ export class EarningsService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const tierConfig = await this.tierRepo.findOne({ where: { tier: user.tier } });
-    if (!tierConfig) throw new NotFoundException('Tier configuration not found');
+    const tierConfig = await this.tierRepo.findOne({
+      where: { tier: user.tier },
+    });
+    if (!tierConfig)
+      throw new NotFoundException('Tier configuration not found');
 
     // Get current staked balance
     const stakeResult = await this.txRepo
@@ -191,7 +215,9 @@ export class EarningsService {
         'staked',
       )
       .where('tx.user_id = :userId', { userId })
-      .andWhere('tx.type IN (:...types)', { types: [TransactionType.STAKE, TransactionType.UNSTAKE] })
+      .andWhere('tx.type IN (:...types)', {
+        types: [TransactionType.STAKE, TransactionType.UNSTAKE],
+      })
       .setParameter('stakeType', TransactionType.STAKE)
       .setParameter('unstakeType', TransactionType.UNSTAKE)
       .getRawOne();

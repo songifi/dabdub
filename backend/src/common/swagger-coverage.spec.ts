@@ -12,10 +12,20 @@ import 'reflect-metadata';
 import { DECORATORS } from '@nestjs/swagger/dist/constants';
 
 // ── Blanket mocks for all infrastructure that isn't installed ─────────────────
-jest.mock('@nestjs-modules/ioredis', () => ({ InjectRedis: () => () => {} }), { virtual: true });
+jest.mock('@nestjs-modules/ioredis', () => ({ InjectRedis: () => () => {} }), {
+  virtual: true,
+});
 jest.mock('qrcode', () => ({}), { virtual: true });
-jest.mock('../paylink/entities/pay-link.entity', () => ({ PayLink: class {} }), { virtual: true });
-jest.mock('@nestjs/websockets', () => ({ WebSocketGateway: () => () => {}, WebSocketServer: () => () => {} }), { virtual: true });
+jest.mock(
+  '../paylink/entities/pay-link.entity',
+  () => ({ PayLink: class {} }),
+  { virtual: true },
+);
+jest.mock(
+  '@nestjs/websockets',
+  () => ({ WebSocketGateway: () => () => {}, WebSocketServer: () => () => {} }),
+  { virtual: true },
+);
 jest.mock('socket.io', () => ({}), { virtual: true });
 jest.mock('@nestjs/config', () => ({
   ConfigService: class {},
@@ -30,10 +40,18 @@ jest.mock('@nestjs/typeorm', () => ({
 jest.mock('typeorm', () => {
   const noop = () => () => {};
   return {
-    Entity: noop, Column: noop, ManyToOne: noop, JoinColumn: noop,
-    PrimaryGeneratedColumn: noop, CreateDateColumn: noop, UpdateDateColumn: noop,
-    Index: noop, BeforeInsert: noop, BeforeUpdate: noop,
-    DataSource: class {}, Repository: class {},
+    Entity: noop,
+    Column: noop,
+    ManyToOne: noop,
+    JoinColumn: noop,
+    PrimaryGeneratedColumn: noop,
+    CreateDateColumn: noop,
+    UpdateDateColumn: noop,
+    Index: noop,
+    BeforeInsert: noop,
+    BeforeUpdate: noop,
+    DataSource: class {},
+    Repository: class {},
   };
 });
 jest.mock('@nestjs/jwt', () => ({
@@ -45,8 +63,14 @@ jest.mock('@nestjs/passport', () => ({
   PassportStrategy: (Base: any) => class extends (Base ?? class {}) {},
   AuthGuard: () => class {},
 }));
-jest.mock('passport-jwt', () => ({ Strategy: class {}, ExtractJwt: { fromAuthHeaderAsBearerToken: () => {} } }));
-jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
+jest.mock('passport-jwt', () => ({
+  Strategy: class {},
+  ExtractJwt: { fromAuthHeaderAsBearerToken: () => {} },
+}));
+jest.mock('bcrypt', () => ({
+  hash: async () => '',
+  compare: async () => true,
+}));
 jest.mock('@nestjs/bull', () => ({
   InjectQueue: () => () => {},
   BullModule: { registerQueue: () => ({}) },
@@ -137,7 +161,7 @@ function getSwaggerProperties(target: new () => object): string[] {
     new target(),
   );
   if (!meta) return [];
-  return ((meta as unknown) as string[]).map((k: string) => k.replace(/^:/, ''));
+  return (meta as unknown as string[]).map((k: string) => k.replace(/^:/, ''));
 }
 
 function getOwnProperties(target: new () => object): string[] {
@@ -170,7 +194,9 @@ describe('Swagger coverage', () => {
         const own = getOwnProperties(Dto);
 
         const missing = own.filter(
-          (p) => typeof (Dto.prototype as any)[p] !== 'function' && !decorated.includes(p),
+          (p) =>
+            typeof (Dto.prototype as any)[p] !== 'function' &&
+            !decorated.includes(p),
         );
 
         expect(missing).toEqual([]);

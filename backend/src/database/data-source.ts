@@ -15,18 +15,15 @@ import { DataSource } from 'typeorm';
 
 dotenv.config();
 
-const {
-  DB_HOST,
-  DB_PORT,
-  DB_USER,
-  DB_PASS,
-  DB_NAME,
-} = process.env as Record<string, string>;
+const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME } = process.env as Record<
+  string,
+  string
+>;
 
 if (!DB_HOST || !DB_USER || !DB_PASS || !DB_NAME) {
   throw new Error(
     '[data-source] Missing required env vars: DB_HOST, DB_USER, DB_PASS, DB_NAME\n' +
-    'Ensure your .env file is present and populated before running TypeORM CLI commands.',
+      'Ensure your .env file is present and populated before running TypeORM CLI commands.',
   );
 }
 
@@ -51,10 +48,7 @@ export const AppDataSource = new DataSource({
     `${__dirname}/../**/*.entity.ts`,
     `${__dirname}/../**/*.entity.js`,
   ],
-  migrations: [
-    `${__dirname}/migrations/*.ts`,
-    `${__dirname}/migrations/*.js`,
-  ],
+  migrations: [`${__dirname}/migrations/*.ts`, `${__dirname}/migrations/*.js`],
 
   synchronize: false,
   logging: ['error', 'warn'],

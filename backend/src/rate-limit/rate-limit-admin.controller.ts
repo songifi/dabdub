@@ -28,7 +28,18 @@ export class RateLimitAdminController {
 
   @Get('blocked-ips')
   @ApiOperation({ summary: 'List all currently blocked IP addresses' })
-  @ApiResponse({ status: 200, schema: { properties: { blockedIps: { type: 'array', items: { type: 'string' }, example: ['1.2.3.4'] } } } })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      properties: {
+        blockedIps: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['1.2.3.4'],
+        },
+      },
+    },
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async listBlockedIps(): Promise<{ blockedIps: string[] }> {
@@ -38,8 +49,19 @@ export class RateLimitAdminController {
 
   @Delete('blocked-ips/:ip')
   @ApiOperation({ summary: 'Unblock an IP address and clear its hit counter' })
-  @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to unblock', example: '1.2.3.4' })
-  @ApiResponse({ status: 200, schema: { properties: { message: { type: 'string', example: 'IP 1.2.3.4 has been unblocked' } } } })
+  @ApiParam({
+    name: 'ip',
+    description: 'IPv4 or IPv6 address to unblock',
+    example: '1.2.3.4',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      properties: {
+        message: { type: 'string', example: 'IP 1.2.3.4 has been unblocked' },
+      },
+    },
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'IP is not currently blocked' })
   @ApiResponse({ status: 500, description: 'Internal server error' })

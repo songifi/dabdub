@@ -23,12 +23,18 @@ dotenv.config();
 import { AppDataSource } from './data-source';
 import { runSeed } from './seed';
 import { User } from '../users/entities/user.entity';
-import { TierConfig, TierName } from '../tier-config/entities/tier-config.entity';
+import {
+  TierConfig,
+  TierName,
+} from '../tier-config/entities/tier-config.entity';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function tableExists(ds: DataSource, tableName: string): Promise<boolean> {
+async function tableExists(
+  ds: DataSource,
+  tableName: string,
+): Promise<boolean> {
   const result = await ds.query<Array<{ exists: boolean }>>(
     `SELECT EXISTS (
        SELECT FROM information_schema.tables
@@ -111,7 +117,11 @@ describe('Database — migrations + seed (integration)', () => {
       });
       expect(tiers).toHaveLength(3);
       expect(tiers.map((t) => t.name)).toEqual(
-        expect.arrayContaining([TierName.SILVER, TierName.GOLD, TierName.BLACK]),
+        expect.arrayContaining([
+          TierName.SILVER,
+          TierName.GOLD,
+          TierName.BLACK,
+        ]),
       );
     });
 

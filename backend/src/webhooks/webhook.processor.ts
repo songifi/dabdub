@@ -7,10 +7,20 @@ import { Repository } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { WebhookDelivery } from './entities/webhook-delivery.entity';
 import { WebhookSubscription } from './entities/webhook-subscription.entity';
-import { DELIVER_WEBHOOK_JOB, WEBHOOKS_QUEUE, WebhookService } from './webhook.service';
+import {
+  DELIVER_WEBHOOK_JOB,
+  WEBHOOKS_QUEUE,
+  WebhookService,
+} from './webhook.service';
 import { hmacSha256Hex } from './webhooks.crypto';
 
-const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 8 * 60 * 60_000] as const;
+const RETRY_DELAYS_MS = [
+  60_000,
+  5 * 60_000,
+  30 * 60_000,
+  2 * 60 * 60_000,
+  8 * 60 * 60_000,
+] as const;
 
 @Processor(WEBHOOKS_QUEUE)
 export class WebhookProcessor {
@@ -34,7 +44,9 @@ export class WebhookProcessor {
     const deliveryId = job.data?.deliveryId;
     if (!deliveryId) return;
 
-    const delivery = await this.deliveryRepo.findOne({ where: { id: deliveryId } });
+    const delivery = await this.deliveryRepo.findOne({
+      where: { id: deliveryId },
+    });
     if (!delivery) return;
 
     // Already delivered — ignore duplicates.
@@ -55,7 +67,10 @@ export class WebhookProcessor {
     const sigHex = hmacSha256Hex(payloadJson, rawSecret);
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.webhooks.getDeliveryTimeoutMs());
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.webhooks.getDeliveryTimeoutMs(),
+    );
 
     try {
       const resp = await fetch(sub.url, {
@@ -79,7 +94,9 @@ export class WebhookProcessor {
         delivery.deliveredAt = new Date();
         delivery.nextRetryAt = delivery.deliveredAt;
         await this.deliveryRepo.save(delivery);
-        this.logger.log(`Delivered webhook deliveryId=${delivery.id} sub=${sub.id} status=${resp.status}`);
+        this.logger.log(
+          `Delivered webhook deliveryId=${delivery.id} sub=${sub.id} status=${resp.status}`,
+        );
         return;
       }
 
@@ -112,7 +129,9 @@ export class WebhookProcessor {
       return;
     }
 
-    const delayMs = RETRY_DELAYS_MS[delivery.attemptCount - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+    const delayMs =
+      RETRY_DELAYS_MS[delivery.attemptCount - 1] ??
+      RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
     delivery.nextRetryAt = new Date(Date.now() + delayMs);
     await this.deliveryRepo.save(delivery);
 
@@ -137,4 +156,3 @@ async function safeReadBody(resp: Response): Promise<string | null> {
     return null;
   }
 }
-

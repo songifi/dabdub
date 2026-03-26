@@ -41,8 +41,12 @@ export class CreatePayLinks1700000000004 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_pay_links_status_expires"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_pay_links_creator_status_created"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_pay_links_status_expires"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_pay_links_creator_status_created"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "pay_links"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "pay_links_status_enum"`);
   }

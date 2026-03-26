@@ -42,9 +42,13 @@ export class ZeptoMailService {
       throw new Error(`ZeptoMail ${res.status}: ${text}`);
     }
 
-    const data = (await res.json()) as { data?: Array<{ message_id?: string }> };
+    const data = (await res.json()) as {
+      data?: Array<{ message_id?: string }>;
+    };
     const messageId = data?.data?.[0]?.message_id ?? 'unknown';
-    this.logger.log(`Email sent to=${to} template=${templateAlias} messageId=${messageId}`);
+    this.logger.log(
+      `Email sent to=${to} template=${templateAlias} messageId=${messageId}`,
+    );
     return { messageId };
   }
 }

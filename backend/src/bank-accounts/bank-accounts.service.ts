@@ -63,8 +63,13 @@ export class BankAccountsService {
     });
   }
 
-  async createForUser(user: User, dto: CreateBankAccountDto): Promise<BankAccount> {
-    const existingCount = await this.bankAccountRepo.count({ where: { userId: user.id } });
+  async createForUser(
+    user: User,
+    dto: CreateBankAccountDto,
+  ): Promise<BankAccount> {
+    const existingCount = await this.bankAccountRepo.count({
+      where: { userId: user.id },
+    });
     if (existingCount >= MAX_BANK_ACCOUNTS) {
       throw new BadRequestException('Maximum of 3 bank accounts allowed');
     }
@@ -73,7 +78,8 @@ export class BankAccountsService {
     let bankName = dto.bankCode;
     try {
       const banks = await this.getBanks();
-      bankName = banks.find((bank) => bank.code === dto.bankCode)?.name ?? dto.bankCode;
+      bankName =
+        banks.find((bank) => bank.code === dto.bankCode)?.name ?? dto.bankCode;
     } catch {
       bankName = dto.bankCode;
     }
@@ -99,7 +105,9 @@ export class BankAccountsService {
   }
 
   async deleteForUser(user: User, id: string): Promise<void> {
-    const account = await this.bankAccountRepo.findOne({ where: { id, userId: user.id } });
+    const account = await this.bankAccountRepo.findOne({
+      where: { id, userId: user.id },
+    });
     if (!account) {
       throw new NotFoundException('Bank account not found');
     }
@@ -117,7 +125,9 @@ export class BankAccountsService {
   }
 
   async setDefaultForUser(user: User, id: string): Promise<void> {
-    const account = await this.bankAccountRepo.findOne({ where: { id, userId: user.id } });
+    const account = await this.bankAccountRepo.findOne({
+      where: { id, userId: user.id },
+    });
     if (!account) {
       throw new NotFoundException('Bank account not found');
     }
@@ -141,15 +151,20 @@ export class BankAccountsService {
 
     try {
       const { data } = await firstValueFrom(
-        this.httpService.get<PaystackBanksResponse>(`${this.paystack.baseUrl}/bank`, {
-          headers: { Authorization: `Bearer ${this.paystack.secretKey}` },
-        }),
+        this.httpService.get<PaystackBanksResponse>(
+          `${this.paystack.baseUrl}/bank`,
+          {
+            headers: { Authorization: `Bearer ${this.paystack.secretKey}` },
+          },
+        ),
       );
 
-      const banks = (data.data ?? []).map((bank: { code: string; name: string }) => ({
-        code: bank.code,
-        name: bank.name,
-      }));
+      const banks = (data.data ?? []).map(
+        (bank: { code: string; name: string }) => ({
+          code: bank.code,
+          name: bank.name,
+        }),
+      );
 
       await this.redis.set(
         PAYSTACK_BANKS_CACHE_KEY,
@@ -170,13 +185,16 @@ export class BankAccountsService {
   ): Promise<{ accountName: string }> {
     try {
       const { data } = await firstValueFrom(
-        this.httpService.get<PaystackResolveResponse>(`${this.paystack.baseUrl}/bank/resolve`, {
-          headers: { Authorization: `Bearer ${this.paystack.secretKey}` },
-          params: {
-            account_number: accountNumber,
-            bank_code: bankCode,
+        this.httpService.get<PaystackResolveResponse>(
+          `${this.paystack.baseUrl}/bank/resolve`,
+          {
+            headers: { Authorization: `Bearer ${this.paystack.secretKey}` },
+            params: {
+              account_number: accountNumber,
+              bank_code: bankCode,
+            },
           },
-        }),
+        ),
       );
 
       return { accountName: data.data.account_name };

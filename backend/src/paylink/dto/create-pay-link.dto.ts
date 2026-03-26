@@ -29,7 +29,8 @@ export class CreatePayLinkDto {
   expiresInHours?: number;
 
   @ApiPropertyOptional({
-    description: 'Optional custom slug: alphanumeric and hyphens, 4 to 32 chars',
+    description:
+      'Optional custom slug: alphanumeric and hyphens, 4 to 32 chars',
     example: 'inv-2026-001',
   })
   @IsOptional()

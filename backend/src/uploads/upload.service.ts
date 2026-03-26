@@ -8,7 +8,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import type { ConfigType } from '@nestjs/config';
-import { S3Client, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  HeadObjectCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { r2Config } from '../config/r2.config';
@@ -17,7 +21,12 @@ import { PresignDto } from './dto/presign.dto';
 
 const MIME_WHITELIST: Record<UploadPurpose, string[]> = {
   [UploadPurpose.KYC]: ['image/jpeg', 'image/png', 'application/pdf'],
-  [UploadPurpose.MERCHANT_LOGO]: ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'],
+  [UploadPurpose.MERCHANT_LOGO]: [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/svg+xml',
+  ],
   [UploadPurpose.REPORT]: ['application/pdf', 'text/csv'],
 };
 
@@ -98,7 +107,9 @@ export class UploadService {
     this.assertOwnership(userId, record);
 
     try {
-      await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
     } catch {
       throw new BadRequestException('File not found in storage');
     }

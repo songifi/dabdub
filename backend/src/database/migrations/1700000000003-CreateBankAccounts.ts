@@ -33,8 +33,12 @@ export class CreateBankAccounts1700000000003 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "UQ_bank_accounts_user_bank_account"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_bank_accounts_user_verified"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "UQ_bank_accounts_user_bank_account"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_bank_accounts_user_verified"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "bank_accounts"`);
   }
 }

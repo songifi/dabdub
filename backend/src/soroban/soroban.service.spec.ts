@@ -43,10 +43,15 @@ describe('SorobanService', () => {
   it('does not submit when write simulation fails', async () => {
     const simulateSpy = jest
       .spyOn(service.server, 'simulateTransaction')
-      .mockResolvedValue({ ok: false, error: 'rpc timeout' } as SimulationResult);
+      .mockResolvedValue({
+        ok: false,
+        error: 'rpc timeout',
+      } as SimulationResult);
     const sendSpy = jest.spyOn(service.server, 'sendTransaction');
 
-    await expect(service.deposit('alice', '100')).rejects.toThrow(BadGatewayException);
+    await expect(service.deposit('alice', '100')).rejects.toThrow(
+      BadGatewayException,
+    );
     expect(simulateSpy).toHaveBeenCalledTimes(1);
     expect(sendSpy).not.toHaveBeenCalled();
   });
@@ -58,7 +63,9 @@ describe('SorobanService', () => {
     } as SimulationResult);
     const sendSpy = jest.spyOn(service.server, 'sendTransaction');
 
-    await expect(service.withdraw('alice', '50')).rejects.toThrow(BadGatewayException);
+    await expect(service.withdraw('alice', '50')).rejects.toThrow(
+      BadGatewayException,
+    );
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
@@ -93,10 +100,12 @@ describe('SorobanService', () => {
       ok: true,
       result: { simulated: true },
     } as SimulationResult);
-    const sendSpy = jest.spyOn(service.server, 'sendTransaction').mockResolvedValue({
-      ok: true,
-      result: { txHash: 'abc123' },
-    });
+    const sendSpy = jest
+      .spyOn(service.server, 'sendTransaction')
+      .mockResolvedValue({
+        ok: true,
+        result: { txHash: 'abc123' },
+      });
 
     await expect(service.pause()).resolves.toEqual({ txHash: 'abc123' });
     expect(sendSpy).toHaveBeenCalledTimes(1);

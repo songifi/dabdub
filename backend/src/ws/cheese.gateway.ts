@@ -93,7 +93,11 @@ export class CheeseGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  async emitToUser(userId: string, event: string, data: unknown): Promise<void> {
+  async emitToUser(
+    userId: string,
+    event: string,
+    data: unknown,
+  ): Promise<void> {
     const sockets = await this.redis.hkeys(`${REDIS_WS_PREFIX}${userId}`);
     if (sockets.length === 0) return;
     this.server.to(`user:${userId}`).emit(event, data);

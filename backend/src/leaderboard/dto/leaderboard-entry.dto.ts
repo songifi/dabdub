@@ -7,7 +7,10 @@ export class LeaderboardEntryDto {
   @ApiProperty({ example: 'a1b2c3d4-...', description: 'Entity UUID' })
   id!: string;
 
-  @ApiProperty({ example: 'alice99', description: 'Display name shown on the leaderboard' })
+  @ApiProperty({
+    example: 'alice99',
+    description: 'Display name shown on the leaderboard',
+  })
   displayName!: string;
 
   @ApiProperty({ example: 4200, description: 'Leaderboard score' })

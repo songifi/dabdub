@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UploadService } from './upload.service';
 import { FileUpload, UploadPurpose } from './entities/file-upload.entity';
 import { r2Config } from '../config/r2.config';
@@ -89,9 +93,9 @@ describe('UploadService', () => {
     it('throws 404 when record does not exist', async () => {
       mockRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.confirmUpload('user-1', 'kyc/user-1/missing.jpeg')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.confirmUpload('user-1', 'kyc/user-1/missing.jpeg'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws 400 when file is not found in R2 (HeadObject fails)', async () => {
@@ -102,9 +106,9 @@ describe('UploadService', () => {
       } as FileUpload);
       mockSend.mockRejectedValueOnce(new Error('NotFound'));
 
-      await expect(service.confirmUpload('user-1', 'kyc/user-1/file.jpeg')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.confirmUpload('user-1', 'kyc/user-1/file.jpeg'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws 403 when a different user tries to confirm', async () => {
@@ -114,9 +118,9 @@ describe('UploadService', () => {
         isConfirmed: false,
       } as FileUpload);
 
-      await expect(service.confirmUpload('user-2', 'kyc/user-1/file.jpeg')).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.confirmUpload('user-2', 'kyc/user-1/file.jpeg'),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('sets isConfirmed=true on success', async () => {
@@ -128,7 +132,10 @@ describe('UploadService', () => {
       mockRepo.findOne.mockResolvedValue(record);
       mockSend.mockResolvedValueOnce({});
 
-      const result = await service.confirmUpload('user-1', 'kyc/user-1/file.jpeg');
+      const result = await service.confirmUpload(
+        'user-1',
+        'kyc/user-1/file.jpeg',
+      );
       expect(result.isConfirmed).toBe(true);
     });
   });

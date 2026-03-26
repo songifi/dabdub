@@ -1,4 +1,10 @@
-import { Body, Controller, Post, ForbiddenException, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  ForbiddenException,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ZeptoMailService, ZeptoSendResult } from './zepto-mail.service';

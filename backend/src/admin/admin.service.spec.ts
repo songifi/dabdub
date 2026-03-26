@@ -28,11 +28,21 @@ describe('AdminService', () => {
         },
         {
           provide: getRepositoryToken(Transaction),
-          useValue: { findAndCount: jest.fn(), find: jest.fn(), createQueryBuilder: jest.fn() },
+          useValue: {
+            findAndCount: jest.fn(),
+            find: jest.fn(),
+            createQueryBuilder: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(FraudFlag),
-          useValue: { find: jest.fn(), save: jest.fn(), create: jest.fn(), count: jest.fn(), update: jest.fn() },
+          useValue: {
+            find: jest.fn(),
+            save: jest.fn(),
+            create: jest.fn(),
+            count: jest.fn(),
+            update: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(Session),
@@ -80,9 +90,14 @@ describe('AdminService', () => {
 
     await service.freezeUser(userId, 'bad behavior', adminId);
 
-    expect(userRepo.save).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
+    expect(userRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ isActive: false }),
+    );
     expect(sessionRepo.delete).toHaveBeenCalledWith(['sess-1']);
-    expect(tokenRepo.update).toHaveBeenCalledWith(['rt-1'], expect.objectContaining({ revokedAt: expect.any(Date) }));
+    expect(tokenRepo.update).toHaveBeenCalledWith(
+      ['rt-1'],
+      expect.objectContaining({ revokedAt: expect.any(Date) }),
+    );
     expect(fraudRepo.save).toHaveBeenCalled();
   });
 });

@@ -35,12 +35,17 @@ describe('SmsProcessor', () => {
     termii.send.mockResolvedValue({ messageId: 'ref-123' });
     repo.update.mockResolvedValue({});
 
-    await processor.handleSend({ data: { logId: 'log-1', phone: '+2348012345678', message: 'test' } } as any);
+    await processor.handleSend({
+      data: { logId: 'log-1', phone: '+2348012345678', message: 'test' },
+    } as any);
 
-    expect(repo.update).toHaveBeenCalledWith('log-1', expect.objectContaining({
-      status: SmsStatus.SENT,
-      providerRef: 'ref-123',
-    }));
+    expect(repo.update).toHaveBeenCalledWith(
+      'log-1',
+      expect.objectContaining({
+        status: SmsStatus.SENT,
+        providerRef: 'ref-123',
+      }),
+    );
   });
 
   it('should mark log as FAILED after exhausted retries', async () => {
@@ -48,21 +53,32 @@ describe('SmsProcessor', () => {
     repo.update.mockResolvedValue({});
 
     await processor.handleFailed(
-      { data: { logId: 'log-2' }, attemptsMade: 3, opts: { attempts: 3 } } as any,
+      {
+        data: { logId: 'log-2' },
+        attemptsMade: 3,
+        opts: { attempts: 3 },
+      } as any,
       err,
     );
 
-    expect(repo.update).toHaveBeenCalledWith('log-2', expect.objectContaining({
-      status: SmsStatus.FAILED,
-      errorMessage: err.message,
-    }));
+    expect(repo.update).toHaveBeenCalledWith(
+      'log-2',
+      expect.objectContaining({
+        status: SmsStatus.FAILED,
+        errorMessage: err.message,
+      }),
+    );
   });
 
   it('should NOT mark as FAILED if retries not yet exhausted', async () => {
     const err = new Error('Termii 500: Internal Server Error');
 
     await processor.handleFailed(
-      { data: { logId: 'log-3' }, attemptsMade: 1, opts: { attempts: 3 } } as any,
+      {
+        data: { logId: 'log-3' },
+        attemptsMade: 1,
+        opts: { attempts: 3 },
+      } as any,
       err,
     );
 

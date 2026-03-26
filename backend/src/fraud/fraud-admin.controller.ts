@@ -50,20 +50,24 @@ export class FraudAdminController {
   constructor(private readonly fraudService: FraudService) {}
 
   @Get('flags')
-  @ApiOperation({ summary: 'List fraud flags with optional filters and pagination' })
+  @ApiOperation({
+    summary: 'List fraud flags with optional filters and pagination',
+  })
   @ApiPaginatedResponse(FraudFlagClass)
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  async listFlags(
-    @Query() query: QueryFlagsDto,
-  ) {
+  async listFlags(@Query() query: QueryFlagsDto) {
     return this.fraudService.findFlags(query);
   }
 
   @Patch('flags/:id/resolve')
   @ApiOperation({ summary: 'Resolve or mark a fraud flag as false positive' })
-  @ApiParam({ name: 'id', description: 'UUID of the fraud flag', example: 'a1b2c3d4-...' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the fraud flag',
+    example: 'a1b2c3d4-...',
+  })
   @ApiResponse({ status: 200, type: FraudFlagClass })
   @ApiResponse({ status: 400, description: 'Invalid resolution status' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

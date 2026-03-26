@@ -13,4 +13,3 @@ export class GetNotificationsQueryDto {
   @IsString()
   cursor?: string;
 }
-

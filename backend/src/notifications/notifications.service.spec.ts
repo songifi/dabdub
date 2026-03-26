@@ -18,13 +18,19 @@ jest.mock('ioredis', () => {
 
 describe('NotificationService', () => {
   let service: NotificationService;
-  let repo: jest.Mocked<Pick<
-    Repository<Notification>,
-    'create' | 'save' | 'count' | 'findOne' | 'createQueryBuilder'
-  >>;
+  let repo: jest.Mocked<
+    Pick<
+      Repository<Notification>,
+      'create' | 'save' | 'count' | 'findOne' | 'createQueryBuilder'
+    >
+  >;
 
   const gateway = { emitToUser: jest.fn().mockResolvedValue(undefined) };
-  const mockRedisConfig = { host: 'localhost', port: 6379, password: undefined };
+  const mockRedisConfig = {
+    host: 'localhost',
+    port: 6379,
+    password: undefined,
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -121,4 +127,3 @@ describe('NotificationService', () => {
     expect(count).toBe(0);
   });
 });
-

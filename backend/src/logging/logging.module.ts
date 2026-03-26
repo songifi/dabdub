@@ -24,7 +24,9 @@ function buildFormat(nodeEnv: string): winston.Logform.Format {
     winston.format.errors({ stack: true }),
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
       const rest =
-        meta && Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta, null, 2)}` : '';
+        meta && Object.keys(meta).length > 0
+          ? ` ${JSON.stringify(meta, null, 2)}`
+          : '';
       return `${timestamp} ${level} ${message}${rest}`;
     }),
   );
@@ -47,4 +49,3 @@ function buildFormat(nodeEnv: string): winston.Logform.Format {
   exports: [WinstonModule],
 })
 export class LoggingModule {}
-

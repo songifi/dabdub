@@ -67,11 +67,17 @@ export class CreateMerchants1700000000002 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_merchants_is_verified"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "merchants"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "merchants_settlement_currency_enum"`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "merchants_business_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "merchants_settlement_currency_enum"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "merchants_business_type_enum"`,
+    );
 
     await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "role"`);
-    await queryRunner.query(`ALTER TABLE "users" DROP COLUMN IF EXISTS "is_merchant"`);
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP COLUMN IF EXISTS "is_merchant"`,
+    );
     await queryRunner.query(`DROP TYPE IF EXISTS "users_role_enum"`);
   }
 }

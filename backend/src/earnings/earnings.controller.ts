@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
 import { EarningsService } from './earnings.service';
 import { TierService } from '../tier-config/tier.service';
 import { Public } from '../auth/decorators/public.decorator';

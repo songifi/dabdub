@@ -21,9 +21,18 @@ export class VirtualAccount extends BaseEntity {
   @Column({ length: 100 })
   reference!: string;
 
-  @Column({ type: 'enum', enum: VirtualAccountProvider, default: VirtualAccountProvider.FLUTTERWAVE })
+  @Column({
+    type: 'enum',
+    enum: VirtualAccountProvider,
+    default: VirtualAccountProvider.FLUTTERWAVE,
+  })
   provider!: VirtualAccountProvider;
 
-  @Column({ name: 'expires_at', type: 'timestamptz', nullable: true, default: null })
+  @Column({
+    name: 'expires_at',
+    type: 'timestamptz',
+    nullable: true,
+    default: null,
+  })
   expiresAt!: Date | null;
 }

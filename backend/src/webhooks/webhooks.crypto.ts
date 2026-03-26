@@ -5,7 +5,10 @@ export function sha256Hex(input: string): string {
 }
 
 export function hmacSha256Hex(payloadJson: string, rawSecret: string): string {
-  return crypto.createHmac('sha256', rawSecret).update(payloadJson).digest('hex');
+  return crypto
+    .createHmac('sha256', rawSecret)
+    .update(payloadJson)
+    .digest('hex');
 }
 
 /**
@@ -15,7 +18,10 @@ export function hmacSha256Hex(payloadJson: string, rawSecret: string): string {
 export function encryptAes256Gcm(plaintext: string, key: Buffer): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
   const tag = cipher.getAuthTag();
   return `${iv.toString('base64')}.${tag.toString('base64')}.${ciphertext.toString('base64')}`;
 }
@@ -28,11 +34,13 @@ export function decryptAes256Gcm(enc: string, key: Buffer): string {
   const ciphertext = Buffer.from(ctB64, 'base64');
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const plaintext = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
   return plaintext.toString('utf8');
 }
 
 export function derive32ByteKeyFromString(secret: string): Buffer {
   return crypto.createHash('sha256').update(secret).digest();
 }
-

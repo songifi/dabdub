@@ -55,11 +55,16 @@ export class CreateWebhooks1700000000001 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_webhook_deliveries_next_retry_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_webhook_deliveries_subscription_created"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_webhook_deliveries_next_retry_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_webhook_deliveries_subscription_created"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "webhook_deliveries"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_webhook_subscriptions_user_active"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_webhook_subscriptions_user_active"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "webhook_subscriptions"`);
   }
 }
-

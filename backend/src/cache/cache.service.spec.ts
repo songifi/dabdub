@@ -15,10 +15,7 @@ describe('CacheService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CacheService,
-        { provide: REDIS_CLIENT, useValue: mockRedis },
-      ],
+      providers: [CacheService, { provide: REDIS_CLIENT, useValue: mockRedis }],
     }).compile();
     service = module.get(CacheService);
   });
@@ -53,7 +50,10 @@ describe('CacheService', () => {
       .mockResolvedValueOnce(['42', ['rate:USDC:NGN', 'rate:USDC:USD']])
       .mockResolvedValueOnce(['0', []]);
     await service.delPattern('rate:USDC:*');
-    expect(mockRedis.unlink).toHaveBeenCalledWith('rate:USDC:NGN', 'rate:USDC:USD');
+    expect(mockRedis.unlink).toHaveBeenCalledWith(
+      'rate:USDC:NGN',
+      'rate:USDC:USD',
+    );
   });
 });
 
@@ -91,7 +91,10 @@ describe('@Cacheable decorator', () => {
       ],
     }).compile();
 
-    const svc = module.get<{ findUser: (id: string) => Promise<unknown>; dbCallCount: number }>('TestSvc');
+    const svc = module.get<{
+      findUser: (id: string) => Promise<unknown>;
+      dbCallCount: number;
+    }>('TestSvc');
 
     const first = await svc.findUser('1');
     const second = await svc.findUser('1');

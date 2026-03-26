@@ -35,7 +35,9 @@ export class CreateYieldEntries1700000000005 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_yield_entries_source"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_yield_entries_user_created"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_yield_entries_user_created"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "yield_entries"`);
     await queryRunner.query(`DROP TYPE IF EXISTS "yield_entries_source_enum"`);
   }

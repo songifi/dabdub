@@ -19,7 +19,9 @@ export class VirtualAccountController {
   constructor(private readonly vaService: VirtualAccountService) {}
 
   @Get('virtual-account')
-  async getVirtualAccount(@Req() req: Request): Promise<VirtualAccountResponseDto> {
+  async getVirtualAccount(
+    @Req() req: Request,
+  ): Promise<VirtualAccountResponseDto> {
     const userId = (req.user as { id: string }).id;
     return this.vaService.getOrProvision(userId);
   }

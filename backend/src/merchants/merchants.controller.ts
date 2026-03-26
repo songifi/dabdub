@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -31,7 +23,9 @@ export class MerchantsController {
   constructor(private readonly merchantsService: MerchantsService) {}
 
   @Post('register')
-  @ApiOperation({ summary: 'Create a merchant profile for the authenticated user' })
+  @ApiOperation({
+    summary: 'Create a merchant profile for the authenticated user',
+  })
   @ApiResponse({ status: 201, type: Merchant })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Merchant profile already exists' })
@@ -43,7 +37,9 @@ export class MerchantsController {
   }
 
   @Get('me')
-  @ApiOperation({ summary: 'Get current merchant profile (merchant accounts only)' })
+  @ApiOperation({
+    summary: 'Get current merchant profile (merchant accounts only)',
+  })
   @ApiResponse({ status: 200, type: Merchant })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Merchant account required' })

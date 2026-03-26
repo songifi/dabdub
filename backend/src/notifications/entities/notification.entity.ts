@@ -31,10 +31,14 @@ export class Notification {
   @Column({ name: 'is_read', default: false })
   isRead!: boolean;
 
-  @Column({ name: 'read_at', type: 'timestamptz', nullable: true, default: null })
+  @Column({
+    name: 'read_at',
+    type: 'timestamptz',
+    nullable: true,
+    default: null,
+  })
   readAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 }
-

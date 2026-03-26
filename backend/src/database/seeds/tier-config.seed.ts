@@ -1,5 +1,8 @@
 import { DataSource } from 'typeorm';
-import { TierConfig, TierName } from '../../tier-config/entities/tier-config.entity';
+import {
+  TierConfig,
+  TierName,
+} from '../../tier-config/entities/tier-config.entity';
 
 export async function seedTierConfigs(dataSource: DataSource): Promise<void> {
   const tierRepo = dataSource.getRepository(TierConfig);

@@ -60,12 +60,18 @@ describe('SmsService', () => {
       redis.incr.mockResolvedValue(5);
       redis.expire.mockResolvedValue(1);
 
-      const fakeLog = { id: 'log-1', phone, status: SmsStatus.QUEUED } as SmsLog;
+      const fakeLog = {
+        id: 'log-1',
+        phone,
+        status: SmsStatus.QUEUED,
+      } as SmsLog;
       repo.create.mockReturnValue(fakeLog);
       repo.save.mockResolvedValue(fakeLog);
       queue.add.mockResolvedValue({});
 
-      await expect(service.queue(phone, 'test message')).resolves.toEqual(fakeLog);
+      await expect(service.queue(phone, 'test message')).resolves.toEqual(
+        fakeLog,
+      );
     });
   });
 
@@ -83,7 +89,8 @@ describe('SmsService', () => {
 
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Your Cheese verification code is 123456. Do not share it. Expires in 10 minutes.',
+          message:
+            'Your Cheese verification code is 123456. Do not share it. Expires in 10 minutes.',
         }),
       );
     });

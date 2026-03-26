@@ -25,6 +25,11 @@ export class RefreshToken extends BaseEntity {
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt!: Date;
 
-  @Column({ name: 'revoked_at', type: 'timestamptz', nullable: true, default: null })
+  @Column({
+    name: 'revoked_at',
+    type: 'timestamptz',
+    nullable: true,
+    default: null,
+  })
   revokedAt!: Date | null;
 }

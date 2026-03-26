@@ -76,8 +76,12 @@ export class PermissionsGuard implements CanActivate {
       where: { adminId },
     });
     const perms = rows.map((r) => r.permission);
-    await this.redis.set(cacheKey(adminId), JSON.stringify(perms), 'EX', TTL_SECONDS);
+    await this.redis.set(
+      cacheKey(adminId),
+      JSON.stringify(perms),
+      'EX',
+      TTL_SECONDS,
+    );
     return perms;
   }
 }
-

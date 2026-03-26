@@ -61,7 +61,8 @@ class TestAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<any>();
     const role = (req.headers['x-test-role'] as string | undefined) ?? 'user';
-    const userId = (req.headers['x-test-user-id'] as string | undefined) ?? 'u1';
+    const userId =
+      (req.headers['x-test-user-id'] as string | undefined) ?? 'u1';
     req.user = { id: userId, role };
     return true;
   }
@@ -84,7 +85,10 @@ describe('RBAC guards (route-level)', () => {
         RolesGuard,
         PermissionsGuard,
         { provide: getRepositoryToken(AdminPermission), useValue: permRepo },
-        { provide: redisConfig.KEY, useValue: { host: 'localhost', port: 6379, password: undefined } },
+        {
+          provide: redisConfig.KEY,
+          useValue: { host: 'localhost', port: 6379, password: undefined },
+        },
       ],
     })
       .overrideGuard(RolesGuard)
@@ -127,4 +131,3 @@ describe('RBAC guards (route-level)', () => {
       .expect(200);
   });
 });
-

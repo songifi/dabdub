@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TierConfig, TierName } from './entities/tier-config.entity';
 import { User } from '../users/entities/user.entity';
-import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 import { TierLimitExceededException } from '../common/exceptions/tier-limit-exceeded.exception';
 
 @Injectable()
@@ -93,7 +96,9 @@ export class TierService {
     const updatedUser = await this.userRepo.save(user);
 
     // Create Notification (STUB)
-    this.logger.log(`Created upgrade notification for user ${userId} to tier ${tier}`);
+    this.logger.log(
+      `Created upgrade notification for user ${userId} to tier ${tier}`,
+    );
     // await this.notificationService.create({ userId, type: 'tier_upgrade', ... })
 
     return updatedUser;

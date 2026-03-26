@@ -13,7 +13,11 @@ import { Merchant } from '../merchants/entities/merchant.entity';
 import { NotificationService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notifications.types';
 import { SorobanService } from '../soroban/soroban.service';
-import { Transaction, TransactionStatus, TransactionType } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TransactionStatus,
+  TransactionType,
+} from '../transactions/entities/transaction.entity';
 import { User } from '../users/entities/user.entity';
 import { CheeseGateway, WS_EVENTS } from '../ws/cheese.gateway';
 import { CreatePayLinkDto } from './dto/create-pay-link.dto';
@@ -55,9 +59,20 @@ export class PayLinkService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  async countActiveReceiveLinks(creatorUserId: string): Promise<number> {
+    return this.payLinkRepo
+      .createQueryBuilder('p')
+      .where('p.creatorUserId = :creatorUserId', { creatorUserId })
+      .andWhere('p.status = :status', { status: PayLinkStatus.ACTIVE })
+      .andWhere('p.expiresAt > :now', { now: new Date() })
+      .getCount();
+  }
+
   async create(creator: User, dto: CreatePayLinkDto): Promise<PayLink> {
     if (dto.customSlug) {
-      const existing = await this.payLinkRepo.findOne({ where: { tokenId: dto.customSlug } });
+      const existing = await this.payLinkRepo.findOne({
+        where: { tokenId: dto.customSlug },
+      });
       if (existing) {
         throw new ConflictException('PayLink slug already exists');
       }
@@ -99,12 +114,16 @@ export class PayLinkService {
 
     await this.ensureNotExpired(payLink);
 
-    const creator = await this.userRepo.findOne({ where: { id: payLink.creatorUserId } });
+    const creator = await this.userRepo.findOne({
+      where: { id: payLink.creatorUserId },
+    });
     if (!creator) {
       throw new NotFoundException('Creator not found');
     }
 
-    const merchant = await this.merchantRepo.findOne({ where: { userId: creator.id } });
+    const merchant = await this.merchantRepo.findOne({
+      where: { userId: creator.id },
+    });
 
     return {
       creatorDisplayName: creator.displayName,
@@ -131,12 +150,17 @@ export class PayLinkService {
       throw new ConflictException('PayLink is cancelled');
     }
 
-    const creator = await this.userRepo.findOne({ where: { id: payLink.creatorUserId } });
+    const creator = await this.userRepo.findOne({
+      where: { id: payLink.creatorUserId },
+    });
     if (!creator) {
       throw new NotFoundException('Creator not found');
     }
 
-    const sorobanResult = await this.sorobanService.payPayLink(payer.username, tokenId);
+    const sorobanResult = await this.sorobanService.payPayLink(
+      payer.username,
+      tokenId,
+    );
     const paymentTxHash = this.extractTxHash(sorobanResult);
 
     payLink.status = PayLinkStatus.PAID;
@@ -238,7 +262,9 @@ export class PayLinkService {
 
     const qb = this.payLinkRepo
       .createQueryBuilder('p')
-      .where('p.creator_user_id = :creatorUserId', { creatorUserId: creator.id })
+      .where('p.creator_user_id = :creatorUserId', {
+        creatorUserId: creator.id,
+      })
       .orderBy('p.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -266,7 +292,10 @@ export class PayLinkService {
   }
 
   private async ensureNotExpired(payLink: PayLink): Promise<void> {
-    if (payLink.status === PayLinkStatus.EXPIRED || payLink.expiresAt.getTime() <= Date.now()) {
+    if (
+      payLink.status === PayLinkStatus.EXPIRED ||
+      payLink.expiresAt.getTime() <= Date.now()
+    ) {
       if (payLink.status !== PayLinkStatus.EXPIRED) {
         payLink.status = PayLinkStatus.EXPIRED;
         await this.payLinkRepo.save(payLink);
@@ -279,7 +308,8 @@ export class PayLinkService {
     const now = Date.now();
     const toExpire = payLinks.filter(
       (payLink) =>
-        payLink.status === PayLinkStatus.ACTIVE && payLink.expiresAt.getTime() <= now,
+        payLink.status === PayLinkStatus.ACTIVE &&
+        payLink.expiresAt.getTime() <= now,
     );
 
     if (toExpire.length === 0) return;
@@ -301,7 +331,9 @@ export class PayLinkService {
   private async generateUniqueTokenId(): Promise<string> {
     for (let i = 0; i < 5; i += 1) {
       const candidate = nanoid10();
-      const existing = await this.payLinkRepo.findOne({ where: { tokenId: candidate } });
+      const existing = await this.payLinkRepo.findOne({
+        where: { tokenId: candidate },
+      });
       if (!existing) return candidate;
     }
     return `${nanoid10()}-${Date.now()}`.slice(0, 64);

@@ -27,7 +27,9 @@ const mockJwtConfig = {
 
 const mockRedisConfig = { host: 'localhost', port: 6379, password: undefined };
 
-function makeClient(authOverride: Record<string, unknown> = { token: 'valid.jwt' }): Socket & { userId?: string } {
+function makeClient(
+  authOverride: Record<string, unknown> = { token: 'valid.jwt' },
+): Socket & { userId?: string } {
   return {
     id: 'socket-1',
     handshake: { auth: authOverride },
@@ -56,19 +58,33 @@ describe('CheeseGateway', () => {
 
   describe('handleConnection', () => {
     it('joins user room and stores socket in Redis on valid JWT', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'user-1', username: 'alice', role: 'user', sessionId: 's1' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'user-1',
+        username: 'alice',
+        role: 'user',
+        sessionId: 's1',
+      });
       const client = makeClient();
 
       await gateway.handleConnection(client);
 
       expect(client.join).toHaveBeenCalledWith('user:user-1');
-      expect((gateway as any).redis.hset).toHaveBeenCalledWith('ws:connections:user-1', 'socket-1', '1');
+      expect((gateway as any).redis.hset).toHaveBeenCalledWith(
+        'ws:connections:user-1',
+        'socket-1',
+        '1',
+      );
       expect(client.disconnect).not.toHaveBeenCalled();
       expect(client.userId).toBe('user-1');
     });
 
     it('joins admin room when role is admin', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'admin-1', username: 'admin', role: 'admin', sessionId: 's2' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'admin-1',
+        username: 'admin',
+        role: 'admin',
+        sessionId: 's2',
+      });
       const client = makeClient();
 
       await gateway.handleConnection(client);
@@ -78,7 +94,12 @@ describe('CheeseGateway', () => {
     });
 
     it('joins admin room when role is super_admin', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'sa-1', username: 'sa', role: 'super_admin', sessionId: 's3' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'sa-1',
+        username: 'sa',
+        role: 'super_admin',
+        sessionId: 's3',
+      });
       const client = makeClient();
 
       await gateway.handleConnection(client);
@@ -97,7 +118,9 @@ describe('CheeseGateway', () => {
     });
 
     it('disconnects client when JWT is invalid', async () => {
-      mockJwtService.verify.mockImplementation(() => { throw new Error('invalid'); });
+      mockJwtService.verify.mockImplementation(() => {
+        throw new Error('invalid');
+      });
       const client = makeClient();
 
       await gateway.handleConnection(client);
@@ -114,7 +137,10 @@ describe('CheeseGateway', () => {
 
       await gateway.handleDisconnect(client);
 
-      expect((gateway as any).redis.hdel).toHaveBeenCalledWith('ws:connections:user-1', 'socket-1');
+      expect((gateway as any).redis.hdel).toHaveBeenCalledWith(
+        'ws:connections:user-1',
+        'socket-1',
+      );
     });
   });
 
@@ -122,7 +148,9 @@ describe('CheeseGateway', () => {
     it('emits to room when user has active sockets', async () => {
       (gateway as any).redis.hkeys.mockResolvedValue(['socket-1']);
       const mockEmit = jest.fn();
-      (gateway as any).server = { to: jest.fn().mockReturnValue({ emit: mockEmit }) };
+      (gateway as any).server = {
+        to: jest.fn().mockReturnValue({ emit: mockEmit }),
+      };
 
       await gateway.emitToUser('user-1', 'transfer_sent', { amount: 100 });
 
