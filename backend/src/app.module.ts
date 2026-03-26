@@ -14,6 +14,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { LoggingModule } from './logging/logging.module';
 import { CorrelationIdMiddleware } from './logging/correlation-id.middleware';
 import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -61,6 +62,9 @@ import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
 
     // 7. Notifications — entity + API + realtime delivery.
     NotificationsModule,
+
+    // 8. Webhooks — subscriptions + signed deliveries + retries.
+    WebhooksModule,
   ],
   providers: [
     // Global guard: every route requires a valid JWT unless decorated @Public().
