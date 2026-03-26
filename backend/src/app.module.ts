@@ -28,6 +28,9 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { PayLinkModule } from './paylink/paylink.module';
 import { ReceiveModule } from './receive/receive.module';
 import { VirtualAccountModule } from './virtual-account/virtual-account.module';
+import { AuditModule } from './audit/audit.module';
+import { AppConfigModule as RuntimeConfigModule } from './app-config/app-config.module';
+import { MaintenanceModeMiddleware } from './app-config/middleware/maintenance-mode.middleware';
 import { AdminModule } from './admin/admin.module';
 import { EarningsModule } from './earnings/earnings.module';
 import { SmsModule } from './sms/sms.module';
@@ -48,7 +51,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
     // 1b. Logging — Winston + Nest bridge.
     LoggingModule,
 
-    // 2. Database — owns the TypeORM root connection; see databasle.ts.
+    // 2. Database — owns the TypeORM root connection; see database.module.ts.
     DatabaseModule,
 
     // 4. Bull — async Redis connection via typed RedisConfig.
@@ -88,21 +91,20 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
     // 8. Auth — register/login/refresh/logout + global JWT guard.
     AuthModule,
 
-    // 6. File presign + confirm via Cloudflare R2.
+    // File uploads — presign + confirm via Cloudflare R2.
     UploadModule,
 
-    // 7. WebSockets — Socket.io real-time gateway.
+    // WebSockets — Socket.io real-time gateway.
     WsModule,
 
-    // 7. Notifications — entity + API + realtime delivery.
+    // Notifications — entity + API + realtime delivery.
     NotificationsModule,
 
-    // 8. Webhooks — subscriptions + signed deliveries + retries.
+    // Webhooks — subscriptions + signed deliveries + retries.
     WebhooksModule,
 
-    // 9. RBAC — roles + permissions for admin routes.
+    // RBAC — roles + permissions for admin routes.
     RbacModule,
-    MerchantsModule,
 
     MerchantsModule,
     UsersModule,
@@ -111,23 +113,26 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
     VirtualAccountModule,
     PayLinkModule,
     ReceiveModule,
+
+    AuditModule,
+
+    // Runtime feature flags + maintenance mode.
+    RuntimeConfigModule,
+
     AdminModule,
 
-    // 10. SMS — OTP + transaction alerts via Termii + BullMQ.
+    // SMS — OTP + transaction alerts via Termii + BullMQ.
     SmsModule,
 
-    // 11. Push — Firebase Cloud Messaging device token management.
+    // Push — Firebase Cloud Messaging device token management.
     PushModule,
 
-    // 12. Earnings — yield dashboard, APY display, projections.
+    // Earnings — yield dashboard, APY display, projections.
     EarningsModule,
 
     WithdrawalsModule,
-    AdminModule,
 
-    // 10. Earnings — yield dashboard, APY display, projections.
-    EarningsModule,
-
+    // Transactions — activity history with cursor-based pagination.
     // Passkey/WebAuthn authentication.
     PasskeyModule,
     // 11. Transactions — activity history with cursor-based pagination.
@@ -150,6 +155,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.ionIdMiddleware).forRoutes('*');
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer.apply(MaintenanceModeMiddleware).forRoutes('*');
   }
 }
