@@ -14,6 +14,7 @@ import { jwtConfig } from '../config/jwt.config';
 import { User, UserRole } from '../users/entities/user.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Session } from './entities/session.entity';
+import { CacheService } from '../cache/cache.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { TokenResponseDto } from './dto/token-response.dto';
@@ -21,6 +22,7 @@ import type { TokenResponseDto } from './dto/token-response.dto';
 export interface JwtPayload {
   sub: string;
   username: string;
+  role: 'user' | 'merchant' | 'admin' | 'super_admin';
   role: 'admin' | 'merchant' | 'user';
   sessionId: string;
 }
@@ -41,6 +43,8 @@ export class AuthService {
 
     @Inject(jwtConfig.KEY)
     private readonly jwt: ConfigType<typeof jwtConfig>,
+
+    private readonly cacheService: CacheService,
   ) {}
 
   // ── Register ────────────────────────────────────────────────────
@@ -96,6 +100,7 @@ export class AuthService {
     }
 
     const sessionId = crypto.randomUUID();
+    await this.cacheService.trackActiveUser(user.id);
     return this.issueTokens(user, sessionId, ipAddress, deviceInfo);
   }
 
@@ -150,6 +155,9 @@ export class AuthService {
     ipAddress?: string,
     deviceInfo?: Record<string, unknown>,
   ): Promise<TokenResponseDto> {
+    const role =
+      (user as any).role ??
+      (user.isAdmin ? ('admin' as const) : ('user' as const));
     const role: JwtPayload['role'] = user.isAdmin
       ? 'admin'
       : user.role === UserRole.MERCHANT

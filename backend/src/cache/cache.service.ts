@@ -48,4 +48,31 @@ export class CacheService {
       this.logger.warn(`Cache delPattern failed for "${pattern}": ${(err as Error).message}`);
     }
   }
+
+  // ── DAU (Daily Active Users) ───────────────────────────────────
+
+  private getDauKey(): string {
+    const today = new Date().toISOString().split('T')[0];
+    return `dau:${today}`;
+  }
+
+  async trackActiveUser(userId: string): Promise<void> {
+    try {
+      const key = this.getDauKey();
+      await this.redis.sadd(key, userId);
+      // Set expiry to 48 hours to have context but clear old data
+      await this.redis.expire(key, 172800); 
+    } catch (err) {
+      this.logger.warn(`DAU tracking failed for userId=${userId}: ${(err as Error).message}`);
+    }
+  }
+
+  async getActiveUsersTodayCount(): Promise<number> {
+    try {
+      const key = this.getDauKey();
+      return await this.redis.scard(key);
+    } catch {
+      return 0;
+    }
+  }
 }

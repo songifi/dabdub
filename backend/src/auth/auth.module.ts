@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import type { ConfigType } from '@nestjs/config';
 import { jwtConfig } from '../config/jwt.config';
 import { User } from '../users/entities/user.entity';
+import { Admin } from '../admin/entities/admin.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Session } from './entities/session.entity';
 import { AuthService } from './auth.service';
@@ -14,7 +15,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, RefreshToken, Session]),
+    TypeOrmModule.forFeature([User, Admin, RefreshToken, Session]),
     PassportModule,
     JwtModule.registerAsync({
       inject: [jwtConfig.KEY],
@@ -26,6 +27,6 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtAuthGuard],
-  exports: [JwtAuthGuard, AuthService],
+  exports: [JwtAuthGuard, AuthService, JwtStrategy],
 })
 export class AuthModule {}

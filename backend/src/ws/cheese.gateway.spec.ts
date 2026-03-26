@@ -77,6 +77,16 @@ describe('CheeseGateway', () => {
       expect(client.join).toHaveBeenCalledWith('admin');
     });
 
+    it('joins admin room when role is super_admin', async () => {
+      mockJwtService.verify.mockReturnValue({ sub: 'sa-1', username: 'sa', role: 'super_admin', sessionId: 's3' });
+      const client = makeClient();
+
+      await gateway.handleConnection(client);
+
+      expect(client.join).toHaveBeenCalledWith('user:sa-1');
+      expect(client.join).toHaveBeenCalledWith('admin');
+    });
+
     it('disconnects client when token is missing', async () => {
       const client = makeClient({});
 

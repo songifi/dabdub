@@ -5,7 +5,6 @@ import { ConfigType } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppConfigModule, appConfig, redisConfig } from './config';
-import { CacheModule } from './cache/cache.module';
 import { EmailModule } from './email/email.module';
 import { RatesModule } from './rates/rates.module';
 import { DatabaseModule } from './database/database.module';
@@ -20,6 +19,7 @@ import { LoggingModule } from './logging/logging.module';
 import { CorrelationIdMiddleware } from './logging/correlation-id.middleware';
 import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { RbacModule } from './rbac/rbac.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { UsersModule } from './users/users.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
@@ -27,7 +27,9 @@ import { PayLinkModule } from './paylink/paylink.module';
 import { AuditModule } from './audit/audit.module';
 import { AppConfigModule as RuntimeConfigModule } from './app-config/app-config.module';
 import { MaintenanceModeMiddleware } from './app-config/middleware/maintenance-mode.middleware';
-
+import { AdminModule } from './admin/admin.module';
+import { EarningsModule } from './earnings/earnings.module';
+import { SmsModule } from './sms/sms.module';
 
 @Module({
   imports: [
@@ -74,33 +76,43 @@ import { MaintenanceModeMiddleware } from './app-config/middleware/maintenance-m
     // 7. Rates — USDC/NGN live rates with Redis cache + BullMQ polling.
     RatesModule,
 
-    // 8. Auth — register/login/refresh/logout + global JWT guard. — register/login/refresh/logout + global JWT guard.
+    // 8. Auth — register/login/refresh/logout + global JWT guard.
     AuthModule,
 
-    // 6. File uploads — presign + confirm via Cloudflare R2.
+    // File uploads — presign + confirm via Cloudflare R2.
     UploadModule,
 
-    // 7. WebSockets — Socket.io real-time gateway.
+    // WebSockets — Socket.io real-time gateway.
     WsModule,
 
-    // 7. Notifications — entity + API + realtime delivery.
+    // Notifications — entity + API + realtime delivery.
     NotificationsModule,
 
-    // 8. Webhooks — subscriptions + signed deliveries + retries.
+    // Webhooks — subscriptions + signed deliveries + retries.
     WebhooksModule,
 
+    // RBAC — roles + permissions for admin routes.
+    RbacModule,
+
     MerchantsModule,
-
     UsersModule,
-
     BankAccountsModule,
-
     PayLinkModule,
+
     AuditModule,
+
+    // Runtime feature flags + maintenance mode.
     RuntimeConfigModule,
+
+    AdminModule,
+
+    // SMS — OTP + transaction alerts via Termii + BullMQ.
+    SmsModule,
+
+    // Earnings — yield dashboard, APY display, projections.
+    EarningsModule,
   ],
   providers: [
-    // Global guard: every route requires a valid JWT unless decorated @Public().
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -117,4 +129,3 @@ export class AppModule implements NestModule {
     consumer.apply(MaintenanceModeMiddleware).forRoutes('*');
   }
 }
-

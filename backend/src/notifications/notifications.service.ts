@@ -147,5 +147,11 @@ export class NotificationService {
   private async invalidateUnreadCount(userId: string): Promise<void> {
     await this.redis.del(unreadCountKey(userId));
   }
+
+  async broadcast(title: string, body: string, segment: string): Promise<void> {
+    // Basic implementation: log the broadcast. 
+    // In a real system, this would trigger a Bull job to notify users in the segment.
+    console.log(`[BROADCAST] Segment: ${segment}, Title: ${title}, Body: ${body}`);
+  }
 }
 

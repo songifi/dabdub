@@ -1,5 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { Role } from '../../rbac/rbac.types';
 import { TierName } from '../../tier-config/entities/tier-config.entity';
 
 export enum UserRole {
@@ -56,6 +57,8 @@ export class User extends BaseEntity {
   @Column({ name: 'is_treasury', default: false })
   isTreasury!: boolean;
 
+  @Column({ type: 'enum', enum: Role, default: Role.User })
+  role!: Role;
   @Column({ name: 'is_merchant', default: false })
   isMerchant!: boolean;
 

@@ -20,6 +20,10 @@ import { QueryFlagsDto } from './dto/query-flags.dto';
 import { ResolveFlagDto } from './dto/resolve-flag.dto';
 import { FraudFlag as FraudFlagClass } from './entities/fraud-flag.entity';
 import { Logger } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
+import { Roles } from '../rbac/decorators/roles.decorator';
+import { Role } from '../rbac/rbac.types';
+import { RolesGuard } from '../rbac/guards/roles.guard';
 import { ApiPaginatedResponse } from '../common/decorators/api-paginated-response.decorator';
 
 /** Stub ports — replace with real injected services when available */
@@ -40,6 +44,8 @@ class StubAuditLogPort implements AuditLogPort {
 @ApiTags('admin / fraud')
 @ApiBearerAuth()
 @Controller('admin/fraud')
+@UseGuards(RolesGuard)
+@Roles(Role.Admin, Role.SuperAdmin)
 export class FraudAdminController {
   constructor(private readonly fraudService: FraudService) {}
 
