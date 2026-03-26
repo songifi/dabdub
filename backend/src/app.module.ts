@@ -26,6 +26,7 @@ import { UsersModule } from './users/users.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { PayLinkModule } from './paylink/paylink.module';
 import { AdminModule } from './admin/admin.module';
+import { EarningsModule } from './earnings/earnings.module';
 
 @Module({
   imports: [
@@ -98,6 +99,9 @@ import { AdminModule } from './admin/admin.module';
     PayLinkModule,
 
     AdminModule,
+
+    // 10. Earnings — yield dashboard, APY display, projections.
+    EarningsModule,
   ],
   providers: [
     // Global guard: every route requires a valid JWT unless decorated @Public().

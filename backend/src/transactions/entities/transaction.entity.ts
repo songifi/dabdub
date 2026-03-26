@@ -1,10 +1,3 @@
-import { Entity, Column } from 'typeorm';
-import { BaseEntity } from '../../common/entities/base.entity';
-
-export enum TransactionType {
-  TRANSFER_IN = 'transfer_in',
-  TRANSFER_OUT = 'transfer_out',
-  WITHDRAWAL = 'withdrawal',
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 
@@ -12,6 +5,11 @@ export enum TransactionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
   TRANSFER = 'transfer',
+  TRANSFER_IN = 'transfer_in',
+  TRANSFER_OUT = 'transfer_out',
+  YIELD_CREDIT = 'yield_credit',
+  STAKE = 'stake',
+  UNSTAKE = 'unstake',
 }
 
 export enum TransactionStatus {
@@ -35,8 +33,8 @@ export class Transaction extends BaseEntity {
     scale: 8,
   })
   amountUsdc!: string;
-}
-  @Column({ name: 'amount', type: 'decimal', precision: 15, scale: 6 })
+
+  @Column({ name: 'amount', type: 'decimal', precision: 15, scale: 6, default: 0 })
   amount!: number;
 
   @Column({ name: 'currency', length: 10, default: 'USDC' })
