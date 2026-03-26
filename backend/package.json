@@ -48,6 +48,7 @@
     "dotenv": "^17.3.1",
     "ioredis": "^5.10.1",
     "joi": "^18.1.1",
+    "nanoid": "^5.1.5",
     "nest-winston": "^1.10.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

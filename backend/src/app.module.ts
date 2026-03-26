@@ -22,6 +22,7 @@ import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
+import { PayLinkModule } from './paylink/paylink.module';
 
 @Module({
   imports: [
@@ -86,6 +87,8 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
     MerchantsModule,
 
     BankAccountsModule,
+
+    PayLinkModule,
   ],
   providers: [
     // Global guard: every route requires a valid JWT unless decorated @Public().
