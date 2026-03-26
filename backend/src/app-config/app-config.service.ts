@@ -45,7 +45,7 @@ export class AppConfigService {
     await this.cache.del(`${CACHE_PREFIX}${key}`);
 
     if (updatedBy) {
-      await this.auditService.log(updatedBy, 'config.set', { key, value });
+      await this.auditService.log(updatedBy, 'config.set', JSON.stringify({ key, value }));
     }
 
     this.logger.log(`AppConfig updated: key=${key} by=${updatedBy ?? 'system'}`);

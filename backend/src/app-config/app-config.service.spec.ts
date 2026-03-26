@@ -107,10 +107,9 @@ describe('AppConfigService', () => {
         { conflictPaths: ['key'], skipUpdateIfNoValuesChanged: false },
       );
       expect(mockCache.del).toHaveBeenCalledWith('config:maintenance_mode');
-      expect(mockAudit.log).toHaveBeenCalledWith('admin-uuid', 'config.set', {
-        key: 'maintenance_mode',
-        value: true,
-      });
+      expect(mockAudit.log).toHaveBeenCalledWith('admin-uuid', 'config.set',
+        JSON.stringify({ key: 'maintenance_mode', value: true }),
+      );
       expect(result.value).toBe(true);
     });
 
