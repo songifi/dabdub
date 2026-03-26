@@ -8,7 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { NotificationType } from '../notifications/notifications.types';
 import { NotificationService } from '../notifications/notifications.service';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { RegisterMerchantDto } from './dto/register-merchant.dto';
 import { UpdateMerchantDto } from './dto/update-merchant.dto';
 import { Merchant } from './entities/merchant.entity';
@@ -56,6 +57,26 @@ export class MerchantsService {
         return savedMerchant;
       },
     );
+    const merchant = await this.dataSource.transaction(async (trx: EntityManager) => {
+      const merchantEntity = trx.getRepository(Merchant).create({
+        userId: user.id,
+        businessName: dto.businessName,
+        businessType: dto.businessType,
+        logoKey: dto.logoKey ?? null,
+        description: dto.description ?? null,
+        settlementCurrency: dto.settlementCurrency,
+        autoSettleEnabled: dto.autoSettleEnabled ?? true,
+        settlementThresholdUsdc: dto.threshold ?? 10,
+      });
+
+      const savedMerchant = await trx.getRepository(Merchant).save(merchantEntity);
+
+      user.isMerchant = true;
+      user.role = Role.Merchant;
+      await trx.getRepository(User).save(user);
+
+      return savedMerchant;
+    });
 
     return merchant;
   }

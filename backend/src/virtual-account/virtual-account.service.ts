@@ -21,6 +21,7 @@ import { CheeseGateway, WS_EVENTS } from '../ws/cheese.gateway';
 import { RatesService } from '../rates/rates.service';
 import { SorobanService } from '../soroban/soroban.service';
 import { DepositsService } from '../deposits/deposits.service';
+import { User } from '../users/entities/user.entity';
 
 const DEDUP_TTL_SECONDS = 172_800; // 48 h
 
@@ -32,6 +33,9 @@ export class VirtualAccountService {
   constructor(
     @InjectRepository(VirtualAccount)
     private readonly vaRepo: Repository<VirtualAccount>,
+
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
 
     private readonly httpService: HttpService,
 
@@ -94,6 +98,10 @@ export class VirtualAccountService {
     return this.provision(userId);
   }
 
+  async findExistingByUserId(userId: string): Promise<VirtualAccount | null> {
+    return this.vaRepo.findOne({ where: { userId } });
+  }
+
   async handleWebhook(rawBody: Buffer, signature: string): Promise<void> {
     this.verifySignature(rawBody, signature);
 
@@ -139,8 +147,13 @@ export class VirtualAccountService {
       data['flw_ref'] as string | undefined,
     );
 
-    // Deposit to Soroban contract
-    await this.sorobanService.deposit(va.userId, usdcAmount);
+    const user = await this.userRepo.findOne({ where: { id: va.userId } });
+    if (!user) {
+      this.logger.warn(`No user found for virtual account userId ${va.userId}`);
+      return;
+    }
+
+    await this.sorobanService.deposit(user.username, usdcAmount.toString());
 
     this.logger.log(
       `Credited ${usdcAmount} USDC to user ${va.userId} (${ngnAmount} NGN via ${reference})`,

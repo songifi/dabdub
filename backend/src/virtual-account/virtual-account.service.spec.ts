@@ -12,6 +12,10 @@ import {
 import { flutterwaveConfig } from '../config/flutterwave.config';
 import { redisConfig } from '../config/redis.config';
 import { CheeseGateway, WS_EVENTS } from '../ws/cheese.gateway';
+import { User } from '../users/entities/user.entity';
+import { RatesService } from '../rates/rates.service';
+import { SorobanService } from '../soroban/soroban.service';
+import { DepositsService } from '../deposits/deposits.service';
 
 jest.mock('ioredis', () =>
   jest.fn().mockImplementation(() => ({
@@ -27,6 +31,10 @@ const mockVaRepo = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+};
+
+const mockUserRepo = {
+  findOne: jest.fn(),
 };
 
 const mockHttpService = { post: jest.fn() };
@@ -64,6 +72,7 @@ describe('VirtualAccountService', () => {
       providers: [
         VirtualAccountService,
         { provide: getRepositoryToken(VirtualAccount), useValue: mockVaRepo },
+        { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: HttpService, useValue: mockHttpService },
         { provide: flutterwaveConfig.KEY, useValue: mockFwConfig },
         { provide: redisConfig.KEY, useValue: mockRedisConfig },
@@ -128,6 +137,10 @@ describe('VirtualAccountService', () => {
         provider: VirtualAccountProvider.FLUTTERWAVE,
       });
       mockRatesService.convertNgnToUsdc.mockResolvedValue(3.25);
+      mockUserRepo.findOne.mockResolvedValue({
+        id: 'user-1',
+        username: 'alice',
+      });
 
       await service.handleWebhook(body, sig);
 
@@ -140,7 +153,7 @@ describe('VirtualAccountService', () => {
         'va_user-1_111',
         undefined,
       );
-      expect(mockSorobanService.deposit).toHaveBeenCalledWith('user-1', 3.25);
+      expect(mockSorobanService.deposit).toHaveBeenCalledWith('alice', '3.25');
       expect(mockGateway.emitToUser).toHaveBeenCalledWith(
         'user-1',
         WS_EVENTS.BALANCE_UPDATED,

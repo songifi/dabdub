@@ -12,3 +12,4 @@ export {
 } from './flutterwave.config';
 export { paystackConfig, type PaystackConfig } from './paystack.config';
 export { smsConfig, smsConfigValidation } from './sms.config';
+export { firebaseConfig, firebaseConfigValidation } from './firebase.config';

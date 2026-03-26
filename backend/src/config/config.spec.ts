@@ -13,6 +13,7 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   API_PREFIX: 'api/v1',
   THROTTLE_TTL: '60',
   THROTTLE_LIMIT: '100',
+  FRONTEND_URL: 'http://localhost:3000',
 
   DB_HOST: 'localhost',
   DB_PORT: '5432',
@@ -33,6 +34,8 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   STELLAR_CONTRACT_ID:
     'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
   STELLAR_ADMIN_SECRET_KEY: 'stellar-admin-secret-key-that-is-32chars!!',
+  STELLAR_RECEIVE_ADDRESS: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+  STELLAR_USDC_ISSUER: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
 
   ZEPTOMAIL_API_KEY: 'zepto-api-key-value',
   ZEPTOMAIL_FROM_EMAIL: 'no-reply@example.com',
@@ -132,6 +135,12 @@ describe('AppConfigModule', () => {
   it('returns correct Stellar, Zepto, and R2 config values', () => {
     expect(config.get<string>('stellar.rpcUrl')).toBe(
       'https://soroban-testnet.stellar.org',
+    );
+    expect(config.get<string>('stellar.receiveAddress')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+    );
+    expect(config.get<string>('stellar.usdcIssuer')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
     );
     expect(config.get<string>('zepto.fromEmail')).toBe('no-reply@example.com');
     expect(config.get<string>('r2.bucketName')).toBe('my-bucket');

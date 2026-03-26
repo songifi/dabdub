@@ -1,16 +1,15 @@
 import {
   Controller,
   Get,
-  Param,
   Patch,
   Body,
-  UseGuards,
-  UnauthorizedException,
-  ForbiddenException,
+  Param,
+  UseInterceptors,
 } from '@nestjs/common';
 import { TierService } from './tier.service';
 import { TierName } from './entities/tier-config.entity';
 import { Public } from '../auth/decorators/public.decorator';
+import { AuditInterceptor, Audit } from '../audit/audit.interceptor';
 
 @Controller()
 export class TierController {
@@ -29,6 +28,8 @@ export class TierController {
   }
 
   @Patch('admin/users/:id/tier')
+  @UseInterceptors(AuditInterceptor)
+  @Audit({ action: 'user.tier_change', resourceType: 'user', resourceIdParam: 'id' })
   async updateUserTier(
     @Param('id') userId: string,
     @Body('tier') tier: TierName,

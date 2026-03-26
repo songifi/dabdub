@@ -8,6 +8,7 @@ import {
   Query,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,12 +20,13 @@ import { AdminService } from './admin.service';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AdminRole } from './entities/admin.entity';
-import { UserRole } from '../users/entities/user.entity';
 import { Request } from 'express';
+import { AuditInterceptor, Audit } from '../audit/audit.interceptor';
 
 @ApiTags('admin')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
+@UseInterceptors(AuditInterceptor)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -45,6 +47,7 @@ export class AdminController {
 
   @Patch('users/:id/freeze')
   @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
+  @Audit({ action: 'user.freeze', resourceType: 'user', resourceIdParam: 'id' })
   @ApiOperation({ summary: 'Freeze user account' })
   async freezeUser(
     @Param('id') id: string,
@@ -57,6 +60,7 @@ export class AdminController {
 
   @Patch('users/:id/unfreeze')
   @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
+  @Audit({ action: 'user.unfreeze', resourceType: 'user', resourceIdParam: 'id' })
   @ApiOperation({ summary: 'Unfreeze user account' })
   async unfreezeUser(@Param('id') id: string, @Req() req: any) {
     const adminId = req.user.id;

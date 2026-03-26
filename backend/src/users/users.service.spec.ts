@@ -3,7 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User, UserRole, KycStatus } from './entities/user.entity';
+import { User, KycStatus } from './entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { UserResponseDto } from './dto/user-response.dto';
 import { TierName } from '../tier-config/entities/tier-config.entity';
 
@@ -23,7 +24,7 @@ describe('UsersService', () => {
     isAdmin: false,
     isTreasury: false,
     isMerchant: false,
-    role: UserRole.USER,
+    role: Role.User,
     isActive: true,
     createdAt: new Date('2026-03-26'),
     updatedAt: new Date('2026-03-26'),

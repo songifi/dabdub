@@ -10,6 +10,7 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { SkipResponseWrap } from '../common/decorators/skip-response-wrap.decorator';
 import { RedisHealthIndicator } from './redis.health';
 import { StellarHealthIndicator } from './stellar.health';
 
@@ -42,6 +43,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @SkipResponseWrap()
   @HealthCheck()
   @ApiOperation({
     summary: 'Service health check',

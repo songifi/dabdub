@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { VirtualAccount } from './entities/virtual-account.entity';
+import { User } from '../users/entities/user.entity';
 import { VirtualAccountService } from './virtual-account.service';
 import { VirtualAccountController } from './virtual-account.controller';
 import { WsModule } from '../ws/ws.module';
@@ -11,7 +12,7 @@ import { DepositsModule } from '../deposits/deposits.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([VirtualAccount]),
+    TypeOrmModule.forFeature([VirtualAccount, User]),
     HttpModule,
     WsModule,
     RatesModule,

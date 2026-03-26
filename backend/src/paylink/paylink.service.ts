@@ -59,6 +59,15 @@ export class PayLinkService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  async countActiveReceiveLinks(creatorUserId: string): Promise<number> {
+    return this.payLinkRepo
+      .createQueryBuilder('p')
+      .where('p.creatorUserId = :creatorUserId', { creatorUserId })
+      .andWhere('p.status = :status', { status: PayLinkStatus.ACTIVE })
+      .andWhere('p.expiresAt > :now', { now: new Date() })
+      .getCount();
+  }
+
   async create(creator: User, dto: CreatePayLinkDto): Promise<PayLink> {
     if (dto.customSlug) {
       const existing = await this.payLinkRepo.findOne({

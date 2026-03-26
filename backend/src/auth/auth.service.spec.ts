@@ -4,7 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Session } from './entities/session.entity';
 import { jwtConfig } from '../config/jwt.config';
@@ -51,7 +52,7 @@ const makeUser = (overrides: Partial<User> = {}): User =>
     username: 'alice',
     passwordHash: '$2b$12$hashedpassword',
     isAdmin: false,
-    role: UserRole.USER,
+    role: Role.User,
     isMerchant: false,
     isActive: true,
     isTreasury: false,
