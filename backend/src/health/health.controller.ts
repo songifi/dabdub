@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import {
   HealthCheck,
   HealthCheckService,
@@ -26,6 +26,7 @@ import { StellarHealthIndicator } from './stellar.health';
  * HTTP 503 → one or more checks failed (partial results are still returned).
  */
 @ApiTags('health')
+@ApiBearerAuth()
 @Controller('health')
 export class HealthController {
   constructor(
@@ -44,6 +45,7 @@ export class HealthController {
       'Returns HTTP 200 when all are healthy, HTTP 503 when any component is down.',
   })
   @ApiResponse({ status: 200, description: 'All components healthy' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   @ApiResponse({ status: 503, description: 'One or more components degraded' })
   check() {
     return this.health.check([

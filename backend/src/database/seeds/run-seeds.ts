@@ -1,9 +1,12 @@
 import { AppDataSource } from '../data-source';
+import { seedTierConfigs } from './tier-config.seed';
 
 async function runSeeds(): Promise<void> {
   await AppDataSource.initialize();
   console.log('Running seeds...');
-  // Register seed classes here
+
+  await seedTierConfigs(AppDataSource);
+
   await AppDataSource.destroy();
   console.log('Seeds complete.');
 }

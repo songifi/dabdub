@@ -8,11 +8,19 @@ import {
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { FraudService, AuditLogPort, UserFreezePort } from './fraud.service';
 import { QueryFlagsDto } from './dto/query-flags.dto';
 import { ResolveFlagDto } from './dto/resolve-flag.dto';
-import { FraudFlag } from './entities/fraud-flag.entity';
+import { FraudFlag as FraudFlagClass } from './entities/fraud-flag.entity';
 import { Logger } from '@nestjs/common';
+import { ApiPaginatedResponse } from '../common/decorators/api-paginated-response.decorator';
 
 /** Stub ports — replace with real injected services when available */
 class StubUserFreezePort implements UserFreezePort {
@@ -29,35 +37,37 @@ class StubAuditLogPort implements AuditLogPort {
   }
 }
 
+@ApiTags('admin / fraud')
+@ApiBearerAuth()
 @Controller('admin/fraud')
 export class FraudAdminController {
   constructor(private readonly fraudService: FraudService) {}
 
-  /**
-   * GET /admin/fraud/flags?severity=high&status=open&userId=xxx&page=1&limit=20
-   */
   @Get('flags')
+  @ApiOperation({ summary: 'List fraud flags with optional filters and pagination' })
+  @ApiPaginatedResponse(FraudFlagClass)
+  @ApiResponse({ status: 400, description: 'Invalid query parameters' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async listFlags(
     @Query() query: QueryFlagsDto,
-  ): Promise<{
-    data: FraudFlag[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+  ) {
     return this.fraudService.findFlags(query);
   }
 
-  /**
-   * PATCH /admin/fraud/flags/:id/resolve
-   * Body: { resolution: 'resolved' | 'false_positive', note?: string }
-   */
   @Patch('flags/:id/resolve')
+  @ApiOperation({ summary: 'Resolve or mark a fraud flag as false positive' })
+  @ApiParam({ name: 'id', description: 'UUID of the fraud flag', example: 'a1b2c3d4-...' })
+  @ApiResponse({ status: 200, type: FraudFlagClass })
+  @ApiResponse({ status: 400, description: 'Invalid resolution status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Fraud flag not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async resolveFlag(
     @Param('id') id: string,
     @Body() dto: ResolveFlagDto,
     @Req() req: Request,
-  ): Promise<FraudFlag> {
+  ) {
     const adminId: string = (req as any).user?.id ?? 'system';
 
     return this.fraudService.resolveFlag(id, adminId, dto, {
