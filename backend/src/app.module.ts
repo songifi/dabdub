@@ -42,6 +42,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { KycModule } from './kyc/kyc.module';
 import { ReportsModule } from './reports/reports.module';
+import { WalletsModule } from './wallets/wallets.module';
 
 @Module({
   imports: [
@@ -150,6 +151,9 @@ import { ReportsModule } from './reports/reports.module';
 
     // Reports — async CSV data exports via BullMQ + R2.
     ReportsModule,
+
+    // Wallets — Stellar keypair provisioning + balance sync.
+    WalletsModule,
   ],
   providers: [
     {

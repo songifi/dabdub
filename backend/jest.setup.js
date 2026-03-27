@@ -40,3 +40,4 @@ process.env.FLUTTERWAVE_ENCRYPTION_KEY = 'test';
 process.env.FLUTTERWAVE_WEBHOOK_SECRET = 'test';
 process.env.WEBAUTHN_RP_ID = 'localhost';
 process.env.WEBAUTHN_ORIGIN = 'http://localhost:3000';
+process.env.WALLET_ENCRYPTION_KEY = 'test-wallet-encryption-key-32chars!!';
