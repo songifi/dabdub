@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AnalyticsService } from '../admin/analytics/analytics.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private analyticsService: AnalyticsService,
   ) {}
 
   /**
@@ -87,7 +89,10 @@ export class UsersService {
       user.phone = dto.phone;
     }
 
-    return this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+    // Invalidate analytics cache on user changes
+    await this.analyticsService.invalidateDashboardCache().catch(() => {});
+    return saved;
   }
 
   /**
@@ -98,18 +103,25 @@ export class UsersService {
   async deactivate(id: string): Promise<User> {
     const user = await this.findById(id);
     user.isActive = false;
-    return this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+    await this.analyticsService.invalidateDashboardCache().catch(() => {});
+    return saved;
   }
 
   async markEmailVerified(id: string): Promise<User> {
     const user = await this.findById(id);
     user.emailVerified = true;
-    return this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+    await this.analyticsService.invalidateDashboardCache().catch(() => {});
+    return saved;
   }
 
   async markPhoneVerified(id: string): Promise<User> {
     const user = await this.findById(id);
     user.phoneVerified = true;
-    return this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+    await this.analyticsService.invalidateDashboardCache().catch(() => {});
+    return saved;
   }
 }
+

@@ -13,6 +13,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
 import { AuditModule } from '../audit/audit.module';
 
+import { AnalyticsModule } from './analytics/analytics.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -27,9 +29,10 @@ import { AuditModule } from '../audit/audit.module';
     NotificationsModule,
     AdminAuthModule,
     AuditModule,
+    AnalyticsModule,
   ],
   providers: [AdminService],
   controllers: [AdminController],
-  exports: [AdminService, AdminAuthModule],
+  exports: [AdminService, AdminAuthModule, AnalyticsModule],
 })
 export class AdminModule {}

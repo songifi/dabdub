@@ -130,7 +130,7 @@ import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers
     // Runtime feature flags + maintenance mode.
     RuntimeConfigModule,
 
-    AdminModule,
+    AdminModule, // Includes AnalyticsModule
 
     // SMS — OTP + transaction alerts via Termii + BullMQ.
     SmsModule,

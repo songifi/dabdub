@@ -67,12 +67,8 @@ export class AdminController {
     return this.adminService.unfreezeUser(id, adminId);
   }
 
-  @Get('stats')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Get dashboard stats' })
-  async getStats() {
-    return this.adminService.getStats();
-  }
+  // getStats() moved to dedicated /admin/analytics/dashboard endpoint
+
 
   @Get('transactions')
   @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
