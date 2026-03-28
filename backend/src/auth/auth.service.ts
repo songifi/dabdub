@@ -12,8 +12,10 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { jwtConfig } from '../config/jwt.config';
 import { User } from '../users/entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Session } from './entities/session.entity';
+import { CacheService } from '../cache/cache.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { TokenResponseDto } from './dto/token-response.dto';
@@ -21,7 +23,8 @@ import type { TokenResponseDto } from './dto/token-response.dto';
 export interface JwtPayload {
   sub: string;
   username: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'merchant' | 'user';
+  role: 'user' | 'merchant' | 'admin' | 'super_admin';
   sessionId: string;
 }
 
@@ -41,6 +44,8 @@ export class AuthService {
 
     @Inject(jwtConfig.KEY)
     private readonly jwt: ConfigType<typeof jwtConfig>,
+
+    private readonly cacheService: CacheService,
   ) {}
 
   // ── Register ────────────────────────────────────────────────────
@@ -96,6 +101,7 @@ export class AuthService {
     }
 
     const sessionId = crypto.randomUUID();
+    await this.cacheService.trackActiveUser(user.id);
     return this.issueTokens(user, sessionId, ipAddress, deviceInfo);
   }
 
@@ -150,7 +156,19 @@ export class AuthService {
     ipAddress?: string,
     deviceInfo?: Record<string, unknown>,
   ): Promise<TokenResponseDto> {
-    const role: 'admin' | 'user' = user.isAdmin ? 'admin' : 'user';
+    const role: JwtPayload['role'] = user.isAdmin
+      ? 'admin'
+      : user.role === UserRole.MERCHANT
+        ? 'merchant'
+        : 'user';
+    const role: JwtPayload['role'] =
+      user.role === Role.SuperAdmin
+        ? 'super_admin'
+        : user.role === Role.Admin || user.isAdmin
+          ? 'admin'
+          : user.role === Role.Merchant
+            ? 'merchant'
+            : 'user';
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,

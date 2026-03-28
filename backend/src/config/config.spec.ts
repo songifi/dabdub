@@ -5,14 +5,16 @@ import type { AppConfig } from './app.config';
 import type { DatabaseConfig } from './database.config';
 import type { RedisConfig } from './redis.config';
 import type { JwtConfig } from './jwt.config';
+import type { QueueConfig } from './queue.config';
 
 /** Minimal valid env that satisfies every required field. */
 const VALID_ENV: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
   PORT: '3001',
-  API_PREFIX: 'api/v1',
+  API_PREFIX: 'api',
   THROTTLE_TTL: '60',
   THROTTLE_LIMIT: '100',
+  FRONTEND_URL: 'http://localhost:3000',
 
   DB_HOST: 'localhost',
   DB_PORT: '5432',
@@ -22,6 +24,8 @@ const VALID_ENV: NodeJS.ProcessEnv = {
 
   REDIS_HOST: 'localhost',
   REDIS_PORT: '6379',
+  BULL_BOARD_USERNAME: 'queue-admin',
+  BULL_BOARD_PASSWORD: 'queue-password',
 
   STELLAR_NETWORK: 'testnet',
   JWT_ACCESS_SECRET: 'access-secret-that-is-at-least-32-chars!!',
@@ -34,6 +38,8 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   STELLAR_CONTRACT_ID:
     'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
   STELLAR_ADMIN_SECRET_KEY: 'stellar-admin-secret-key-that-is-32chars!!',
+  STELLAR_RECEIVE_ADDRESS: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+  STELLAR_USDC_ISSUER: 'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
 
   ZEPTOMAIL_API_KEY: 'zepto-api-key-value',
   ZEPTOMAIL_FROM_EMAIL: 'no-reply@example.com',
@@ -42,6 +48,13 @@ const VALID_ENV: NodeJS.ProcessEnv = {
   R2_ACCESS_KEY_ID: 'r2-access-key',
   R2_SECRET_ACCESS_KEY: 'r2-secret-key',
   R2_BUCKET_NAME: 'my-bucket',
+
+  FLUTTERWAVE_SECRET_KEY: 'flutterwave-secret-key',
+  FLUTTERWAVE_WEBHOOK_SECRET: 'flutterwave-webhook-secret',
+  FLUTTERWAVE_BASE_URL: 'https://api.flutterwave.com',
+
+  PAYSTACK_SECRET_KEY: 'paystack-secret-key',
+  PAYSTACK_BASE_URL: 'https://api.paystack.co',
 };
 
 function applyEnv(overrides: NodeJS.ProcessEnv = {}): void {
@@ -76,7 +89,7 @@ describe('AppConfigModule', () => {
   it('returns correct typed AppConfig values', () => {
     expect(config.get<AppConfig['port']>('app.port')).toBe(3001);
     expect(config.get<AppConfig['nodeEnv']>('app.nodeEnv')).toBe('test');
-    expect(config.get<AppConfig['apiPrefix']>('app.apiPrefix')).toBe('api/v1');
+    expect(config.get<AppConfig['apiPrefix']>('app.apiPrefix')).toBe('api');
     expect(config.get<AppConfig['throttleTtl']>('app.throttleTtl')).toBe(60);
     expect(config.get<AppConfig['throttleLimit']>('app.throttleLimit')).toBe(
       100,
@@ -100,6 +113,15 @@ describe('AppConfigModule', () => {
     expect(
       config.get<RedisConfig['password']>('redis.password'),
     ).toBeUndefined();
+  });
+
+  it('returns correct typed QueueConfig values', () => {
+    expect(
+      config.get<QueueConfig['bullBoardUsername']>('queue.bullBoardUsername'),
+    ).toBe('queue-admin');
+    expect(
+      config.get<QueueConfig['bullBoardPassword']>('queue.bullBoardPassword'),
+    ).toBe('queue-password');
   });
 
   it('exposes optional REDIS_PASSWORD when provided', async () => {
@@ -127,6 +149,12 @@ describe('AppConfigModule', () => {
     expect(config.get<string>('stellar.network')).toBe('testnet');
     expect(config.get<string>('stellar.rpcUrl')).toBe(
       'https://soroban-testnet.stellar.org',
+    );
+    expect(config.get<string>('stellar.receiveAddress')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
+    );
+    expect(config.get<string>('stellar.usdcIssuer')).toBe(
+      'GBBM6BKZPEHWYOESEOTMOVALSRHVHXJ4Q2GWQYLBBZYH4M4XBRZECV2T',
     );
     expect(config.get<string>('zepto.fromEmail')).toBe('no-reply@example.com');
     expect(config.get<string>('r2.bucketName')).toBe('my-bucket');

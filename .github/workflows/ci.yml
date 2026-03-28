@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  RUSTFLAGS: -D warnings
+  CARGO_INCREMENTAL: 0
+  LLVM_PROFILE_FILE: target/coverage/cheese-%p-%m.profraw
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+
+      - name: Install Rust wasm target
+        run: rustup target add wasm32v1-none
+
+      - name: cargo test
+        run: cargo test
+
+      - name: Generate coverage report
+        run: |
+          mkdir -p target/coverage
+          cargo tarpaulin \
+            --workspace \
+            --out Xml \
+            --output-dir target/coverage \
+            --exclude-files "*/tests/*" \
+            --verbose \
+            --fail-under 85
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          files: target/coverage/cobertura.xml
+          flags: rust
+          name: cheese-contracts
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: wasm build
+        run: cargo wasm-build
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-contracts
+          path: |
+            contracts/paylink/target/wasm32v1-none/release/paylink.wasm
+            contracts/cheese_pay/target/wasm32v1-none/release/cheese_pay.wasm
+          retention-days: 30

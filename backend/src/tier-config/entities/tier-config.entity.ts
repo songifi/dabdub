@@ -7,56 +7,73 @@ export enum TierName {
   BLACK = 'Black',
 }
 
-/**
- * TierConfig defines the per-tier business rules applied to user accounts.
- *
- * Tiers are assigned based on a user's balance relative to minBalance.
- * feeMultiplier scales the base fee rates from FeeConfig (e.g. 0.8 = 20% discount).
- * Limits are stored in the platform's native unit (e.g. XLM or USD-equivalent).
- */
 @Entity('tier_configs')
 export class TierConfig extends BaseEntity {
   @Column({ type: 'enum', enum: TierName, unique: true })
-  name!: TierName;
+  tier!: TierName;
 
-  /** Minimum account balance to qualify for this tier (inclusive). */
   @Column({
-    name: 'min_balance',
+    name: 'daily_transfer_limit_usdc',
     type: 'numeric',
     precision: 24,
     scale: 8,
     default: '0',
   })
-  minBalance!: string;
+  dailyTransferLimitUsdc!: string;
+
+  @Column({
+    name: 'monthly_transfer_limit_usdc',
+    type: 'numeric',
+    precision: 24,
+    scale: 8,
+    default: '0',
+  })
+  monthlyTransferLimitUsdc!: string;
+
+  @Column({
+    name: 'max_single_withdrawal_usdc',
+    type: 'numeric',
+    precision: 24,
+    scale: 8,
+    default: '0',
+  })
+  maxSingleWithdrawalUsdc!: string;
 
   /**
-   * Multiplier applied to base fee rates.
-   * Silver = 1.00 (no discount), Gold = 0.80 (20% off), Black = 0.50 (50% off).
+   * Fee discount in percent (0–100).
+   * Silver = 0, Gold = 20, Black = 50.
    */
   @Column({
-    name: 'fee_multiplier',
+    name: 'fee_discount_percent',
+    type: 'int',
+    default: 0,
+  })
+  feeDiscountPercent!: number;
+
+  @Column({
+    name: 'yield_apy_percent',
     type: 'numeric',
     precision: 5,
-    scale: 4,
-    default: '1.0000',
+    scale: 2,
+    default: '0.00',
   })
-  feeMultiplier!: string;
+  yieldApyPercent!: string;
 
   @Column({
-    name: 'daily_limit',
+    name: 'min_stake_amount_usdc',
     type: 'numeric',
     precision: 24,
     scale: 8,
+    default: '0',
   })
-  dailyLimit!: string;
+  minStakeAmountUsdc!: string;
 
   @Column({
-    name: 'monthly_limit',
-    type: 'numeric',
-    precision: 24,
-    scale: 8,
+    name: 'stake_lockup_days',
+    type: 'int',
+    default: 0,
   })
-  monthlyLimit!: string;
+  stakeLockupDays!: number;
 
   @Column({ name: 'is_active', default: true })
   isActive!: boolean;

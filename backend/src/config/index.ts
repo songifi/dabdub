@@ -6,3 +6,16 @@ export { jwtConfig, type JwtConfig } from './jwt.config';
 export { stellarConfig, type StellarConfig } from './stellar.config';
 export { zeptoConfig, type ZeptoConfig } from './zepto.config';
 export { r2Config, type R2Config } from './r2.config';
+export { queueConfig, type QueueConfig } from './queue.config';
+export {
+  flutterwaveConfig,
+  type FlutterwaveConfig,
+} from './flutterwave.config';
+export { paystackConfig, type PaystackConfig } from './paystack.config';
+export { smsConfig, smsConfigValidation } from './sms.config';
+export { firebaseConfig, firebaseConfigValidation } from './firebase.config';
+export {
+  sudoAfricaConfig,
+  type SudoAfricaConfig,
+} from './sudo-africa.config';
+export { webPushConfig, webPushConfigValidation } from './web-push.config';

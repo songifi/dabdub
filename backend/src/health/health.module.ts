@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './health.controller';
 import { RedisHealthIndicator } from './redis.health';
 import { StellarHealthIndicator } from './stellar.health';
+import { QueueModule } from '../queue/queue.module';
 
 /**
  * HealthModule wires together all health indicators and exposes GET /health.
@@ -18,6 +19,7 @@ import { StellarHealthIndicator } from './stellar.health';
     TerminusModule,
     // Required for TypeOrmHealthIndicator to resolve the active DataSource.
     TypeOrmModule,
+    QueueModule,
   ],
   controllers: [HealthController],
   providers: [RedisHealthIndicator, StellarHealthIndicator],

@@ -1,12 +1,19 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import {
   HealthCheck,
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { SkipResponseWrap } from '../common/decorators/skip-response-wrap.decorator';
 import { RedisHealthIndicator } from './redis.health';
 import { StellarHealthIndicator } from './stellar.health';
+import { QueueHealthIndicator } from '../queue/queue.health';
 
 /**
  * GET /health
@@ -26,16 +33,19 @@ import { StellarHealthIndicator } from './stellar.health';
  * HTTP 503 → one or more checks failed (partial results are still returned).
  */
 @ApiTags('health')
-@Controller('health')
+@ApiBearerAuth()
+@Controller({ path: 'health', version: '1' })
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly db: TypeOrmHealthIndicator,
     private readonly redis: RedisHealthIndicator,
+    private readonly queues: QueueHealthIndicator,
     private readonly stellar: StellarHealthIndicator,
   ) {}
 
   @Get()
+  @SkipResponseWrap()
   @HealthCheck()
   @ApiOperation({
     summary: 'Service health check',
@@ -44,11 +54,13 @@ export class HealthController {
       'Returns HTTP 200 when all are healthy, HTTP 503 when any component is down.',
   })
   @ApiResponse({ status: 200, description: 'All components healthy' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   @ApiResponse({ status: 503, description: 'One or more components degraded' })
   check() {
     return this.health.check([
       () => this.db.pingCheck('db'),
       () => this.redis.pingCheck('redis'),
+      () => this.queues.pingCheck('queues'),
       () => this.stellar.pingCheck('stellar'),
     ]);
   }
