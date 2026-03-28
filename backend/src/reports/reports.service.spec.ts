@@ -117,6 +117,27 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('requestGdprExport', () => {
+    it('enforces one GDPR export per 30 days', async () => {
+      mockRepo.count.mockResolvedValue(1);
+
+      await expect(service.requestGdprExport('user-uuid-1')).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(mockRepo.save).not.toHaveBeenCalled();
+      expect(mockQueue.add).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('requestAccountStatement', () => {
+    it('rejects ranges longer than 12 months', async () => {
+      await expect(
+        service.requestAccountStatement('user-uuid-1', '2025-01-01', '2026-12-01'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   // ── getForUser ────────────────────────────────────────────────────────────
 
   describe('getForUser', () => {

@@ -2,8 +2,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateWallets1769700000000 implements MigrationInterface {
   name = 'CreateWallets1769700000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE "wallets" (
         "id"                   UUID         NOT NULL DEFAULT uuid_generate_v4(),
@@ -23,7 +25,7 @@ export class CreateWallets1769700000000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_wallets_user_id" ON "wallets" ("user_id")
+      CREATE INDEX CONCURRENTLY "IDX_wallets_user_id" ON "wallets" ("user_id")
     `);
   }
 

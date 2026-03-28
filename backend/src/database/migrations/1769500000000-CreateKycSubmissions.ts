@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateKycSubmissions1769500000000 implements MigrationInterface {
   name = 'CreateKycSubmissions1769500000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE "kyc_submission_status_enum" AS ENUM ('pending', 'under_review', 'approved', 'rejected')
     `);
@@ -30,8 +32,8 @@ export class CreateKycSubmissions1769500000000 implements MigrationInterface {
         CONSTRAINT "PK_kyc_submissions_id" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_kyc_submissions_user_id" ON "kyc_submissions" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_kyc_submissions_status"  ON "kyc_submissions" ("status")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_kyc_submissions_user_id" ON "kyc_submissions" ("user_id")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_kyc_submissions_status"  ON "kyc_submissions" ("status")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

@@ -4,8 +4,10 @@ export class CreateComplianceTables1769800000000
   implements MigrationInterface
 {
   name = 'CreateComplianceTables1769800000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE "compliance_event_type_enum" AS ENUM (
         'aml_threshold', 'velocity', 'structuring', 'other'
@@ -62,22 +64,22 @@ export class CreateComplianceTables1769800000000
       )
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_compliance_events_user_id" ON "compliance_events" ("user_id")
+      CREATE INDEX CONCURRENTLY "IDX_compliance_events_user_id" ON "compliance_events" ("user_id")
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_compliance_events_status" ON "compliance_events" ("status")
+      CREATE INDEX CONCURRENTLY "IDX_compliance_events_status" ON "compliance_events" ("status")
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_compliance_events_type" ON "compliance_events" ("type")
+      CREATE INDEX CONCURRENTLY "IDX_compliance_events_type" ON "compliance_events" ("type")
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_sar_user_id" ON "suspicious_activity_reports" ("user_id")
+      CREATE INDEX CONCURRENTLY "IDX_sar_user_id" ON "suspicious_activity_reports" ("user_id")
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_sar_generated_by" ON "suspicious_activity_reports" ("generated_by")
+      CREATE INDEX CONCURRENTLY "IDX_sar_generated_by" ON "suspicious_activity_reports" ("generated_by")
     `);
     await queryRunner.query(`
-      CREATE INDEX "IDX_sar_status" ON "suspicious_activity_reports" ("status")
+      CREATE INDEX CONCURRENTLY "IDX_sar_status" ON "suspicious_activity_reports" ("status")
     `);
   }
 

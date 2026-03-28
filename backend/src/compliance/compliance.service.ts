@@ -30,9 +30,17 @@ import {
 } from './entities/suspicious-activity-report.entity';
 import type { CreateSarDto } from './dto/create-sar.dto';
 import type { QuerySarsDto } from './dto/query-sars.dto';
+import type { QueryComplianceEventsDto } from './dto/query-compliance-events.dto';
 
 export const COMPLIANCE_QUEUE = 'compliance';
 export const STRUCTURING_DETECT_JOB = 'detect-structuring';
+export const CHECK_TRANSACTION_JOB = 'check-transaction';
+
+export interface CheckTransactionJobData {
+  userId: string;
+  amount: number;
+  txId: string | null;
+}
 
 type Paginated<T> = {
   data: T[];
@@ -367,6 +375,139 @@ export class ComplianceDashboardService {
     return saved;
   }
 
+  // ── Admin compliance event endpoints ──────────────────────────────────────
+
+  async listEvents(
+    query: QueryComplianceEventsDto,
+  ): Promise<Paginated<ComplianceEvent>> {
+    const { page = 1, limit = 20, status, eventType, severity, userId } = query;
+    const where: Record<string, unknown> = {};
+    if (status) where['status'] = status;
+    if (eventType) where['eventType'] = eventType;
+    if (severity) where['severity'] = severity;
+    if (userId) where['userId'] = userId;
+
+    const [data, total] = await this.complianceEventRepo.findAndCount({
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit };
+  }
+
+  async clearEvent(
+    id: string,
+    adminId: string,
+    note: string,
+  ): Promise<ComplianceEvent> {
+    const event = await this.complianceEventRepo.findOne({ where: { id } });
+    if (!event) throw new NotFoundException(`ComplianceEvent ${id} not found`);
+
+    event.status = ComplianceEventStatus.CLEARED;
+    event.reviewedBy = adminId;
+    event.resolvedBy = adminId;
+    event.resolvedAt = new Date();
+    event.metadata = { ...event.metadata, clearNote: note };
+    const saved = await this.complianceEventRepo.save(event);
+
+    // If user was auto-frozen due to this event, unfreeze them
+    const user = await this.userRepo.findOne({ where: { id: event.userId } });
+    if (user && !user.isActive) {
+      const otherCritical = await this.complianceEventRepo.findOne({
+        where: {
+          userId: event.userId,
+          severity: ComplianceEventSeverity.CRITICAL,
+          status: ComplianceEventStatus.OPEN,
+        },
+      });
+      if (!otherCritical) {
+        user.isActive = true;
+        await this.userRepo.save(user);
+        this.logger.log(`Unfroze user ${event.userId} after compliance event ${id} cleared`);
+      }
+    }
+
+    return saved;
+  }
+
+  async escalateEvent(
+    id: string,
+    adminId: string,
+  ): Promise<ComplianceEvent> {
+    const event = await this.complianceEventRepo.findOne({ where: { id } });
+    if (!event) throw new NotFoundException(`ComplianceEvent ${id} not found`);
+
+    event.status = ComplianceEventStatus.ESCALATED;
+    event.reviewedBy = adminId;
+    const saved = await this.complianceEventRepo.save(event);
+
+    // Notify SuperAdmins
+    const superAdmins = await this.userRepo.find({
+      where: { role: Role.SuperAdmin, isActive: true },
+    });
+    await Promise.allSettled(
+      superAdmins.map((admin) =>
+        this.emailService.queue(
+          admin.email,
+          'compliance-event-escalated',
+          {
+            eventId: id,
+            userId: event.userId,
+            eventType: event.eventType,
+            severity: event.severity,
+            escalatedBy: adminId,
+          },
+          admin.id,
+        ),
+      ),
+    );
+
+    return saved;
+  }
+
+  async getUserComplianceSummary(userId: string): Promise<{
+    monthlyVolume: number;
+    openEventCount: number;
+    kycStatus: string;
+    tier: string;
+  }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User ${userId} not found`);
+
+    const monthStart = this.startOfMonth(new Date());
+    const now = new Date();
+
+    const [openEventCount, monthlyTxs, latestKyc] = await Promise.all([
+      this.complianceEventRepo.count({
+        where: { userId, status: ComplianceEventStatus.OPEN },
+      }),
+      this.txRepo.find({
+        where: {
+          userId,
+          status: TransactionStatus.COMPLETED,
+          createdAt: Between(monthStart, now),
+        },
+      }),
+      this.kycRepo.findOne({
+        where: { userId },
+        order: { createdAt: 'DESC' },
+      }),
+    ]);
+
+    const monthlyVolume = monthlyTxs.reduce(
+      (sum, tx) => sum + this.toAmount(tx.amountUsdc),
+      0,
+    );
+
+    return {
+      monthlyVolume,
+      openEventCount,
+      kycStatus: latestKyc?.status ?? user.kycStatus,
+      tier: user.tier,
+    };
+  }
+
   async enqueueDailyStructuringDetection(): Promise<void> {
     await this.complianceQueue.add(
       STRUCTURING_DETECT_JOB,
@@ -399,7 +540,7 @@ export class ComplianceDashboardService {
     });
     const existingEvents = await this.complianceEventRepo.find({
       where: {
-        type: ComplianceEventType.STRUCTURING,
+        eventType: ComplianceEventType.STRUCTURING,
         createdAt: Between(start, end),
       },
     });
@@ -432,7 +573,7 @@ export class ComplianceDashboardService {
       const event = await this.complianceEventRepo.save(
         this.complianceEventRepo.create({
           userId,
-          type: ComplianceEventType.STRUCTURING,
+          eventType: ComplianceEventType.STRUCTURING,
           severity: ComplianceEventSeverity.HIGH,
           status: ComplianceEventStatus.OPEN,
           description: `Detected possible structuring from ${suspiciousTransactions.length} transactions just below the $1000 threshold on ${dateKey}.`,

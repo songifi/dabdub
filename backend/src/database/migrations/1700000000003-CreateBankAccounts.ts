@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateBankAccounts1700000000003 implements MigrationInterface {
   name = 'CreateBankAccounts1700000000003';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "bank_accounts" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -22,12 +24,12 @@ export class CreateBankAccounts1700000000003 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_bank_accounts_user_verified"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_bank_accounts_user_verified"
       ON "bank_accounts" ("user_id", "is_verified")
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_bank_accounts_user_bank_account"
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "UQ_bank_accounts_user_bank_account"
       ON "bank_accounts" ("user_id", "bank_code", "account_number")
     `);
   }

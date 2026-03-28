@@ -9,12 +9,14 @@ import { CacheModule } from '../cache/cache.module';
 import { User } from '../users/entities/user.entity';
 import { Transaction } from '../transactions/entities/transaction.entity';
 import { PayLink } from '../paylink/entities/paylink.entity';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ContractEventLog, ReconciliationAlert, User, Transaction, PayLink]),
     BullModule.registerQueue({ name: 'blockchain-sync' }),
     CacheModule,
+    StellarModule,
   ],
   providers: [SorobanService, ContractEventListenerService],
   controllers: [SorobanAdminController],

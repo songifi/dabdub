@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateYieldEntries1700000000005 implements MigrationInterface {
   name = 'CreateYieldEntries1700000000005';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "yield_entries_source_enum" AS ENUM ('staking_reward', 'bonus', 'referral')
     `);
@@ -23,12 +25,12 @@ export class CreateYieldEntries1700000000005 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_yield_entries_user_created"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_yield_entries_user_created"
       ON "yield_entries" ("user_id", "createdAt" DESC)
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_yield_entries_source"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_yield_entries_source"
       ON "yield_entries" ("source")
     `);
   }

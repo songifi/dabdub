@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateMerchants1700000000002 implements MigrationInterface {
   name = 'CreateMerchants1700000000002';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "users_role_enum" AS ENUM ('user', 'merchant', 'admin')
     `);
@@ -59,7 +61,7 @@ export class CreateMerchants1700000000002 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_merchants_is_verified"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_merchants_is_verified"
       ON "merchants" ("is_verified")
     `);
   }

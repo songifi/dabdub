@@ -1,8 +1,9 @@
 import { Process, Processor, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bull';
 import { Repository } from 'typeorm';
-import { Job } from 'bull';
+import { Job, Queue } from 'bull';
 import {
   TRANSFER_QUEUE,
   PROCESS_TRANSFER_JOB,
@@ -22,6 +23,7 @@ import { WS_EVENTS } from '../../ws/cheese.gateway';
 import { CheeseGateway } from '../../ws/cheese.gateway';
 import { EmailService } from '../../email/email.service';
 import { UsersService } from '../../users/users.service';
+import { COMPLIANCE_QUEUE, CHECK_TRANSACTION_JOB, type CheckTransactionJobData } from '../../compliance/compliance.service';
 
 @Processor(TRANSFER_QUEUE)
 export class TransferProcessor {
@@ -40,6 +42,9 @@ export class TransferProcessor {
 
     @InjectRepository(Transfer)
     private readonly transferRepo: Repository<Transfer>,
+
+    @InjectQueue(COMPLIANCE_QUEUE)
+    private readonly complianceQueue: Queue,
   ) {}
 
   @Process(PROCESS_TRANSFER_JOB)
@@ -61,7 +66,7 @@ export class TransferProcessor {
       const confirmed = await this.transfersService.markConfirmed(transferId, txHash);
 
       // Create Transaction records for both parties
-      await this.transactionRepo.save([
+      const [outTx] = await this.transactionRepo.save([
         this.transactionRepo.create({
           userId: transfer.fromUserId,
           type: TransactionType.TRANSFER_OUT,
@@ -91,6 +96,13 @@ export class TransferProcessor {
           metadata: { transferId },
         }),
       ]);
+
+      // Enqueue async AML compliance check for the sender (non-blocking)
+      await this.complianceQueue.add(
+        CHECK_TRANSACTION_JOB,
+        { userId: transfer.fromUserId, amount: parseFloat(transfer.amount), txId: outTx.id } satisfies CheckTransactionJobData,
+        { attempts: 3, backoff: { type: 'exponential', delay: 3_000 }, removeOnComplete: true },
+      );
 
       // WebSocket events
       await this.gateway.emitToUser(transfer.fromUserId, WS_EVENTS.TRANSFER_SENT, confirmed);

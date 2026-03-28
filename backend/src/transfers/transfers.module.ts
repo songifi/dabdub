@@ -14,11 +14,13 @@ import { TierConfigModule } from '../tier-config/tier-config.module';
 import { WsModule } from '../ws/ws.module';
 import { EmailModule } from '../email/email.module';
 import { PinModule } from '../pin/pin.module';
+import { COMPLIANCE_QUEUE } from '../compliance/compliance.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Transfer, FeeConfig, Transaction]),
     BullModule.registerQueue({ name: TRANSFER_QUEUE }),
+    BullModule.registerQueue({ name: COMPLIANCE_QUEUE }),
     SorobanModule,
     NotificationsModule,
     UsersModule,

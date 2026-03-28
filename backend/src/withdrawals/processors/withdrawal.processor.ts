@@ -1,8 +1,9 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bull';
 import { Repository } from 'typeorm';
-import { Job } from 'bull';
+import { Job, Queue } from 'bull';
 import * as Sentry from '@sentry/nestjs';
 import {
   WITHDRAWAL_QUEUE,
@@ -14,6 +15,7 @@ import { SorobanService } from '../../soroban/soroban.service';
 import { Transaction, TransactionType, TransactionStatus } from '../../transactions/entities/transaction.entity';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { BalanceService } from '../../balance/balance.service';
+import { COMPLIANCE_QUEUE, CHECK_TRANSACTION_JOB, type CheckTransactionJobData } from '../../compliance/compliance.service';
 
 export interface ProcessWithdrawalJobData {
   withdrawalId: string;
@@ -32,6 +34,9 @@ export class WithdrawalProcessor {
 
     private readonly notificationsService: NotificationsService,
     private readonly balanceService: BalanceService,
+
+    @InjectQueue(COMPLIANCE_QUEUE)
+    private readonly complianceQueue: Queue,
   ) {}
 
   @Process(PROCESS_WITHDRAWAL_JOB)
@@ -63,7 +68,7 @@ export class WithdrawalProcessor {
 
         const confirmed = await this.withdrawalsService.markConfirmed(withdrawalId, txHash);
 
-        await this.transactionRepo.save(
+        const savedTx = await this.transactionRepo.save(
           this.transactionRepo.create({
             userId: withdrawal.userId,
             type: TransactionType.WITHDRAWAL,
@@ -78,6 +83,13 @@ export class WithdrawalProcessor {
 
       // Invalidate balance cache
       await this.balanceService.invalidateCache(withdrawal.userId);
+
+      // Enqueue async AML compliance check (non-blocking)
+      await this.complianceQueue.add(
+        CHECK_TRANSACTION_JOB,
+        { userId: withdrawal.userId, amount: parseFloat(withdrawal.netAmount), txId: savedTx.id } satisfies CheckTransactionJobData,
+        { attempts: 3, backoff: { type: 'exponential', delay: 3_000 }, removeOnComplete: true },
+      );
 
       await this.notificationsService.notifyWithdrawalConfirmed(confirmed);
         await this.notificationsService.notifyWithdrawalConfirmed(confirmed);

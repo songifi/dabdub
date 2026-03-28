@@ -1,6 +1,8 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bull';
 import { Repository } from 'typeorm';
+import { Queue } from 'bull';
 import { Deposit, DepositStatus } from './entities/deposit.entity';
 import {
   Transaction,
@@ -9,6 +11,7 @@ import {
 } from '../transactions/entities/transaction.entity';
 import { VirtualAccount } from '../virtual-account/entities/virtual-account.entity';
 import { BalanceService } from '../balance/balance.service';
+import { COMPLIANCE_QUEUE, CHECK_TRANSACTION_JOB, type CheckTransactionJobData } from '../compliance/compliance.service';
 
 @Injectable()
 export class DepositsService {
@@ -20,6 +23,8 @@ export class DepositsService {
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
     private readonly balanceService: BalanceService,
+    @InjectQueue(COMPLIANCE_QUEUE)
+    private readonly complianceQueue: Queue,
   ) {}
 
   async createDeposit(
@@ -60,6 +65,13 @@ export class DepositsService {
 
     // Invalidate balance cache
     await this.balanceService.invalidateCache(userId);
+
+    // Enqueue async AML compliance check (non-blocking)
+    await this.complianceQueue.add(
+      CHECK_TRANSACTION_JOB,
+      { userId, amount: usdcAmount, txId: transaction.id } satisfies CheckTransactionJobData,
+      { attempts: 3, backoff: { type: 'exponential', delay: 3_000 }, removeOnComplete: true },
+    );
 
     this.logger.log(
       `Created deposit and transaction for user ${userId}: ${usdcAmount} USDC`,

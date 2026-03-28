@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { ReceiptService } from '../receipt/receipt.service';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AdminRole } from './entities/admin.entity';
@@ -29,7 +30,10 @@ import { AuditInterceptor, Audit } from '../audit/audit.interceptor';
 @UseInterceptors(AuditInterceptor)
 @Controller({ path: 'admin', version: '1' })
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly receiptService: ReceiptService,
+  ) {}
 
   @Get('users')
   @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
@@ -84,5 +88,12 @@ export class AdminController {
     @Body() dto: { title: string; body: string; segment: string },
   ) {
     return this.adminService.broadcast(dto);
+  }
+
+  @Get('transactions/:id/receipt')
+  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
+  @ApiOperation({ summary: 'Generate receipt for any transaction (admin)' })
+  async getTransactionReceipt(@Param('id') id: string) {
+    return this.receiptService.generateTransactionReceiptAdmin(id);
   }
 }

@@ -2,15 +2,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateReferralsTable1769342977096 implements MigrationInterface {
   name = 'CreateReferralsTable1769342977096';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       ALTER TABLE "users"
       ADD COLUMN IF NOT EXISTS "referralCode" varchar
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "IDX_users_referral_code"
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "IDX_users_referral_code"
       ON "users" ("referralCode")
       WHERE "referralCode" IS NOT NULL
     `);
@@ -42,17 +44,17 @@ export class CreateReferralsTable1769342977096 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_referrals_referrer_id"
+      CREATE INDEX CONCURRENTLY "IDX_referrals_referrer_id"
       ON "referrals" ("referrerId")
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_referrals_status"
+      CREATE INDEX CONCURRENTLY "IDX_referrals_status"
       ON "referrals" ("status")
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_referrals_code"
+      CREATE INDEX CONCURRENTLY "IDX_referrals_code"
       ON "referrals" ("code")
     `);
   }

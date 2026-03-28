@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BlockchainWalletService, WALLET_PROVISIONED_EVENT } from './blockchain-wallet.service';
 import { SorobanService } from './soroban.service';
+import { StellarAssetService } from '../stellar/stellar-asset.service';
 import { BlockchainWallet } from './entities/blockchain-wallet.entity';
 
 const MOCK_ENC_KEY = 'test-encryption-key-32-chars-long!!';
@@ -26,6 +27,7 @@ describe('BlockchainWalletService', () => {
   let service: BlockchainWalletService;
   let walletRepo: any;
   let sorobanService: jest.Mocked<SorobanService>;
+  let stellarAssetService: jest.Mocked<StellarAssetService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
   let configService: jest.Mocked<ConfigService>;
 
@@ -50,6 +52,12 @@ describe('BlockchainWalletService', () => {
           },
         },
         {
+          provide: StellarAssetService,
+          useValue: {
+            ensureTrustLine: jest.fn(),
+          },
+        },
+        {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string, def?: any) => {
@@ -70,6 +78,7 @@ describe('BlockchainWalletService', () => {
     service = module.get(BlockchainWalletService);
     walletRepo = module.get(getRepositoryToken(BlockchainWallet));
     sorobanService = module.get(SorobanService);
+    stellarAssetService = module.get(StellarAssetService);
     eventEmitter = module.get(EventEmitter2);
     configService = module.get(ConfigService);
   });
@@ -121,6 +130,29 @@ describe('BlockchainWalletService', () => {
       const result = await service.provision('user-uuid', 'alice');
       expect(result).toBeDefined();
       expect(walletRepo.save).toHaveBeenCalled();
+    });
+
+    it('calls ensureTrustLine before registerUser during provisioning', async () => {
+      walletRepo.findOne.mockResolvedValue(null);
+      const wallet = mockWallet();
+      walletRepo.create.mockReturnValue(wallet);
+      walletRepo.save.mockResolvedValue(wallet);
+
+      const callOrder: string[] = [];
+      stellarAssetService.ensureTrustLine.mockImplementation(async () => {
+        callOrder.push('ensureTrustLine');
+      });
+      sorobanService.registerUser.mockImplementation(async () => {
+        callOrder.push('registerUser');
+      });
+
+      const StellarSdk = require('@stellar/stellar-sdk');
+      const mockFriendbot = { call: jest.fn().mockResolvedValue({}) };
+      jest.spyOn(StellarSdk.Horizon.Server.prototype, 'friendbot').mockReturnValue(mockFriendbot);
+
+      await service.provision('user-uuid', 'alice');
+
+      expect(callOrder).toEqual(['ensureTrustLine', 'registerUser']);
     });
   });
 

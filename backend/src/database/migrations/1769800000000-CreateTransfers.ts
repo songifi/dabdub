@@ -2,8 +2,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateTransfers1769800000000 implements MigrationInterface {
   name = 'CreateTransfers1769800000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE "transfers_status_enum" AS ENUM ('pending', 'confirmed', 'failed')
     `);
@@ -27,8 +29,8 @@ export class CreateTransfers1769800000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX "IDX_transfers_from_user_id" ON "transfers" ("from_user_id")`);
-    await queryRunner.query(`CREATE INDEX "IDX_transfers_to_user_id" ON "transfers" ("to_user_id")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_transfers_from_user_id" ON "transfers" ("from_user_id")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_transfers_to_user_id" ON "transfers" ("to_user_id")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

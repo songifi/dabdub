@@ -1,6 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { StellarSubmitErrorDetails } from './stellar.types';
 
+export class AccountNotFundedException extends BadRequestException {
+  constructor() {
+    super('Account needs XLM to create trust line');
+  }
+}
+
 export class AccountNotFoundException extends NotFoundException {
   constructor(public readonly publicKey: string) {
     super(`Stellar account not found for ${publicKey}`);

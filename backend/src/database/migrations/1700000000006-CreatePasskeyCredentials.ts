@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreatePasskeyCredentials1700000000006 implements MigrationInterface {
   name = 'CreatePasskeyCredentials1700000000006';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     // Create enum for device type
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "passkey_device_type" AS ENUM ('singleDevice', 'multiDevice')
@@ -29,12 +31,12 @@ export class CreatePasskeyCredentials1700000000006 implements MigrationInterface
 
     // Create indexes
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_passkey_credentials_user_id"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_passkey_credentials_user_id"
       ON "passkey_credentials" ("user_id")
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "IDX_passkey_credentials_credential_id"
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "IDX_passkey_credentials_credential_id"
       ON "passkey_credentials" ("credential_id")
     `);
 

@@ -17,6 +17,7 @@ import { CronAdminController } from './cron-admin.controller';
 import { AuditModule } from '../audit/audit.module';
 
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ReceiptModule } from '../receipt/receipt.module';
 
 @Module({
   imports: [
@@ -34,12 +35,10 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AuditModule,
     AnalyticsModule,
     CronModule,
+    ReceiptModule,
   ],
   providers: [AdminService],
   controllers: [AdminController, CronAdminController],
-  ],
-  providers: [AdminService],
-  controllers: [AdminController],
   exports: [AdminService, AdminAuthModule, AnalyticsModule],
 })
 export class AdminModule {}

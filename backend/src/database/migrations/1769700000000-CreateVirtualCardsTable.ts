@@ -1,7 +1,10 @@
-import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 export class CreateVirtualCardsTable1769700000000 implements MigrationInterface {
+  public transaction = false;
+
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     // Create virtual_cards table
     await queryRunner.createTable(
       new Table({
@@ -90,29 +93,16 @@ export class CreateVirtualCardsTable1769700000000 implements MigrationInterface 
     );
 
     // Create indexes
-    await queryRunner.createIndex(
-      'virtual_cards',
-      new TableIndex({
-        name: 'IDX_virtual_cards_user_id',
-        columnNames: ['user_id'],
-      }),
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_virtual_cards_user_id" ON "virtual_cards" ("user_id")`,
     );
 
-    await queryRunner.createIndex(
-      'virtual_cards',
-      new TableIndex({
-        name: 'IDX_virtual_cards_sudo_card_id',
-        columnNames: ['sudo_card_id'],
-        isUnique: true,
-      }),
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "IDX_virtual_cards_sudo_card_id" ON "virtual_cards" ("sudo_card_id")`,
     );
 
-    await queryRunner.createIndex(
-      'virtual_cards',
-      new TableIndex({
-        name: 'IDX_virtual_cards_status',
-        columnNames: ['status'],
-      }),
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_virtual_cards_status" ON "virtual_cards" ("status")`,
     );
   }
 

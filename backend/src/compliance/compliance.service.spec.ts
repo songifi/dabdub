@@ -102,7 +102,7 @@ describe('ComplianceDashboardService', () => {
     expect(complianceEventRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        type: ComplianceEventType.STRUCTURING,
+        eventType: ComplianceEventType.STRUCTURING,
         severity: ComplianceEventSeverity.HIGH,
         status: ComplianceEventStatus.OPEN,
       }),

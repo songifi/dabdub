@@ -2,8 +2,10 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateBlockchainWallets1700000000002 implements MigrationInterface {
   name = 'CreateBlockchainWallets1700000000002';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE "blockchain_wallets" (
         "id"                   UUID NOT NULL DEFAULT uuid_generate_v4(),

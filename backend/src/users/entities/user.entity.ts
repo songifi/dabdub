@@ -1,4 +1,4 @@
-import { Entity, Column } from 'typeorm';
+import { Entity, Column, Index } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Role } from '../../rbac/rbac.types';
 import { TierName } from '../../tier-config/entities/tier-config.entity';
@@ -26,7 +26,8 @@ export class User extends BaseEntity {
   @Column({ name: 'email_verified', default: false })
   emailVerified!: boolean;
 
-  @Column({ unique: true, length: 50 })
+  @Column({ unique: true, length: 20 })
+  @Index()
   username!: string;
 
   @Column({ name: 'password_hash', length: 255 })
@@ -75,17 +76,6 @@ export class User extends BaseEntity {
 
   @Column({ name: 'is_active', default: true })
   isActive!: boolean;
-
-  // ── Security Features ────────────────────────────────────────
-
-  @Column({ name: 'email_verified', default: false })
-  emailVerified!: boolean;
-
-  @Column({ name: 'phone_verified', default: false })
-  phoneVerified!: boolean;
-
-  @Column({ name: 'pin_hash', length: 255, nullable: true, default: null })
-  pinHash!: string | null;
 
   @Column({ name: 'passkey_id', length: 255, nullable: true, default: null })
   passkeyId!: string | null;

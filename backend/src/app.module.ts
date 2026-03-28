@@ -67,6 +67,9 @@ import { OtpModule } from './otp/otp.module';
 import { PwaModule } from './pwa/pwa.module';
 import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
 import { ComplianceModule } from './compliance/compliance.module';
+import { UsernameModule } from './username/username.module';
+import { SplitsModule } from './splits/splits.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -207,6 +210,14 @@ import { ComplianceModule } from './compliance/compliance.module';
 
     // Wallets — Stellar keypair provisioning + balance sync.
     WalletsModule,
+
+    UsernameModule,
+
+
+    // Splits — split payment requests among multiple users.
+    SplitsModule,
+    FeedbackModule,
+
   ],
   providers: [
     {
@@ -227,7 +238,6 @@ import { ComplianceModule } from './compliance/compliance.module';
     },
   ],
 })
-export class AppModule {}
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(CorrelationIdMiddleware).forRoutes('*');

@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddUserRoleAndAdminPermissions1700000000002 implements MigrationInterface {
   name = 'AddUserRoleAndAdminPermissions1700000000002';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "users_role_enum" AS ENUM (
         'user',
@@ -52,12 +54,12 @@ export class AddUserRoleAndAdminPermissions1700000000002 implements MigrationInt
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_admin_permissions_admin"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_admin_permissions_admin"
       ON "admin_permissions" ("admin_id")
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_admin_permissions_admin_permission"
+      CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "UQ_admin_permissions_admin_permission"
       ON "admin_permissions" ("admin_id", "permission")
     `);
   }

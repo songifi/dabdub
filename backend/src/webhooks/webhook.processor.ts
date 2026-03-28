@@ -65,6 +65,7 @@ export class WebhookProcessor {
     const payloadJson = JSON.stringify(delivery.payload);
     const rawSecret = this.webhooks.decryptRawSecret(sub);
     const sigHex = hmacSha256Hex(payloadJson, rawSecret);
+    const isSandbox = (delivery.payload as { sandbox?: unknown })?.sandbox === true;
 
     const controller = new AbortController();
     const timer = setTimeout(
@@ -80,6 +81,7 @@ export class WebhookProcessor {
           'Content-Type': 'application/json',
           'X-Cheese-Event': delivery.event,
           'X-Cheese-Signature': `sha256=${sigHex}`,
+          'X-Cheese-Sandbox': isSandbox ? 'true' : 'false',
           'X-Correlation-Id': (job as any).id?.toString?.() ?? undefined,
         } as any,
         body: payloadJson,

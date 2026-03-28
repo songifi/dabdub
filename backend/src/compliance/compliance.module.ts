@@ -1,5 +1,6 @@
 import { BullModule } from '@nestjs/bull';
 import { Module, OnModuleInit } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { EmailModule } from '../email/email.module';
@@ -15,6 +16,7 @@ import {
   COMPLIANCE_QUEUE,
   ComplianceDashboardService,
 } from './compliance.service';
+import { AmlService } from './aml.service';
 import { ComplianceEvent } from './entities/compliance-event.entity';
 import { SuspiciousActivityReport } from './entities/suspicious-activity-report.entity';
 
@@ -30,13 +32,14 @@ import { SuspiciousActivityReport } from './entities/suspicious-activity-report.
       TierConfig,
     ]),
     BullModule.registerQueue({ name: COMPLIANCE_QUEUE }),
+    HttpModule,
     RbacModule,
     AuditModule,
     EmailModule,
   ],
   controllers: [ComplianceController],
-  providers: [ComplianceDashboardService, ComplianceProcessor],
-  exports: [ComplianceDashboardService],
+  providers: [ComplianceDashboardService, AmlService, ComplianceProcessor],
+  exports: [ComplianceDashboardService, AmlService],
 })
 export class ComplianceModule implements OnModuleInit {
   constructor(

@@ -7,6 +7,8 @@ export enum ReportType {
   FEE_SUMMARY = 'fee_summary',
   KYC_SUBMISSIONS = 'kyc_submissions',
   WAITLIST_EXPORT = 'waitlist_export',
+  GDPR_EXPORT = 'gdpr_export',
+  ACCOUNT_STATEMENT = 'account_statement',
 }
 
 export enum ReportStatus {

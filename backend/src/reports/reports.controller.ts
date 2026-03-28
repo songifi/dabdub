@@ -15,6 +15,7 @@ import { ReportsService } from './reports.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { SuperAdminGuard } from '../common/guards/super-admin.guard';
 import { User } from '../users/entities/user.entity';
+import { AccountStatementRequestDto } from './dto/account-statement-request.dto';
 
 type AuthReq = Request & { user: User };
 
@@ -41,6 +42,38 @@ export class ReportsController {
   @ApiOperation({ summary: 'Get a specific report job (own only)' })
   getOne(@Req() req: AuthReq, @Param('id') id: string) {
     return this.reportsService.getForUser(req.user.id, id);
+  }
+
+  @Post('account/export/data')
+  @ApiOperation({ summary: 'Request GDPR data export (one every 30 days)' })
+  requestGdprExport(@Req() req: AuthReq) {
+    return this.reportsService.requestGdprExport(req.user.id);
+  }
+
+  @Post('account/export/statement')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @ApiOperation({ summary: 'Request account statement export (max 12 months)' })
+  requestAccountStatement(
+    @Req() req: AuthReq,
+    @Body() body: AccountStatementRequestDto,
+  ) {
+    return this.reportsService.requestAccountStatement(
+      req.user.id,
+      body.dateFrom,
+      body.dateTo,
+    );
+  }
+
+  @Get('account/exports')
+  @ApiOperation({ summary: 'List account export requests for current user' })
+  listAccountExports(@Req() req: AuthReq) {
+    return this.reportsService.listAccountExports(req.user.id);
+  }
+
+  @Get('account/exports/:id')
+  @ApiOperation({ summary: 'Get account export status and download URL when ready' })
+  getAccountExport(@Req() req: AuthReq, @Param('id') id: string) {
+    return this.reportsService.getAccountExport(req.user.id, id);
   }
 
   @UseGuards(SuperAdminGuard)

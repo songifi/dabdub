@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreatePayLinks1700000000004 implements MigrationInterface {
   name = 'CreatePayLinks1700000000004';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "pay_links_status_enum" AS ENUM ('active', 'paid', 'cancelled', 'expired')
     `);
@@ -30,12 +32,12 @@ export class CreatePayLinks1700000000004 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_pay_links_creator_status_created"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_pay_links_creator_status_created"
       ON "pay_links" ("creator_user_id", "status", "createdAt" DESC)
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_pay_links_status_expires"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_pay_links_status_expires"
       ON "pay_links" ("status", "expires_at")
     `);
   }

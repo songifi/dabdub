@@ -1,7 +1,10 @@
-import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 export class CreateTransactionsTable1740446400000 implements MigrationInterface {
+  public transaction = false;
+
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.createTable(
       new Table({
         name: 'transactions',
@@ -95,31 +98,16 @@ export class CreateTransactionsTable1740446400000 implements MigrationInterface 
     );
 
     // Create indexes
-    await queryRunner.createIndex(
-      'transactions',
-      new TableIndex({
-        name: 'idx_transactions_user_id_created_at_desc',
-        columnNames: ['user_id', 'created_at'],
-        isUnique: false,
-      }),
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_transactions_user_id_created_at_desc" ON "transactions" ("user_id", "created_at")`,
     );
 
-    await queryRunner.createIndex(
-      'transactions',
-      new TableIndex({
-        name: 'idx_transactions_user_id_type_created_at_desc',
-        columnNames: ['user_id', 'type', 'created_at'],
-        isUnique: false,
-      }),
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_transactions_user_id_type_created_at_desc" ON "transactions" ("user_id", "type", "created_at")`,
     );
 
-    await queryRunner.createIndex(
-      'transactions',
-      new TableIndex({
-        name: 'idx_transactions_reference',
-        columnNames: ['reference'],
-        isUnique: false,
-      }),
+    await queryRunner.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_transactions_reference" ON "transactions" ("reference")`,
     );
   }
 

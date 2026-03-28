@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateWebhooks1700000000001 implements MigrationInterface {
   name = 'CreateWebhooks1700000000001';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "webhook_subscriptions" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -20,7 +22,7 @@ export class CreateWebhooks1700000000001 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_webhook_subscriptions_user_active"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_webhook_subscriptions_user_active"
       ON "webhook_subscriptions" ("user_id", "is_active")
     `);
 
@@ -44,12 +46,12 @@ export class CreateWebhooks1700000000001 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_webhook_deliveries_subscription_created"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_webhook_deliveries_subscription_created"
       ON "webhook_deliveries" ("subscription_id", "createdAt")
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_webhook_deliveries_next_retry_at"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_webhook_deliveries_next_retry_at"
       ON "webhook_deliveries" ("next_retry_at")
     `);
   }

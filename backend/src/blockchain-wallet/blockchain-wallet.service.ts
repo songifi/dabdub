@@ -17,6 +17,7 @@ import {
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { BlockchainWallet } from './entities/blockchain-wallet.entity';
 import { SorobanService } from './soroban.service';
+import { StellarAssetService } from '../stellar/stellar-asset.service';
 
 export const WALLET_PROVISIONED_EVENT = 'wallet.provisioned';
 
@@ -30,6 +31,7 @@ export class BlockchainWalletService {
     @InjectRepository(BlockchainWallet)
     private readonly walletRepo: Repository<BlockchainWallet>,
     private readonly sorobanService: SorobanService,
+    private readonly stellarAssetService: StellarAssetService,
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
   ) {
@@ -66,6 +68,7 @@ export class BlockchainWalletService {
 
     // 4. Register on Soroban contract
     try {
+      await this.stellarAssetService.ensureTrustLine(publicKey, secretKey);
       await this.sorobanService.registerUser(username, publicKey);
     } catch (err: any) {
       this.logger.warn(`Soroban registerUser failed for ${userId}: ${err.message}`);

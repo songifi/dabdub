@@ -37,8 +37,13 @@ const mockEmailService = {
   queue: jest.fn().mockResolvedValue({}),
 };
 
+const mockUserRepo = {
+  findOne: jest.fn().mockResolvedValue({ id: 'user-uuid-1', email: 'user@example.com' }),
+};
+
 const mockDataSource = {
   query: jest.fn().mockResolvedValue([]),
+  getRepository: jest.fn().mockReturnValue(mockUserRepo),
 };
 
 const mockR2Config = {
@@ -129,6 +134,25 @@ describe('ReportsProcessor', () => {
 
       const secondCall = mockReportsService.update.mock.calls[1];
       expect(secondCall[1].fileUrl).toMatch(/^https:\/\//);
+    });
+
+    it('uses 48-hour expiry for GDPR export download links', async () => {
+      const reportJob = makeJob({
+        type: ReportType.GDPR_EXPORT,
+        params: {},
+      });
+      mockReportsService.findById.mockResolvedValue(reportJob);
+      jest
+        .spyOn(processor as any, 'generateGdprZip')
+        .mockResolvedValue(Buffer.from('zip'));
+
+      await processor.handleGenerate(makeBullJob({ jobId: reportJob.id }));
+
+      const secondCall = mockReportsService.update.mock.calls[1];
+      const expiresAt = secondCall[1].expiresAt as Date;
+      const hours = Math.round((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60));
+      expect(hours).toBeGreaterThanOrEqual(47);
+      expect(hours).toBeLessThanOrEqual(48);
     });
 
     it('skips gracefully when job not found', async () => {

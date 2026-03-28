@@ -7,6 +7,7 @@ import { Role } from '../../rbac/enums/role.enum';
 import { ContractEventListenerService } from '../services/contract-event-listener.service';
 import { ContractEventType } from '../entities/contract-event-log.entity';
 import { PaginatedContractEventsDto, PaginatedReconciliationAlertsDto } from '../dto/soroban.dto';
+import { StellarAssetService } from '../../stellar/stellar-asset.service';
 
 /**
  * SorobanAdminController
@@ -20,7 +21,10 @@ import { PaginatedContractEventsDto, PaginatedReconciliationAlertsDto } from '..
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPER_ADMIN)
 export class SorobanAdminController {
-  constructor(private readonly contractEventListenerService: ContractEventListenerService) {}
+  constructor(
+    private readonly contractEventListenerService: ContractEventListenerService,
+    private readonly stellarAssetService: StellarAssetService,
+  ) {}
 
   /**
    * GET /admin/blockchain/events
@@ -141,5 +145,11 @@ export class SorobanAdminController {
   ): Promise<{ message: string }> {
     await this.contractEventListenerService.resolveAlert(alertId, resolvedNote);
     return { message: `Alert ${alertId} marked as resolved` };
+  }
+
+  @Get('account/:address')
+  @ApiOperation({ summary: 'Get full Stellar account details including trust lines and balances' })
+  async getAccountDetails(@Param('address') address: string) {
+    return this.stellarAssetService.getAccountDetails(address);
   }
 }

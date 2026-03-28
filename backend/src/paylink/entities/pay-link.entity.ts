@@ -51,4 +51,7 @@ export class PayLink extends BaseEntity {
     default: null,
   })
   paymentTxHash!: string | null;
+
+  @Column({ name: 'sandbox', type: 'boolean', default: false })
+  sandbox!: boolean;
 }

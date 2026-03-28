@@ -19,8 +19,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
  */
 export class AddPerformanceIndexes1700000000006 implements MigrationInterface {
   name = 'AddPerformanceIndexes1700000000006';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     // ====================================================================
     // Users Table Indexes
     // ====================================================================

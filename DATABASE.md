@@ -1,5 +1,92 @@
 # Database — Indexing Strategy & Query Optimization
 
+## Migration Safety Rules (Zero-Downtime)
+
+These rules apply to all production migrations.
+
+1. Never `DROP COLUMN` in the same release where code stops using it.
+   Use a two-release (or three-phase) strategy.
+2. Always use `ADD COLUMN IF NOT EXISTS`.
+3. Always use `CREATE INDEX CONCURRENTLY` (never plain `CREATE INDEX`).
+4. Never rename columns in-place.
+   Add new column, backfill, migrate code, then drop old column later.
+
+### Lock Safety
+
+- Set `lock_timeout = '5s'` at the start of every migration `up()`.
+- For migrations creating indexes concurrently, set `transaction = false` on the migration class (Postgres requirement).
+
+### Migration Helper
+
+Use `MigrationHelper` from [backend/src/database/migration.helper.ts](backend/src/database/migration.helper.ts):
+
+- `MigrationHelper.addColumnIfNotExists(runner, table, column, definition)`
+- `MigrationHelper.dropColumnIfExists(runner, table, column)`
+- `MigrationHelper.createIndexConcurrently(runner, name, table, columns)`
+
+### Template: Safe Column Addition (3-Phase)
+
+Phase 1 (schema)
+
+```ts
+// migration phase 1
+await queryRunner.query("SET lock_timeout = '5s'");
+await MigrationHelper.addColumnIfNotExists(
+  queryRunner,
+  'users',
+  'new_col',
+  'text NULL',
+);
+```
+
+Code phase
+
+```ts
+// app code update
+// write to both old_col and new_col, read from old_col with fallback to new_col
+```
+
+Phase 2 (backfill + enforce)
+
+```ts
+// migration phase 2
+await queryRunner.query("SET lock_timeout = '5s'");
+await queryRunner.query(
+  `UPDATE "users" SET "new_col" = "old_col" WHERE "new_col" IS NULL`,
+);
+await queryRunner.query(
+  `ALTER TABLE "users" ALTER COLUMN "new_col" SET NOT NULL`,
+);
+```
+
+Phase 3 (cleanup after code no longer uses old column)
+
+```ts
+// migration phase 3 (future release)
+await queryRunner.query("SET lock_timeout = '5s'");
+await MigrationHelper.dropColumnIfExists(queryRunner, 'users', 'old_col');
+```
+
+### Template: Safe Index Creation
+
+```ts
+export class AddUsersEmailIndex1700000000000 implements MigrationInterface {
+  name = 'AddUsersEmailIndex1700000000000';
+  public transaction = false;
+
+  async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
+    await MigrationHelper.createIndexConcurrently(
+      queryRunner,
+      'IDX_users_email',
+      'users',
+      ['email'],
+      true,
+    );
+  }
+}
+```
+
 ## Overview
 
 As the platform scales, query performance becomes critical. This document describes the indexing strategy, documents which indexes serve which queries, and outlines the maintenance schedule.

@@ -10,11 +10,13 @@ import { WithdrawalProcessor } from './processors/withdrawal.processor';
 import { SorobanModule } from '../soroban/soroban.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BalanceModule } from '../balance/balance.module';
+import { COMPLIANCE_QUEUE } from '../compliance/compliance.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Withdrawal, FeeConfig, Transaction]),
     BullModule.registerQueue({ name: WITHDRAWAL_QUEUE }),
+    BullModule.registerQueue({ name: COMPLIANCE_QUEUE }),
     SorobanModule,
     NotificationsModule,
     BalanceModule,

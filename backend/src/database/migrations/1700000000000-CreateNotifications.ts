@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateNotifications1700000000000 implements MigrationInterface {
   name = 'CreateNotifications1700000000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE IF NOT EXISTS "notifications_type_enum" AS ENUM (
         'transfer_received',
@@ -33,7 +35,7 @@ export class CreateNotifications1700000000000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_notifications_user_read_created"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_notifications_user_read_created"
       ON "notifications" ("user_id", "is_read", "created_at" DESC)
     `);
   }

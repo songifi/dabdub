@@ -22,6 +22,8 @@ import { ComplianceDashboardService } from './compliance.service';
 import { CreateSarDto } from './dto/create-sar.dto';
 import { QueryHighRiskUsersDto } from './dto/query-high-risk-users.dto';
 import { QuerySarsDto } from './dto/query-sars.dto';
+import { QueryComplianceEventsDto } from './dto/query-compliance-events.dto';
+import { ClearComplianceEventDto } from './dto/clear-compliance-event.dto';
 
 type AuthReq = Request & { user: { id: string } };
 
@@ -58,6 +60,48 @@ export class ComplianceController {
   getTransactionPatterns(@Param('id') id: string) {
     return this.complianceService.getTransactionPatterns(id);
   }
+
+  @Get('users/:id/summary')
+  @ApiOperation({ summary: 'Get compliance summary for a user' })
+  @Roles(Role.Admin, Role.SuperAdmin)
+  @Permissions(Permission.ComplianceReview)
+  getUserSummary(@Param('id') id: string) {
+    return this.complianceService.getUserComplianceSummary(id);
+  }
+
+  // ── Compliance Events ──────────────────────────────────────────────────────
+
+  @Get('events')
+  @ApiOperation({ summary: 'List compliance events (paginated, filterable)' })
+  @Roles(Role.Admin, Role.SuperAdmin)
+  @Permissions(Permission.ComplianceReview)
+  listEvents(@Query() query: QueryComplianceEventsDto) {
+    return this.complianceService.listEvents(query);
+  }
+
+  @Patch('events/:id/clear')
+  @ApiOperation({ summary: 'Clear a compliance event; unfreezes user if auto-frozen' })
+  @Roles(Role.Admin, Role.SuperAdmin)
+  @Permissions(Permission.ComplianceReview)
+  @Audit({ action: 'compliance.event.clear', resourceType: 'compliance_event', resourceIdParam: 'id' })
+  clearEvent(
+    @Param('id') id: string,
+    @Body() dto: ClearComplianceEventDto,
+    @Req() req: AuthReq,
+  ) {
+    return this.complianceService.clearEvent(id, req.user.id, dto.note);
+  }
+
+  @Patch('events/:id/escalate')
+  @ApiOperation({ summary: 'Escalate a compliance event; notifies SuperAdmins' })
+  @Roles(Role.Admin, Role.SuperAdmin)
+  @Permissions(Permission.ComplianceReview)
+  @Audit({ action: 'compliance.event.escalate', resourceType: 'compliance_event', resourceIdParam: 'id' })
+  escalateEvent(@Param('id') id: string, @Req() req: AuthReq) {
+    return this.complianceService.escalateEvent(id, req.user.id);
+  }
+
+  // ── SAR ────────────────────────────────────────────────────────────────────
 
   @Post('sar')
   @ApiOperation({ summary: 'Create a suspicious activity report draft' })

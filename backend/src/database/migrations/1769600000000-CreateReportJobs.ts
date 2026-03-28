@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateReportJobs1769600000000 implements MigrationInterface {
   name = 'CreateReportJobs1769600000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TYPE "report_type_enum" AS ENUM (
         'user_transactions', 'merchant_settlements', 'fee_summary',
@@ -29,9 +31,9 @@ export class CreateReportJobs1769600000000 implements MigrationInterface {
         CONSTRAINT "PK_report_jobs_id" PRIMARY KEY ("id")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_report_jobs_requested_by" ON "report_jobs" ("requested_by")`);
-    await queryRunner.query(`CREATE INDEX "IDX_report_jobs_status"       ON "report_jobs" ("status")`);
-    await queryRunner.query(`CREATE INDEX "IDX_report_jobs_expires_at"   ON "report_jobs" ("expires_at")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_report_jobs_requested_by" ON "report_jobs" ("requested_by")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_report_jobs_status"       ON "report_jobs" ("status")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_report_jobs_expires_at"   ON "report_jobs" ("expires_at")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

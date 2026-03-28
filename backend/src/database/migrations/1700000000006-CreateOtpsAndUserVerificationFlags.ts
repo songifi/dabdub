@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateOtpsAndUserVerificationFlags1700000000006 implements MigrationInterface {
   name = 'CreateOtpsAndUserVerificationFlags1700000000006';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       ALTER TABLE "users"
       ADD COLUMN IF NOT EXISTS "email_verified" boolean NOT NULL DEFAULT false
@@ -36,12 +38,12 @@ export class CreateOtpsAndUserVerificationFlags1700000000006 implements Migratio
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_otps_user_type_created"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_otps_user_type_created"
       ON "otps" ("user_id", "type", "createdAt" DESC)
     `);
 
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_otps_user_type_used_expires"
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_otps_user_type_used_expires"
       ON "otps" ("user_id", "type", "used_at", "expires_at")
     `);
   }

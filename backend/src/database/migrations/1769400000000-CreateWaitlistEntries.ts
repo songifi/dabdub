@@ -2,8 +2,10 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateWaitlistEntries1769400000000 implements MigrationInterface {
   name = 'CreateWaitlistEntries1769400000000';
+  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "waitlist_entries" (
         "id"               uuid          NOT NULL DEFAULT uuid_generate_v4(),
@@ -23,7 +25,7 @@ export class CreateWaitlistEntries1769400000000 implements MigrationInterface {
         CONSTRAINT "UQ_waitlist_entries_referral_code" UNIQUE ("referral_code")
       )
     `);
-    await queryRunner.query(`CREATE INDEX "IDX_waitlist_entries_ip" ON "waitlist_entries" ("ip_address")`);
+    await queryRunner.query(`CREATE INDEX CONCURRENTLY "IDX_waitlist_entries_ip" ON "waitlist_entries" ("ip_address")`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
