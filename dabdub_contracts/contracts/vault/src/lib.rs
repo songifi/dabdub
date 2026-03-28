@@ -5,8 +5,9 @@ mod test;
 mod token_helpers;
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
+Symbol, String,
     Vec,
+
 };
 
 /// Pending claim record: amounts reserved and expiry ledger for cancellation rules.
@@ -48,10 +49,22 @@ pub enum DataKey {
     AvailableFees,
     TotalFees,
     Paused,
-    PendingClaim(BytesN<32>),
+PendingClaim(BytesN<32>),
+    StakedBalance(String),
+    LiquidBalance(String),
+    StakeStartLedger(String),
 }
 
 const MAX_FEE: i128 = 5_000_000;
+
+#[contracttype]
+pub enum Error {
+    InsufficientBalance,
+    InvalidAmount,
+    UserNotFound,
+    Unauthorized,
+    Paused,
+}
 
 #[contractevent(topics = ["VAULT", "payment"])]
 struct PaymentProcessedEvent {
@@ -102,6 +115,14 @@ struct PaymentCancelledEvent {
     fee_amount: i128,
     cancelled_by: Address,
     force: bool,
+}
+
+#[contractevent(topics = ["VAULT", "unstaked"])]
+pub struct UnstakedEvent {
+    pub username: String,
+    pub amount: i128,
+    pub remaining_stake: i128,
+    pub ledger: u32,
 }
 
 /// Ledgers after process_payment after which a claim can be cancelled without force.
@@ -592,8 +613,86 @@ impl Vault {
         .publish(&env);
     }
 
+    /// Stake tokens for user (admin only). Assumes tokens already transferred to vault contract separately.
+    pub fn stake(env: Env, username: String, amount: i128) {
+        let caller = env.invoker();
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            panic!("Contract is paused");
+        }
+
+        if amount <= 0 {
+            panic!("Amount must be > 0");
+        }
+
+        let mut stake: i128 = env.storage().persistent().get(&DataKey::StakedBalance(username.clone())).unwrap_or(0);
+        stake = stake.checked_add(amount).expect("Stake overflow");
+
+        env.storage().persistent().set(&DataKey::StakedBalance(username.clone()), &stake);
+        env.storage().persistent().bump(&DataKey::StakedBalance(username.clone()), 400_000u32, 200_000u32);
+
+        let old_stake = stake - amount;
+        if old_stake == 0 {
+            let current_ledger = env.ledger().sequence() as u32;
+            env.storage().persistent().set(&DataKey::StakeStartLedger(username.clone()), &current_ledger);
+            env.storage().persistent().bump(&DataKey::StakeStartLedger(username.clone()), 400_000u32, 200_000u32);
+        }
+    }
+
+    /// Unstake tokens for user (admin only). Moves staked balance + accrued yield to liquid balance.
+    pub fn unstake(env: Env, username: String, amount: i128) -> Result<(), Error> {
+        let caller = env.invoker();
+        access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
+        caller.require_auth();
+
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            return Err(Error::Paused);
+        }
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let mut stake: i128 = env.storage().persistent().get(&DataKey::StakedBalance(username.clone())).ok_or(Error::UserNotFound)?;
+        if stake < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        // Accrue yield
+        let stake_start: u32 = env.storage().persistent().get(&DataKey::StakeStartLedger(username.clone())).unwrap_or(env.ledger().sequence() as u32);
+        let ledgers_staked = (env.ledger().sequence() as u32).saturating_sub(stake_start);
+        let kledgers = ledgers_staked / 1000u32;
+        let yield_bp_per_kledger = 1i128; // 0.01% per 1000 ledgers
+        let yield_amount = (kledgers as i128 * amount * yield_bp_per_kledger) / 10_000i128;
+        let total_return = amount + yield_amount;
+
+        stake -= amount;
+        env.storage().persistent().set(&DataKey::StakedBalance(username.clone()), &stake);
+        env.storage().persistent().bump(&DataKey::StakedBalance(username.clone()), 400_000u32, 200_000u32);
+
+        let mut liquid: i128 = env.storage().persistent().get(&DataKey::LiquidBalance(username.clone())).unwrap_or(0i128);
+        liquid += total_return;
+        env.storage().persistent().set(&DataKey::LiquidBalance(username.clone()), &liquid);
+        env.storage().persistent().bump(&DataKey::LiquidBalance(username.clone()), 400_000u32, 200_000u32);
+
+        UnstakedEvent {
+            username: username.clone(),
+            amount,
+            remaining_stake: stake,
+            ledger: env.ledger().sequence() as u32,
+        }.publish(&env);
+
+        Ok(())
+    }
+
     /// Pause contract (admin only)
     pub fn pause(env: Env, caller: Address) {
+
+
         access_control::require_role(&env, &caller, access_control::ADMIN_ROLE);
         caller.require_auth();
 
@@ -650,6 +749,14 @@ impl Vault {
             .unwrap_or(0);
         let total = payments + fees;
         (payments, fees, total)
+    }
+
+pub fn get_stake_balance(env: Env, username: String) -> i128 {
+        env.storage().persistent().get(&DataKey::StakedBalance(username)).unwrap_or(0)
+    }
+
+    pub fn get_liquid_balance(env: Env, username: String) -> i128 {
+        env.storage().persistent().get(&DataKey::LiquidBalance(username)).unwrap_or(0)
     }
 
     pub fn is_paused(env: Env) -> bool {
