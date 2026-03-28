@@ -68,6 +68,7 @@ import { OtpModule } from './otp/otp.module';
 import { PwaModule } from './pwa/pwa.module';
 import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
 import { ComplianceModule } from './compliance/compliance.module';
+import { DisputesModule } from './disputes/disputes.module';
 import { UsernameModule } from './username/username.module';
 import { SplitsModule } from './splits/splits.module';
 import { FeedbackModule } from './feedback/feedback.module';
@@ -215,6 +216,8 @@ import { FeedbackModule } from './feedback/feedback.module';
     // Wallets — Stellar keypair provisioning + balance sync.
     WalletsModule,
 
+    // Disputes — transaction chargeback and reversal requests.
+    DisputesModule,
     UsernameModule,
 
 
