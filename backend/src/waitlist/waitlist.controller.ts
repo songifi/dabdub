@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -68,5 +69,35 @@ export class WaitlistController {
     @Query('limit') limit = 20,
   ) {
     return this.waitlistService.adminList(Number(page), Number(limit));
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(SuperAdminGuard)
+  @Get('admin/waitlist/fraud-logs')
+  @ApiOperation({ summary: 'Admin: paginated fraud logs with filters' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'rule', required: false, example: 'IP_RATE_LIMIT' })
+  @ApiQuery({ name: 'action', required: false, example: 'blocked' })
+  getFraudLogs(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('rule') rule?: string,
+    @Query('action') action?: string,
+  ) {
+    return this.fraudService.getFraudLogs(
+      Number(page), 
+      Number(limit), 
+      rule, 
+      action as any
+    );
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(SuperAdminGuard)
+  @Post('admin/waitlist/fraud/reset-ip/:ip')
+  @ApiOperation({ summary: 'Admin: manually reset IP rate limit' })
+  resetIpRateLimit(@Param('ip') ip: string) {
+    return this.fraudService.resetIpRateLimit(ip);
   }
 }
