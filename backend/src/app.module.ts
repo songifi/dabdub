@@ -67,6 +67,7 @@ import { PwaModule } from './pwa/pwa.module';
 import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
 import { ComplianceModule } from './compliance/compliance.module';
 import { SplitsModule } from './splits/splits.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -209,7 +210,7 @@ import { SplitsModule } from './splits/splits.module';
 
     // Splits — split payment requests among multiple users.
     SplitsModule,
-    ProfileModule,
+    FeedbackModule,
   ],
 
   providers: [
