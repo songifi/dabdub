@@ -159,9 +159,7 @@ export class FraudService {
     }
   }
 
-  async findFlags(
-    query: QueryFlagsDto,
-  ): Promise<{
+  async findFlags(query: QueryFlagsDto): Promise<{
     data: FraudFlag[];
     total: number;
     page: number;

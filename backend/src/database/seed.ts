@@ -13,7 +13,13 @@ import 'reflect-metadata';
 import * as bcrypt from 'bcrypt';
 import { DataSource, Repository } from 'typeorm';
 import { AppDataSource } from './data-source';
+import { User, UserRole } from '../users/entities/user.entity';
+import {
+  TierConfig,
+  TierName,
+} from '../tier-config/entities/tier-config.entity';
 import { User } from '../users/entities/user.entity';
+import { Role } from '../rbac/rbac.types';
 import { TierConfig, TierName } from '../tier-config/entities/tier-config.entity';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 
@@ -23,9 +29,12 @@ const BCRYPT_ROUNDS = 12;
 
 // Default passwords — override via env vars in your deployment pipeline.
 const ADMIN_EMAIL = process.env['SEED_ADMIN_EMAIL'] ?? 'admin@system.local';
-const ADMIN_PASSWORD = process.env['SEED_ADMIN_PASSWORD'] ?? 'Admin@System!SecureChangeMe';
-const TREASURY_EMAIL = process.env['SEED_TREASURY_EMAIL'] ?? 'treasury@system.local';
-const TREASURY_PASSWORD = process.env['SEED_TREASURY_PASSWORD'] ?? 'Treasury@System!SecureChangeMe';
+const ADMIN_PASSWORD =
+  process.env['SEED_ADMIN_PASSWORD'] ?? 'Admin@System!SecureChangeMe';
+const TREASURY_EMAIL =
+  process.env['SEED_TREASURY_EMAIL'] ?? 'treasury@system.local';
+const TREASURY_PASSWORD =
+  process.env['SEED_TREASURY_PASSWORD'] ?? 'Treasury@System!SecureChangeMe';
 
 // ── Seed definitions ───────────────────────────────────────────────────────────
 
@@ -35,7 +44,7 @@ interface UserSeed {
   displayName: string;
   isAdmin: boolean;
   isTreasury: boolean;
-} 
+}
 
 const USER_SEEDS: UserSeed[] = [
   {
@@ -65,22 +74,22 @@ interface TierSeed {
 const TIER_SEEDS: TierSeed[] = [
   {
     name: TierName.SILVER,
-    minBalance: '0',           // default tier — everyone starts here
-    feeMultiplier: '1.0000',  // no discount
+    minBalance: '0', // default tier — everyone starts here
+    feeMultiplier: '1.0000', // no discount
     dailyLimit: '1000.00000000',
     monthlyLimit: '10000.00000000',
   },
   {
     name: TierName.GOLD,
     minBalance: '10000.00000000',
-    feeMultiplier: '0.8000',  // 20 % fee discount
+    feeMultiplier: '0.8000', // 20 % fee discount
     dailyLimit: '5000.00000000',
     monthlyLimit: '50000.00000000',
   },
   {
     name: TierName.BLACK,
     minBalance: '100000.00000000',
-    feeMultiplier: '0.5000',  // 50 % fee discount
+    feeMultiplier: '0.5000', // 50 % fee discount
     dailyLimit: '50000.00000000',
     monthlyLimit: '500000.00000000',
   },
@@ -135,6 +144,8 @@ async function seedUsers(repo: Repository<User>): Promise<void> {
         passwordHash,
         displayName: seed.displayName,
         isAdmin: seed.isAdmin,
+        role: seed.isAdmin ? Role.Admin : Role.User,
+        isMerchant: false,
         isTreasury: seed.isTreasury,
         isActive: true,
       }),

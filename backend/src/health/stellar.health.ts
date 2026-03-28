@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HealthIndicator, HealthIndicatorResult, HealthCheckError } from '@nestjs/terminus';
+import {
+  HealthIndicator,
+  HealthIndicatorResult,
+  HealthCheckError,
+} from '@nestjs/terminus';
 import { Inject } from '@nestjs/common';
 import { stellarConfig } from '../config';
 import type { StellarConfig } from '../config';

@@ -6,7 +6,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { jwtConfig } from '../../config/jwt.config';
 import { User } from '../../users/entities/user.entity';
+import { Admin } from '../../admin/entities/admin.entity';
 import type { JwtPayload } from '../auth.service';
+
+interface ExtendedJwtPayload extends JwtPayload {
+  isAdmin?: boolean;
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -16,6 +21,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+
+    @InjectRepository(Admin)
+    private readonly adminRepo: Repository<Admin>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -24,7 +32,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload): Promise<User> {
+  async validate(payload: ExtendedJwtPayload): Promise<User | Admin> {
+    if (payload.isAdmin) {
+      const admin = await this.adminRepo.findOne({
+        where: { id: payload.sub },
+      });
+      if (!admin) {
+        throw new Error('Unauthorized');
+      }
+      return admin;
+    }
+
     const user = await this.userRepo.findOne({ where: { id: payload.sub } });
     if (!user || !user.isActive) {
       throw new Error('Unauthorized');

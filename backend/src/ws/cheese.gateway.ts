@@ -78,7 +78,7 @@ export class CheeseGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await client.join(userRoom);
     await this.redis.hset(`${REDIS_WS_PREFIX}${payload.sub}`, client.id, '1');
 
-    if (payload.role === 'admin') {
+    if (payload.role === 'admin' || payload.role === 'super_admin') {
       await client.join('admin');
     }
 
@@ -93,7 +93,11 @@ export class CheeseGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  async emitToUser(userId: string, event: string, data: unknown): Promise<void> {
+  async emitToUser(
+    userId: string,
+    event: string,
+    data: unknown,
+  ): Promise<void> {
     const sockets = await this.redis.hkeys(`${REDIS_WS_PREFIX}${userId}`);
     if (sockets.length === 0) return;
     this.server.to(`user:${userId}`).emit(event, data);
