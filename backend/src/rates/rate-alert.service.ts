@@ -120,9 +120,4 @@ export class RateAlertService {
     await this.alertRepo.update(alertId, { status: AlertStatus.CANCELLED });
     return { ...alert, status: AlertStatus.CANCELLED };
   }
-
-  async getRateHistory(): Promise<unknown[]> {
-    // Delegated to RatesService — this method exists for controller wiring
-    return [];
-  }
 }

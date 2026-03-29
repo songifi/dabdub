@@ -9,6 +9,13 @@ import { EmailService } from '../email/email.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RateAlert } from './entities/rate-alert.entity';
+import { User } from '../users/entities/user.entity';
+
+function formatNgn(value: string): string {
+  const n = parseFloat(value);
+  if (Number.isNaN(n)) return value;
+  return n.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+}
 
 @Processor(RATE_ALERT_QUEUE)
 export class RateAlertProcessor {
@@ -20,12 +27,16 @@ export class RateAlertProcessor {
     private readonly emailService: EmailService,
     @InjectRepository(RateAlert)
     private readonly alertRepo: Repository<RateAlert>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   @Process(FIRE_RATE_ALERT_JOB)
   async handleFireAlert(job: Job<FireRateAlertPayload>): Promise<void> {
     const { alertId, userId, targetRate, currentRate } = job.data;
-    const message = `NGN/USDC rate hit your target of ₦${targetRate}. Current rate: ₦${currentRate}`;
+    const t = formatNgn(targetRate);
+    const c = formatNgn(currentRate);
+    const message = `NGN/USDC rate hit your target of ₦${t}. Current rate: ₦${c}`;
 
     const channels: string[] = [];
 
@@ -53,14 +64,18 @@ export class RateAlertProcessor {
     }
 
     try {
-      // email address resolved at send time by the email processor via userId lookup
-      await this.emailService.queue(
-        userId, // treated as userId; email processor resolves address
-        'RATE_ALERT_TRIGGERED',
-        { targetRate, currentRate, message },
-        userId,
-      );
-      channels.push('email');
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (user?.email) {
+        await this.emailService.queue(
+          user.email,
+          'rate-alert-triggered',
+          { targetRate: t, currentRate: c, message },
+          userId,
+        );
+        channels.push('email');
+      } else {
+        this.logger.warn(`No email for user ${userId}; skipping rate alert email`);
+      }
     } catch (err) {
       this.logger.warn(`Email failed for alert ${alertId}: ${(err as Error).message}`);
     }

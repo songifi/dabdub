@@ -20,6 +20,7 @@ export enum TicketCategory {
   KYC = 'kyc',
   WITHDRAWAL = 'withdrawal',
   GENERAL = 'general',
+  DISPUTE = 'dispute',
 }
 
 export enum TicketStatus {
@@ -91,6 +92,9 @@ export class SupportTicket extends BaseEntity {
   @ManyToOne(() => Transaction, { nullable: true })
   @JoinColumn({ name: 'transaction_id' })
   transaction?: Transaction;
+
+  @Column({ name: 'dispute_id', type: 'uuid', nullable: true, default: null })
+  disputeId!: string | null;
 
   @Column({ name: 'resolved_at', type: 'timestamptz', nullable: true })
   resolvedAt!: Date | null;

@@ -17,6 +17,7 @@ import { NotificationService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notifications.types';
 import { R2Service } from '../r2/r2.service';
 import { PremblyService, VerifyResult } from '../prembly/prembly.service';
+import { TierUpgradeService } from '../tier-config/tier-upgrade.service';
 
 @Injectable()
 export class KycService {
@@ -31,6 +32,7 @@ export class KycService {
     private readonly emailService: EmailService,
     private readonly notificationService: NotificationService,
     private readonly premblyService: PremblyService,
+    private readonly tierUpgradeService: TierUpgradeService,
   ) {}
 
   // ── User endpoints ──────────────────────────────────────────────────────────
@@ -130,27 +132,31 @@ export class KycService {
     submission.reviewedAt = new Date();
     await this.repo.save(submission);
 
-    const newTier = submission.targetTier as TierName;
     await this.userRepo.update(submission.userId, {
-      tier: newTier,
       kycStatus: KycStatus.APPROVED,
     });
 
+    const upgradedViaPending = await this.tierUpgradeService.checkAutoUpgrade(
+      submission.userId,
+    );
+
+    if (!upgradedViaPending) {
+      await this.tierUpgradeService.applySubmissionTierAfterKyc(
+        submission.userId,
+        submission.targetTier as TierName,
+      );
+    }
+
     const user = await this.userRepo.findOne({ where: { id: submission.userId } });
+    const effectiveTier = user?.tier ?? (submission.targetTier as TierName);
 
     await this.notificationService.create(
       submission.userId,
       NotificationType.TIER_UPGRADED,
       'KYC Approved',
-      `Your KYC has been approved. You are now on the ${newTier} tier.`,
-      { submissionId: id, tier: newTier },
+      `Your KYC has been approved. You are now on the ${effectiveTier} tier.`,
+      { submissionId: id, tier: effectiveTier },
     );
-
-    if (user) {
-      this.emailService
-        .queue(user.email, 'kyc-approved', { tier: newTier })
-        .catch(() => undefined);
-    }
 
     return submission;
   }

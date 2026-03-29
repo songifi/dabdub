@@ -84,14 +84,34 @@ export class RatesService {
     return snapshot;
   }
 
-  async getRateHistory(): Promise<RateSnapshot[]> {
+  /**
+   * Last 7 days of USDC/NGN, one row per clock hour (mean rate within the hour).
+   * Suitable for exchange screen charts without returning every 30s poll row.
+   */
+  async getRateHistory(): Promise<
+    Array<{ fetchedAt: Date; rate: string; source: string }>
+  > {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    return this.snapshotRepo
-      .createQueryBuilder('s')
-      .where('s.base = :base AND s.quote = :quote', { base: 'USDC', quote: 'NGN' })
-      .andWhere('s.fetchedAt >= :since', { since: sevenDaysAgo })
-      .orderBy('s.fetchedAt', 'ASC')
-      .getMany();
+    const rows = await this.snapshotRepo.manager.query<
+      Array<{ bucket: Date; rate: string }>
+    >(
+      `
+      SELECT
+        date_trunc('hour', s.fetched_at) AS bucket,
+        (AVG(s.rate::numeric))::text AS rate
+      FROM rate_snapshots s
+      WHERE s.base = $1 AND s.quote = $2 AND s.fetched_at >= $3
+      GROUP BY 1
+      ORDER BY 1 ASC
+      `,
+      ['USDC', 'NGN', sevenDaysAgo],
+    );
+
+    return rows.map((r) => ({
+      fetchedAt: r.bucket,
+      rate: r.rate,
+      source: 'hourly_avg',
+    }));
   }
 
   /** Converts NGN amount to USDC using the latest stored NGN-per-USDC rate. */

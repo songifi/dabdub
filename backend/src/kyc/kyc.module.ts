@@ -9,6 +9,7 @@ import { EmailModule } from '../email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { R2Module } from '../r2/r2.module';
 import { PremblyModule } from '../prembly/prembly.module';
+import { TierConfigModule } from '../tier-config/tier-config.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PremblyModule } from '../prembly/prembly.module';
     NotificationsModule,
     R2Module,
     PremblyModule,
+    TierConfigModule,
   ],
   providers: [KycService],
   controllers: [KycController],

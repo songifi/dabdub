@@ -8,6 +8,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PushModule } from '../push/push.module';
 import { RateSnapshot } from './entities/rate-snapshot.entity';
 import { RateAlert } from './entities/rate-alert.entity';
+import { User } from '../users/entities/user.entity';
 import { RatesService } from './rates.service';
 import { RatesProcessor } from './rates.processor';
 import { RatesController } from './rates.controller';
@@ -16,7 +17,7 @@ import { RateAlertProcessor } from './rate-alert.processor';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RateSnapshot, RateAlert]),
+    TypeOrmModule.forFeature([RateSnapshot, RateAlert, User]),
     CacheModule,
     BullModule.registerQueue({ name: 'rates' }),
     BullModule.registerQueue({ name: RATE_ALERT_QUEUE }),

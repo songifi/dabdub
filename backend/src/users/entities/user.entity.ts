@@ -42,7 +42,7 @@ export class User extends BaseEntity {
   @Column({ name: 'phone_verified', default: false })
   phoneVerified!: boolean;
 
-@Column({ name: 'display_name', length: 100, nullable: true, default: null })
+  @Column({ name: 'display_name', length: 100, nullable: true, default: null })
   displayName!: string | null;
 
   @Column({ length: 160, nullable: true, default: null })
@@ -63,6 +63,19 @@ export class User extends BaseEntity {
     default: TierName.SILVER,
   })
   tier!: TierName;
+
+  /**
+   * Target tier from an in-app upgrade while KYC is not yet approved.
+   * Cleared after automatic or manual tier application.
+   */
+  @Column({
+    name: 'pending_tier_upgrade',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+    default: null,
+  })
+  pendingTierUpgrade!: TierName | null;
 
   @Column({
     name: 'kyc_status',
