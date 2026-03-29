@@ -45,6 +45,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { PasskeyModule } from './passkey/passkey.module';
 import { SecurityModule } from './security/security.module';
 import { SandboxModule } from './sandbox/sandbox.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { MaintenanceWindowMiddleware } from './maintenance/middleware/maintenance-window.middleware';
 
@@ -164,6 +165,7 @@ import { FlutterwaveModule } from './flutterwave/flutterwave.module';
     WithdrawalsModule,
     SecurityModule,
     SandboxModule,
+    FeatureFlagsModule,
     MaintenanceModule,
     AlertModule,
     GroupsModule,
