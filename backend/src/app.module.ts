@@ -80,6 +80,7 @@ import { FeesModule } from './fees/fees.module';
 import { DeepLinkModule } from './deeplink/deeplink.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 import { FeatureFlagModule } from './feature-flags/feature-flag.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -245,6 +246,9 @@ import { FeatureFlagModule } from './feature-flags/feature-flag.module';
 
     // User-level feature flags (rollouts, A/B) — Redis-cached evaluation.
     FeatureFlagModule,
+
+    // Global search — users, transactions, paylinks.
+    SearchModule,
 
   ],
 
