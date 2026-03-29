@@ -1,0 +1,29 @@
+﻿
+> cheese-backend@0.0.1 test C:\Users\tomio\Desktop\dabdub\backend
+> jest "--testPathPattern=offramp"
+
+node.exe : 'jest' is not 
+recognized as an internal 
+or external command,
+At C:\Users\tomio\AppData\
+Roaming\npm\pnpm.ps1:24 
+char:5
++     & "node$exe"  "$base
+dir/node_modules/pnpm/bin/
+pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: ('  
+  jest' is not r...tern   
+ al command,:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+operable program or batch 
+file.
+ΓÇëELIFECYCLEΓÇë Test failed. See above for more details.
+ΓÇëWARNΓÇë  Local package.json exists, but node_modules missing, did you mean to install?
