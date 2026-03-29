@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, LessThanOrEqual } from 'typeorm';
+import { Repository, MoreThan, LessThanOrEqual, And } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { CacheService } from '../cache/cache.service';
@@ -21,7 +21,7 @@ export const MAINTENANCE_QUEUE = 'maintenance';
 
 export interface MaintenanceJobPayload {
   windowId: string;
-  action: 'start' | 'end' | 'notify_24h' | 'notify_1h';
+  action: 'start' | 'end' | 'notify_24h' | 'notify_1h' | 'cancel_notify';
 }
 
 @Injectable()
@@ -52,8 +52,7 @@ export class MaintenanceService {
     const windows = await this.windowRepo.find({
       where: {
         status: MaintenanceStatus.SCHEDULED,
-        startAt: MoreThan(now),
-        startAt: LessThanOrEqual(next72h),
+        startAt: And(MoreThan(now), LessThanOrEqual(next72h)),
       },
       order: { startAt: 'ASC' },
     });
@@ -138,10 +137,15 @@ export class MaintenanceService {
     
     // Remove scheduled jobs
     await this.removeJobs(id);
-    
+
+    await this.maintenanceQueue.add(
+      { windowId: id, action: 'cancel_notify' },
+      { removeOnComplete: true },
+    );
+
     // Invalidate cache
     await this.invalidateCache();
-    
+
     this.logger.log(`Maintenance window cancelled: ${id}`);
     
     return updated;

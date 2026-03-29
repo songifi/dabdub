@@ -6,10 +6,12 @@ import { FileUpload } from './entities/file-upload.entity';
 import { UploadService, UPLOAD_QUEUE, CLEANUP_JOB } from './upload.service';
 import { UploadController } from './upload.controller';
 import { UploadProcessor } from './upload.processor';
+import { R2Module } from '../r2/r2.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([FileUpload]),
+    R2Module,
     BullModule.registerQueue({
       name: UPLOAD_QUEUE,
       defaultJobOptions: { removeOnComplete: true },

@@ -41,3 +41,24 @@ process.env.FLUTTERWAVE_WEBHOOK_SECRET = 'test';
 process.env.WEBAUTHN_RP_ID = 'localhost';
 process.env.WEBAUTHN_ORIGIN = 'http://localhost:3000';
 process.env.WALLET_ENCRYPTION_KEY = 'test-wallet-encryption-key-32chars!!';
+
+// Required by AppConfigModule Joi schema when any import pulls in `src/config` barrel (e.g. via redis.module).
+process.env.BULL_BOARD_USERNAME = 'test-bull-board';
+process.env.BULL_BOARD_PASSWORD = 'test-bull-board-secret';
+process.env.STELLAR_RECEIVE_ADDRESS =
+  'GDMXN67BPZJWG4R7M6YMTBWOUIURNHSF34AHPGCBUOPNSWKYSXXPMQOZ';
+process.env.STELLAR_USDC_ISSUER =
+  'GDMXN67BPZJWG4R7M6YMTBWOUIURNHSF34AHPGCBUOPNSWKYSXXPMQOZ';
+process.env.R2_PUBLIC_DOMAIN = 'https://cdn.test.example';
+process.env.FIREBASE_SERVICE_ACCOUNT = '{}';
+process.env.VAPID_PUBLIC_KEY = 'test-vapid-public-key';
+process.env.VAPID_PRIVATE_KEY = 'test-vapid-private-key';
+process.env.SUDO_AFRICA_API_KEY = 'test';
+process.env.SUDO_AFRICA_WEBHOOK_SECRET = 'test';
+process.env.PREMBLY_API_KEY = 'test';
+process.env.PREMBLY_APP_ID = 'test';
+process.env.APPLE_TEAM_ID = 'TESTTEAMID';
+process.env.APPLE_BUNDLE_ID = 'com.test.app';
+process.env.ANDROID_PACKAGE = 'com.test.app';
+process.env.ANDROID_SHA256_FINGERPRINT =
+  'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';

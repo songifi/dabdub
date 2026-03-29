@@ -2,7 +2,12 @@ import { Processor, Process, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import * as Sentry from '@sentry/nestjs';
-import { MaintenanceService, MAINTENANCE_QUEUE, MaintenanceJobPayload } from './maintenance.service';
+import {
+  MaintenanceService,
+  MAINTENANCE_QUEUE,
+  MaintenanceJobPayload,
+} from './maintenance.service';
+import { MaintenanceStatus } from './entities/maintenance-window.entity';
 import { CheeseGateway, WS_EVENTS } from '../ws/cheese.gateway';
 import { EmailService } from '../email/email.service';
 import { PushService } from '../push/push.service';
@@ -49,6 +54,9 @@ export class MaintenanceProcessor {
           case 'notify_1h':
             await this.handleNotification(windowId, '1 hour');
             break;
+          case 'cancel_notify':
+            await this.handleCancelNotify(windowId);
+            break;
           default:
             this.logger.warn(`Unknown maintenance action: ${action}`);
         }
@@ -77,19 +85,23 @@ export class MaintenanceProcessor {
   private async handleStart(windowId: string): Promise<void> {
     try {
       const window = await this.maintenanceService.findById(windowId);
-      
-      // Set status to active
+      if (window.status !== MaintenanceStatus.SCHEDULED) {
+        this.logger.warn(
+          `Skip maintenance start for ${windowId}: status=${window.status}`,
+        );
+        return;
+      }
+
       await this.maintenanceService.setActive(windowId);
-      
-      // Notify all connected WebSocket clients
-      this.wsGateway.emitToAll('system_maintenance_start', {
+
+      this.wsGateway.emitToAll(WS_EVENTS.SYSTEM_MAINTENANCE_START, {
         id: window.id,
         title: window.title,
         description: window.description,
         estimatedRestoration: window.endAt,
         affectedServices: window.affectedServices,
       });
-      
+
       this.logger.log(`Maintenance window started: ${windowId}`);
     } catch (error) {
       this.logger.error(`Failed to start maintenance window ${windowId}:`, error);
@@ -100,16 +112,18 @@ export class MaintenanceProcessor {
   private async handleEnd(windowId: string): Promise<void> {
     try {
       const window = await this.maintenanceService.findById(windowId);
-      
-      // Set status to completed
+      if (window.status !== MaintenanceStatus.ACTIVE) {
+        this.logger.warn(`Skip maintenance end for ${windowId}: status=${window.status}`);
+        return;
+      }
+
       await this.maintenanceService.setCompleted(windowId);
-      
-      // Notify all connected WebSocket clients
-      this.wsGateway.emitToAll('system_maintenance_end', {
+
+      this.wsGateway.emitToAll(WS_EVENTS.SYSTEM_MAINTENANCE_END, {
         id: window.id,
         title: window.title,
       });
-      
+
       this.logger.log(`Maintenance window completed: ${windowId}`);
     } catch (error) {
       this.logger.error(`Failed to end maintenance window ${windowId}:`, error);
@@ -120,8 +134,13 @@ export class MaintenanceProcessor {
   private async handleNotification(windowId: string, timeframe: string): Promise<void> {
     try {
       const window = await this.maintenanceService.findById(windowId);
-      
-      // Get all active users
+      if (window.status !== MaintenanceStatus.SCHEDULED) {
+        this.logger.warn(
+          `Skip maintenance reminder for ${windowId}: status=${window.status}`,
+        );
+        return;
+      }
+
       const activeUsers = await this.usersService.findActiveUsers();
       
       const subject = `Scheduled Maintenance in ${timeframe}`;
@@ -143,12 +162,15 @@ export class MaintenanceProcessor {
       await this.pushService.sendBulk(userIds, pushPayload);
       
       // Send email notifications
+      const greetingName = (u: { displayName?: string | null; username: string }) =>
+        u.displayName?.trim() || u.username;
+
       for (const user of activeUsers) {
         await this.emailService.queue(
           user.email,
           'maintenance-notification',
           {
-            firstName: user.firstName,
+            firstName: greetingName(user),
             title: window.title,
             description: window.description,
             startTime: window.startAt.toISOString(),
@@ -161,6 +183,51 @@ export class MaintenanceProcessor {
       this.logger.log(`Sent ${timeframe} maintenance notifications for window ${windowId} to ${activeUsers.length} users`);
     } catch (error) {
       this.logger.error(`Failed to send maintenance notifications for window ${windowId}:`, error);
+      throw error;
+    }
+  }
+
+  private async handleCancelNotify(windowId: string): Promise<void> {
+    try {
+      const window = await this.maintenanceService.findById(windowId);
+      if (window.status !== MaintenanceStatus.CANCELLED) {
+        return;
+      }
+
+      const activeUsers = await this.usersService.findActiveUsers();
+      const subject = 'Scheduled maintenance cancelled';
+      const body = `${window.title} is no longer scheduled.`;
+
+      await this.pushService.sendBulk(activeUsers.map((u) => u.id), {
+        title: subject,
+        body,
+        data: {
+          type: 'maintenance_cancelled',
+          windowId: window.id,
+        },
+      });
+
+      const greetingName = (u: { displayName?: string | null; username: string }) =>
+        u.displayName?.trim() || u.username;
+
+      for (const user of activeUsers) {
+        await this.emailService.queue(user.email, 'maintenance-cancelled', {
+          firstName: greetingName(user),
+          title: window.title,
+          description: window.description,
+          startTime: window.startAt.toISOString(),
+          endTime: window.endAt.toISOString(),
+        });
+      }
+
+      this.wsGateway.emitToAll(WS_EVENTS.SYSTEM_MAINTENANCE_CANCELLED, {
+        id: window.id,
+        title: window.title,
+      });
+
+      this.logger.log(`Sent cancellation notices for maintenance window ${windowId}`);
+    } catch (error) {
+      this.logger.error(`Failed to notify cancellation for ${windowId}:`, error);
       throw error;
     }
   }

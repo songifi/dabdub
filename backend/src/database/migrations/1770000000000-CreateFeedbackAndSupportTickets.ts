@@ -15,8 +15,10 @@ export class CreateFeedbackAndSupportTickets1770000000000
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'feedback_type_enum') THEN
           CREATE TYPE feedback_type_enum AS ENUM (
             'transaction_rating',
-            'feature_feedback',
-            'nps'
+            'nps',
+            'feature_request',
+            'bug_report',
+            'general'
           );
         END IF;
       END

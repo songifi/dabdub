@@ -4,6 +4,7 @@ import { FeedbackService } from './feedback.service';
 import { FeedbackType } from './entities/feedback.entity';
 import { TransactionStatus } from '../transactions/entities/transaction.entity';
 import { FraudStatus } from '../fraud/entities/fraud-flag.entity';
+import { FeedbackPromptTrigger } from './dto/should-prompt-query.dto';
 
 describe('FeedbackService', () => {
   const redis = {
@@ -36,17 +37,20 @@ describe('FeedbackService', () => {
     count: jest.fn(),
   };
 
+  const activeUser = {
+    id: 'user-1',
+    isActive: true,
+    createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000), // 40 days ago
+    updatedAt: new Date(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     redis.get.mockResolvedValue(null);
     redis.set.mockResolvedValue('OK');
-
-    userRepo.findOne.mockResolvedValue({
-      id: 'user-1',
-      isActive: true,
-      updatedAt: new Date(),
-    });
+    userRepo.findOne.mockResolvedValue(activeUser);
     fraudRepo.count.mockResolvedValue(0);
+    txRepo.count.mockResolvedValue(5);
 
     feedbackRepo.create.mockImplementation((payload: any) => payload);
     feedbackRepo.save.mockImplementation(async (payload: any) => ({
@@ -76,142 +80,212 @@ describe('FeedbackService', () => {
     );
   }
 
-  it('returns false during cooldown', async () => {
-    const service = createService();
-    redis.get.mockResolvedValue('1');
+  describe('shouldPrompt', () => {
+    it('respects 7-day cooldown — returns false when Redis key exists', async () => {
+      const service = createService();
+      redis.get.mockResolvedValue('1');
 
-    const result = await service.shouldPrompt('user-1', 'transaction_rating' as any);
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.TRANSACTION_RATING);
 
-    expect(result).toEqual({ shouldPrompt: false, reason: 'cooldown_active' });
-  });
-
-  it('requires third completed transaction for transaction rating prompt', async () => {
-    const service = createService();
-
-    txRepo.count
-      .mockResolvedValueOnce(1) // recent completed tx count
-      .mockResolvedValueOnce(2); // total completed tx count
-
-    const result = await service.shouldPrompt('user-1', 'transaction_rating' as any);
-
-    expect(txRepo.count).toHaveBeenNthCalledWith(1, {
-      where: {
-        userId: 'user-1',
-        status: TransactionStatus.COMPLETED,
-        createdAt: expect.anything(),
-      },
-    });
-    expect(result).toEqual({
-      shouldPrompt: false,
-      reason: 'requires_three_transactions',
-    });
-  });
-
-  it('creates support ticket automatically for low rating', async () => {
-    const service = createService();
-
-    const result = await service.submit('user-1', {
-      type: FeedbackType.FEATURE_FEEDBACK,
-      rating: 2,
-      message: 'Transfer flow failed for me',
+      expect(result).toEqual({ shouldPrompt: false, reason: 'cooldown_active' });
+      expect(redis.set).not.toHaveBeenCalled();
     });
 
-    expect(result.feedback.requiresOutreach).toBe(true);
-    expect(supportTicketRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-1',
-        feedbackId: 'feedback-1',
-      }),
-    );
-    expect(result.supportTicket?.id).toBe('ticket-1');
-  });
+    it('sets Redis key with 604800s TTL when prompt is shown', async () => {
+      const service = createService();
 
-  it('marks NPS detractor for outreach', async () => {
-    const service = createService();
+      await service.shouldPrompt('user-1', FeedbackPromptTrigger.TRANSACTION_RATING);
 
-    const result = await service.submit('user-1', {
-      type: FeedbackType.NPS,
-      npsScore: 6,
-      message: 'Need faster settlements',
+      expect(redis.set).toHaveBeenCalledWith(
+        `feedback:prompted:user-1:transaction_rating`,
+        '1',
+        'EX',
+        604800,
+      );
     });
 
-    expect(result.feedback.requiresOutreach).toBe(true);
-    expect(result.supportTicket).toBeNull();
-  });
+    it('transaction_rating requires 3 completed transactions', async () => {
+      const service = createService();
+      txRepo.count.mockResolvedValue(2);
 
-  it('computes NPS formula correctly', async () => {
-    const service = createService();
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.TRANSACTION_RATING);
 
-    const ratingQb = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn().mockResolvedValue({ avgRating: '4.2' }),
-    };
-
-    const npsQb = {
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([
-        { score: '10' },
-        { score: '9' },
-        { score: '8' },
-        { score: '6' },
-      ]),
-    };
-
-    const typeQb = {
-      select: jest.fn().mockReturnThis(),
-      addSelect: jest.fn().mockReturnThis(),
-      groupBy: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([
-        { type: 'nps', count: '4' },
-      ]),
-    };
-
-    feedbackRepo.createQueryBuilder
-      .mockReturnValueOnce(ratingQb as any)
-      .mockReturnValueOnce(npsQb as any)
-      .mockReturnValueOnce(typeQb as any);
-
-    feedbackRepo.count
-      .mockResolvedValueOnce(10)
-      .mockResolvedValueOnce(3); // outreach required count
-
-    const result = await service.getAggregates();
-
-    // promoters=2, detractors=1, total=4 -> nps=25
-    expect(result.nps).toBe(25);
-    expect(result.promoters).toBe(2);
-    expect(result.detractors).toBe(1);
-    expect(result.passive).toBe(1);
-  });
-
-  it('rejects non-NPS payload without rating', async () => {
-    const service = createService();
-
-    await expect(
-      service.submit('user-1', {
-        type: FeedbackType.FEATURE_FEEDBACK,
-      }),
-    ).rejects.toThrow(BadRequestException);
-  });
-
-  it('blocks prompt when account has open restrictions', async () => {
-    const service = createService();
-    fraudRepo.count.mockResolvedValue(1);
-
-    const result = await service.shouldPrompt('user-1', 'feature_feedback' as any);
-
-    expect(fraudRepo.count).toHaveBeenCalledWith({
-      where: {
-        userId: 'user-1',
-        status: FraudStatus.OPEN,
-      },
+      expect(result).toEqual({ shouldPrompt: false, reason: 'requires_three_transactions' });
     });
-    expect(result).toEqual({
-      shouldPrompt: false,
-      reason: 'account_restricted',
+
+    it('transaction_rating returns true when user has >= 3 completed transactions', async () => {
+      const service = createService();
+      txRepo.count.mockResolvedValue(3);
+
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.TRANSACTION_RATING);
+
+      expect(result.shouldPrompt).toBe(true);
+    });
+
+    it('NPS requires 30 days of active use', async () => {
+      const service = createService();
+      userRepo.findOne.mockResolvedValue({
+        ...activeUser,
+        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // only 10 days ago
+      });
+
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.NPS);
+
+      expect(result).toEqual({ shouldPrompt: false, reason: 'requires_30_days_active_use' });
+    });
+
+    it('NPS returns true when user account is >= 30 days old', async () => {
+      const service = createService();
+
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.NPS);
+
+      expect(result.shouldPrompt).toBe(true);
+    });
+
+    it('blocks prompt when account has open fraud restrictions', async () => {
+      const service = createService();
+      fraudRepo.count.mockResolvedValue(1);
+
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.GENERAL);
+
+      expect(fraudRepo.count).toHaveBeenCalledWith({
+        where: { userId: 'user-1', status: FraudStatus.OPEN },
+      });
+      expect(result).toEqual({ shouldPrompt: false, reason: 'account_restricted' });
+    });
+
+    it('blocks prompt for inactive account', async () => {
+      const service = createService();
+      userRepo.findOne.mockResolvedValue({ ...activeUser, isActive: false });
+
+      const result = await service.shouldPrompt('user-1', FeedbackPromptTrigger.GENERAL);
+
+      expect(result).toEqual({ shouldPrompt: false, reason: 'account_inactive' });
+    });
+  });
+
+  describe('submit', () => {
+    it('rating <= 2 auto-creates SupportTicket', async () => {
+      const service = createService();
+
+      const result = await service.submit('user-1', {
+        type: FeedbackType.TRANSACTION_RATING,
+        rating: 2,
+        message: 'Transfer flow failed',
+      });
+
+      expect(result.feedback.requiresOutreach).toBe(true);
+      expect(supportTicketRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', feedbackId: 'feedback-1' }),
+      );
+      expect(result.supportTicket?.id).toBe('ticket-1');
+    });
+
+    it('rating > 2 does not create SupportTicket', async () => {
+      const service = createService();
+
+      const result = await service.submit('user-1', {
+        type: FeedbackType.TRANSACTION_RATING,
+        rating: 4,
+      });
+
+      expect(result.supportTicket).toBeNull();
+      expect(supportTicketRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('NPS detractor (score <= 6) flagged for outreach, no support ticket', async () => {
+      const service = createService();
+
+      const result = await service.submit('user-1', {
+        type: FeedbackType.NPS,
+        npsScore: 6,
+        message: 'Need faster settlements',
+      });
+
+      expect(result.feedback.requiresOutreach).toBe(true);
+      expect(result.supportTicket).toBeNull();
+    });
+
+    it('NPS promoter (score >= 9) not flagged for outreach', async () => {
+      const service = createService();
+
+      const result = await service.submit('user-1', {
+        type: FeedbackType.NPS,
+        npsScore: 9,
+      });
+
+      expect(result.feedback.requiresOutreach).toBe(false);
+    });
+
+    it('rejects non-NPS payload without rating', async () => {
+      const service = createService();
+
+      await expect(
+        service.submit('user-1', { type: FeedbackType.BUG_REPORT }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects NPS payload without npsScore', async () => {
+      const service = createService();
+
+      await expect(
+        service.submit('user-1', { type: FeedbackType.NPS }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getAggregates', () => {
+    it('computes NPS correctly: % promoters - % detractors', async () => {
+      const service = createService();
+
+      const ratingQb = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ avgRating: '4.2' }),
+      };
+
+      const npsQb = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          { score: '10' }, // promoter
+          { score: '9' },  // promoter
+          { score: '8' },  // passive
+          { score: '6' },  // detractor
+        ]),
+      };
+
+      const distQb = {
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ rating: '4', count: '3' }]),
+      };
+
+      const commentsQb = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ message: 'Great app' }]),
+      };
+
+      feedbackRepo.createQueryBuilder
+        .mockReturnValueOnce(ratingQb as any)
+        .mockReturnValueOnce(npsQb as any)
+        .mockReturnValueOnce(distQb as any)
+        .mockReturnValueOnce(commentsQb as any);
+
+      feedbackRepo.count.mockResolvedValue(10);
+
+      const result = await service.getAggregates();
+
+      // promoters=2, detractors=1, total=4 → nps = round((2-1)/4 * 100) = 25
+      expect(result.npsScore).toBe(25);
+      expect(result.totalFeedback).toBe(10);
+      expect(result.recentComments).toEqual(['Great app']);
     });
   });
 });

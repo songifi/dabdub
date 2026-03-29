@@ -10,6 +10,8 @@ import { LessThan, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 import { User } from '../users/entities/user.entity';
+import { SorobanService } from '../soroban/soroban.service';
+import { Transaction, TransactionType } from '../transactions/entities/transaction.entity';
 import { InitiateResponseDto } from './dto/initiate-response.dto';
 import { PreviewResponseDto } from './dto/preview.dto';
 import { FlutterwaveClient } from './flutterwave.client';
@@ -49,8 +51,11 @@ export class OnRampService {
     private readonly feeConfigRepo: Repository<FeeConfig>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepo: Repository<Transaction>,
     private readonly configService: ConfigService,
     private readonly flutterwaveClient: FlutterwaveClient,
+    private readonly sorobanService: SorobanService,
   ) {}
 
   async preview(
@@ -204,7 +209,7 @@ export class OnRampService {
     await this.orderRepo.save(order);
 
     try {
-      order.settlementReference = this.creditUsdc(order);
+      order.settlementReference = await this.creditUsdc(order);
       order.status = OnRampStatus.CREDITED;
       order.creditedAt = new Date();
       await this.orderRepo.save(order);
@@ -330,12 +335,46 @@ export class OnRampService {
     return null;
   }
 
-  private creditUsdc(order: OnRampOrder): string {
+  private async creditUsdc(order: OnRampOrder): Promise<string> {
     this.logger.log(
-      `Recording USDC credit for order ${order.reference} amount=${order.amountUsdc} userId=${order.userId}`,
+      `Crediting USDC for order ${order.reference} amount=${order.amountUsdc} userId=${order.userId}`,
     );
 
-    return `credit-${order.reference}`;
+    try {
+      // Call SorobanService to deposit USDC to user's wallet
+      const txHash = await this.sorobanService.deposit(order.userId, Number(order.amountUsdc));
+      
+      // Create transaction record
+      const transaction = this.transactionRepo.create({
+        userId: order.userId,
+        type: TransactionType.DEPOSIT,
+        amount: order.amountUsdc,
+        currency: 'USDC',
+        status: 'completed',
+        reference: order.reference,
+        blockchainTxHash: txHash,
+        metadata: {
+          onrampOrderId: order.id,
+          amountNgn: order.amountNgn,
+          rateNgnPerUsdc: order.rateNgnPerUsdc,
+          spreadPercent: order.spreadPercent,
+        },
+      });
+
+      await this.transactionRepo.save(transaction);
+      
+      this.logger.log(
+        `Successfully credited USDC for order ${order.reference}, txHash: ${txHash}`,
+      );
+
+      return txHash;
+    } catch (error) {
+      this.logger.error(
+        `Failed to credit USDC for order ${order.reference}:`,
+        error,
+      );
+      throw error;
+    }
   }
 
   private roundCurrency(value: number, decimals: number): number {

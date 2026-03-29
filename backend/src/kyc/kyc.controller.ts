@@ -94,4 +94,19 @@ export class KycController {
   requestInfo(@Param('id') id: string, @Req() req: AuthReq) {
     return this.kycService.requestInfo(id, req.user.id);
   }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('admin/kyc/:id/run-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin: trigger auto BVN/NIN verification via Prembly' })
+  runVerification(@Param('id') id: string) {
+    return this.kycService.runVerification(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('admin/kyc/:id/verification-results')
+  @ApiOperation({ summary: 'Admin: view Prembly verification results for a submission' })
+  getVerificationResults(@Param('id') id: string) {
+    return this.kycService.getVerificationResults(id);
+  }
 }

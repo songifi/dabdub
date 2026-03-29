@@ -3,8 +3,10 @@ import { BaseEntity } from '../../common/entities/base.entity';
 
 export enum FeedbackType {
   TRANSACTION_RATING = 'transaction_rating',
-  FEATURE_FEEDBACK = 'feature_feedback',
   NPS = 'nps',
+  FEATURE_REQUEST = 'feature_request',
+  BUG_REPORT = 'bug_report',
+  GENERAL = 'general',
 }
 
 @Entity('feedback')

@@ -1,21 +1,13 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
-import type { ConfigType } from '@nestjs/config';
-import {
-  S3Client,
-  HeadObjectCommand,
-  PutObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { r2Config } from '../config/r2.config';
+import { R2Service } from '../r2/r2.service';
 import { FileUpload, UploadPurpose } from './entities/file-upload.entity';
 import { PresignDto } from './dto/presign.dto';
 
@@ -37,26 +29,12 @@ export const CLEANUP_JOB = 'cleanup-unconfirmed';
 
 @Injectable()
 export class UploadService {
-  private readonly s3: S3Client;
-  private readonly bucket: string;
-
   constructor(
     @InjectRepository(FileUpload)
     private readonly repo: Repository<FileUpload>,
 
-    @Inject(r2Config.KEY)
-    private readonly cfg: ConfigType<typeof r2Config>,
-  ) {
-    this.bucket = cfg.bucketName;
-    this.s3 = new S3Client({
-      region: 'auto',
-      endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: cfg.accessKeyId,
-        secretAccessKey: cfg.secretAccessKey,
-      },
-    });
-  }
+    private readonly r2: R2Service,
+  ) {}
 
   async getPresignedUrl(
     userId: string,
@@ -74,22 +52,15 @@ export class UploadService {
     }
 
     const ext = dto.mimeType.split('/')[1].replace('+xml', '');
+    // Key naming convention enforced here per purpose
     const key = `${dto.purpose}/${userId}/${randomUUID()}.${ext}`;
 
-    const command = new PutObjectCommand({
-      Bucket: this.bucket,
-      Key: key,
-      ContentType: dto.mimeType,
-      ContentLength: dto.sizeBytes,
-    });
-
-    const url = await getSignedUrl(this.s3, command, { expiresIn: 900 });
+    const { uploadUrl: url } = await this.r2.getPresignedUploadUrl(key, dto.mimeType, 900);
 
     await this.repo.save(
       this.repo.create({
         userId,
         key,
-        bucket: this.bucket,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
         purpose: dto.purpose,
@@ -106,11 +77,8 @@ export class UploadService {
 
     this.assertOwnership(userId, record);
 
-    try {
-      await this.s3.send(
-        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
-      );
-    } catch {
+    const { exists } = await this.r2.headObject(key);
+    if (!exists) {
       throw new BadRequestException('File not found in storage');
     }
 

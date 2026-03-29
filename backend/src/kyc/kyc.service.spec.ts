@@ -1,3 +1,11 @@
+jest.mock('../r2/r2.service', () => ({
+  R2Service: class MockR2Service {},
+}));
+
+jest.mock('../prembly/prembly.service', () => ({
+  PremblyService: class MockPremblyService {},
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -8,6 +16,10 @@ import { TierName } from '../tier-config/entities/tier-config.entity';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { r2Config } from '../config/r2.config';
+import { VerificationResult } from './entities/verification-result.entity';
+import { R2Service } from '../r2/r2.service';
+import { PremblyService } from '../prembly/prembly.service';
+import { TierUpgradeService } from '../tier-config/tier-upgrade.service';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +37,25 @@ const mockUserRepo = {
 
 const mockEmail = { queue: jest.fn().mockResolvedValue({}) };
 const mockNotification = { create: jest.fn().mockResolvedValue({}) };
+
+const mockVerificationRepo = {
+  create: jest.fn(),
+  save: jest.fn(),
+};
+
+const mockR2 = {
+  getPresignedDownloadUrl: jest.fn(),
+};
+
+const mockPrembly = {
+  verifyBvn: jest.fn(),
+  verifyNin: jest.fn(),
+};
+
+const mockTierUpgrade = {
+  checkAutoUpgrade: jest.fn(),
+  applySubmissionTierAfterKyc: jest.fn(),
+};
 
 const mockR2Config = {
   accountId: 'test-account',
@@ -86,9 +117,16 @@ describe('KycService', () => {
         KycService,
         { provide: getRepositoryToken(KycSubmission), useValue: mockKycRepo },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        {
+          provide: getRepositoryToken(VerificationResult),
+          useValue: mockVerificationRepo,
+        },
         { provide: r2Config.KEY, useValue: mockR2Config },
+        { provide: R2Service, useValue: mockR2 },
         { provide: EmailService, useValue: mockEmail },
         { provide: NotificationService, useValue: mockNotification },
+        { provide: PremblyService, useValue: mockPrembly },
+        { provide: TierUpgradeService, useValue: mockTierUpgrade },
       ],
     }).compile();
 
@@ -152,14 +190,22 @@ describe('KycService', () => {
       mockKycRepo.findOne.mockResolvedValue(submission);
       mockKycRepo.save.mockResolvedValue({ ...submission, status: KycSubmissionStatus.APPROVED });
       mockUserRepo.update.mockResolvedValue(undefined);
-      mockUserRepo.findOne.mockResolvedValue(makeUser());
+      mockTierUpgrade.checkAutoUpgrade.mockResolvedValue(false);
+      mockTierUpgrade.applySubmissionTierAfterKyc.mockResolvedValue(undefined);
+      mockUserRepo.findOne.mockResolvedValue(
+        makeUser({ tier: TierName.GOLD, kycStatus: KycStatus.APPROVED }),
+      );
 
       const result = await service.approve('kyc-uuid-1', 'admin-uuid');
 
       expect(mockUserRepo.update).toHaveBeenCalledWith('user-uuid-1', {
-        tier: TierName.GOLD,
         kycStatus: KycStatus.APPROVED,
       });
+      expect(mockTierUpgrade.checkAutoUpgrade).toHaveBeenCalledWith('user-uuid-1');
+      expect(mockTierUpgrade.applySubmissionTierAfterKyc).toHaveBeenCalledWith(
+        'user-uuid-1',
+        TierName.GOLD,
+      );
       expect(mockNotification.create).toHaveBeenCalledWith(
         'user-uuid-1',
         'tier_upgraded',
@@ -168,10 +214,30 @@ describe('KycService', () => {
         expect.any(Object),
       );
       await new Promise(process.nextTick);
-      expect(mockEmail.queue).toHaveBeenCalledWith(
-        'alice@example.com', 'kyc-approved', expect.any(Object),
-      );
+      expect(mockEmail.queue).not.toHaveBeenCalled();
       expect(result.status).toBe(KycSubmissionStatus.APPROVED);
+    });
+
+    it('uses pending tier when checkAutoUpgrade applies it', async () => {
+      const submission = makeSubmission({ status: KycSubmissionStatus.PENDING });
+      mockKycRepo.findOne.mockResolvedValue(submission);
+      mockKycRepo.save.mockResolvedValue({ ...submission, status: KycSubmissionStatus.APPROVED });
+      mockUserRepo.update.mockResolvedValue(undefined);
+      mockTierUpgrade.checkAutoUpgrade.mockResolvedValue(true);
+      mockUserRepo.findOne.mockResolvedValue(
+        makeUser({ tier: TierName.BLACK, kycStatus: KycStatus.APPROVED }),
+      );
+
+      await service.approve('kyc-uuid-1', 'admin-uuid');
+
+      expect(mockTierUpgrade.applySubmissionTierAfterKyc).not.toHaveBeenCalled();
+      expect(mockNotification.create).toHaveBeenCalledWith(
+        'user-uuid-1',
+        'tier_upgraded',
+        'KYC Approved',
+        expect.stringContaining('Black'),
+        expect.any(Object),
+      );
     });
 
     it('throws 404 for unknown submission id', async () => {
