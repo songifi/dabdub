@@ -17,7 +17,6 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
-import { User } from '../users/entities/user.entity';
 
 export const SUPPORT_QUEUE = 'support-jobs';
 
@@ -98,6 +97,38 @@ export class SupportService {
     );
 
     return new TicketResponseDto(saved);
+  }
+
+  /** Auto-created when a user opens a transaction dispute (linked row). */
+  async createTicketForDispute(params: {
+    userId: string;
+    transactionId: string;
+    disputeId: string;
+    disputeType: string;
+    description: string;
+  }): Promise<SupportTicket> {
+    const ticketNumber = this.generateTicketNumber();
+    const ticket = this.ticketRepo.create({
+      userId: params.userId,
+      ticketNumber,
+      category: TicketCategory.DISPUTE,
+      subject: `Dispute ${params.disputeId.slice(0, 8)} — ${params.disputeType}`,
+      description: `${params.description}\n\n[Dispute ID: ${params.disputeId}]`,
+      priority: TicketPriority.HIGH,
+      transactionId: params.transactionId,
+      disputeId: params.disputeId,
+    });
+    const saved = await this.ticketRepo.save(ticket);
+
+    await this.notificationService.create(
+      'system-admin',
+      NotificationType.SYSTEM,
+      `New dispute ticket ${saved.ticketNumber}`,
+      `User ${params.userId} disputed transaction ${params.transactionId}.`,
+      { ticketId: saved.id, disputeId: params.disputeId },
+    );
+
+    return saved;
   }
 
   async listUserTickets(userId: string, query: { limit?: number; cursor?: string }) {

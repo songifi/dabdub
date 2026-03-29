@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { DisputeStatus, DisputeType } from '../entities/dispute.entity';
 
 export class QueryDisputesDto {
@@ -13,7 +13,7 @@ export class QueryDisputesDto {
 
 export class RejectDisputeDto {
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   @MaxLength(1000)
-  resolution?: string;
+  resolution!: string;
 }

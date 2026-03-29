@@ -22,6 +22,10 @@ export class Wallet extends BaseEntity {
   @Column({ name: 'staked_balance', type: 'varchar', default: '0' })
   stakedBalance!: string;
 
+  /** USDC amount reserved while a transaction dispute is open (off-chain ledger). */
+  @Column({ name: 'disputed_hold', type: 'varchar', default: '0' })
+  disputedHold!: string;
+
   @Column({ name: 'last_synced_at', type: 'timestamptz', nullable: true, default: null })
   lastSyncedAt!: Date | null;
 }
