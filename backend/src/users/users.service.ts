@@ -150,7 +150,7 @@ export class UsersService {
   async findActiveUsers(): Promise<User[]> {
     return this.usersRepository.find({
       where: { isActive: true },
-      select: ['id', 'email', 'firstName'],
+      select: ['id', 'email', 'displayName', 'username'],
     });
   }
 }

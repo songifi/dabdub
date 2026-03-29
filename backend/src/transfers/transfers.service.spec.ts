@@ -4,10 +4,10 @@ import { getQueueToken } from '@nestjs/bull';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TransfersService, TRANSFER_QUEUE } from './transfers.service';
 import { Transfer, TransferStatus } from './entities/transfer.entity';
-import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 import { UsersService } from '../users/users.service';
 import { TierService } from '../tier-config/tier.service';
 import { TierLimitExceededException } from '../common/exceptions/tier-limit-exceeded.exception';
+import { FeesService } from '../fees/fees.service';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -20,8 +20,8 @@ const mockTransferRepo = {
   createQueryBuilder: jest.fn(),
 };
 
-const mockFeeConfigRepo = {
-  findOne: jest.fn(),
+const mockFeesService = {
+  computeFee: jest.fn(),
 };
 
 const mockQueue = {
@@ -54,7 +54,7 @@ const makeTransfer = (overrides: Partial<Transfer> = {}): Transfer =>
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as Transfer);
+  }) as Transfer;
 
 const makeUser = (overrides = {}) => ({
   id: 'user-uuid-2',
@@ -75,7 +75,7 @@ describe('TransfersService', () => {
       providers: [
         TransfersService,
         { provide: getRepositoryToken(Transfer), useValue: mockTransferRepo },
-        { provide: getRepositoryToken(FeeConfig), useValue: mockFeeConfigRepo },
+        { provide: FeesService, useValue: mockFeesService },
         { provide: getQueueToken(TRANSFER_QUEUE), useValue: mockQueue },
         { provide: UsersService, useValue: mockUsersService },
         { provide: TierService, useValue: mockTierService },
@@ -92,7 +92,10 @@ describe('TransfersService', () => {
       mockUsersService.findByUsername.mockResolvedValue(null);
 
       await expect(
-        service.create('user-uuid-1', 'alice', { toUsername: 'ghost', amount: '10' }),
+        service.create('user-uuid-1', 'alice', {
+          toUsername: 'ghost',
+          amount: '10',
+        }),
       ).rejects.toThrow(NotFoundException);
 
       expect(mockTierService.checkTransferLimit).not.toHaveBeenCalled();
@@ -101,7 +104,10 @@ describe('TransfersService', () => {
 
     it('throws BadRequestException when sender equals receiver', async () => {
       await expect(
-        service.create('user-uuid-1', 'alice', { toUsername: 'alice', amount: '10' }),
+        service.create('user-uuid-1', 'alice', {
+          toUsername: 'alice',
+          amount: '10',
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -110,11 +116,18 @@ describe('TransfersService', () => {
     it('throws TierLimitExceededException when daily limit is exceeded', async () => {
       mockUsersService.findByUsername.mockResolvedValue(makeUser());
       mockTierService.checkTransferLimit.mockRejectedValue(
-        new TierLimitExceededException({ limit: '100', used: '95', requested: '10' }),
+        new TierLimitExceededException({
+          limit: '100',
+          used: '95',
+          requested: '10',
+        }),
       );
 
       await expect(
-        service.create('user-uuid-1', 'alice', { toUsername: 'bob', amount: '10' }),
+        service.create('user-uuid-1', 'alice', {
+          toUsername: 'bob',
+          amount: '10',
+        }),
       ).rejects.toThrow(TierLimitExceededException);
 
       expect(mockQueue.add).not.toHaveBeenCalled();
@@ -123,12 +136,11 @@ describe('TransfersService', () => {
     it('creates transfer and enqueues job on success', async () => {
       mockUsersService.findByUsername.mockResolvedValue(makeUser());
       mockTierService.checkTransferLimit.mockResolvedValue(undefined);
-      mockFeeConfigRepo.findOne.mockResolvedValue({
-        feeType: FeeType.TRANSFER,
-        baseFeeRate: '0.01',
-        minFee: '0',
-        maxFee: null,
-        isActive: true,
+      mockFeesService.computeFee.mockResolvedValue({
+        gross: '10.00000000',
+        fee: '0.10000000',
+        net: '9.90000000',
+        feeConfigId: 'cfg-1',
       });
       const transfer = makeTransfer();
       mockTransferRepo.create.mockReturnValue(transfer);

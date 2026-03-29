@@ -17,6 +17,7 @@ import type {
   TrustedDeviceDto,
 } from '../dto/security.dto';
 import { Session } from '../../auth/entities/session.entity';
+import { GeoService } from '../../geo/geo.service';
 
 /**
  * SecurityService
@@ -46,6 +47,8 @@ export class SecurityService {
 
     @InjectRepository(Session)
     private readonly sessionRepo: Repository<Session>,
+
+    private readonly geoService: GeoService,
   ) {}
 
   /**
@@ -149,6 +152,7 @@ export class SecurityService {
       userId,
       ipAddress,
       userAgent,
+      country: this.geoService.getCountry(ipAddress),
       status,
       failureReason,
     });

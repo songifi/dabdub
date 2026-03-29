@@ -32,6 +32,9 @@ export class Transfer extends BaseEntity {
   @Column({ name: 'net_amount', type: 'varchar' })
   netAmount!: string;
 
+  @Column({ name: 'fee_config_id', nullable: true })
+  feeConfigId!: string | null;
+
   @Column({ name: 'note', length: 100, nullable: true, default: null })
   note!: string | null;
 

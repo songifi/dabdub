@@ -18,6 +18,7 @@ import { AuditModule } from '../audit/audit.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { ReceiptModule } from '../receipt/receipt.module';
 import { OffRampModule } from '../offramp/offramp.module';
+import { GeoModule } from '../geo/geo.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { OffRampModule } from '../offramp/offramp.module';
     ReceiptModule,
     ReferralsModule,
     OffRampModule,
+    GeoModule,
   ],
   providers: [AdminService],
   controllers: [AdminController, CronAdminController],

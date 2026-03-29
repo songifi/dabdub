@@ -7,6 +7,7 @@ export enum SecurityAlertType {
   NEW_COUNTRY = 'new_country',
   PIN_ATTEMPTS = 'pin_attempts',
   LARGE_WITHDRAWAL = 'large_withdrawal',
+  SUSPICIOUS_IP = 'suspicious_ip',
 }
 
 /**

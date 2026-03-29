@@ -23,7 +23,13 @@ import { WS_EVENTS } from '../../ws/cheese.gateway';
 import { CheeseGateway } from '../../ws/cheese.gateway';
 import { EmailService } from '../../email/email.service';
 import { UsersService } from '../../users/users.service';
-import { COMPLIANCE_QUEUE, CHECK_TRANSACTION_JOB, type CheckTransactionJobData } from '../../compliance/compliance.service';
+import {
+  COMPLIANCE_QUEUE,
+  CHECK_TRANSACTION_JOB,
+  type CheckTransactionJobData,
+} from '../../compliance/compliance.service';
+import { FeesService } from '../../fees/fees.service';
+import { FeeType } from '../../fee-config/entities/fee-config.entity';
 
 @Processor(TRANSFER_QUEUE)
 export class TransferProcessor {
@@ -36,6 +42,7 @@ export class TransferProcessor {
     private readonly gateway: CheeseGateway,
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
+    private readonly feesService: FeesService,
 
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
@@ -52,18 +59,23 @@ export class TransferProcessor {
     const { transferId } = job.data;
     this.logger.log(`Processing transfer ${transferId}`);
 
-    const transfer = await this.transferRepo.findOneOrFail({ where: { id: transferId } });
+    const transfer = await this.transferRepo.findOneOrFail({
+      where: { id: transferId },
+    });
 
     try {
-      const result = await this.sorobanService.transfer(
+      const result = (await this.sorobanService.transfer(
         transfer.fromUsername,
         transfer.toUsername,
         transfer.amount,
         transfer.note ?? undefined,
-      ) as { txHash?: string } | null;
+      )) as { txHash?: string } | null;
 
       const txHash = result?.txHash ?? `transfer-${transferId}`;
-      const confirmed = await this.transfersService.markConfirmed(transferId, txHash);
+      const confirmed = await this.transfersService.markConfirmed(
+        transferId,
+        txHash,
+      );
 
       // Create Transaction records for both parties
       const [outTx] = await this.transactionRepo.save([
@@ -92,7 +104,8 @@ export class TransferProcessor {
           status: TransactionStatus.COMPLETED,
           reference: txHash,
           counterpartyUsername: transfer.fromUsername,
-          description: transfer.note ?? `Transfer from @${transfer.fromUsername}`,
+          description:
+            transfer.note ?? `Transfer from @${transfer.fromUsername}`,
           metadata: { transferId },
         }),
       ]);
@@ -100,13 +113,41 @@ export class TransferProcessor {
       // Enqueue async AML compliance check for the sender (non-blocking)
       await this.complianceQueue.add(
         CHECK_TRANSACTION_JOB,
-        { userId: transfer.fromUserId, amount: parseFloat(transfer.amount), txId: outTx.id } satisfies CheckTransactionJobData,
-        { attempts: 3, backoff: { type: 'exponential', delay: 3_000 }, removeOnComplete: true },
+        {
+          userId: transfer.fromUserId,
+          amount: parseFloat(transfer.amount),
+          txId: outTx.id,
+        } satisfies CheckTransactionJobData,
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3_000 },
+          removeOnComplete: true,
+        },
       );
 
+      if (transfer.feeConfigId && parseFloat(transfer.fee) > 0) {
+        await this.feesService.recordFee({
+          userId: transfer.fromUserId,
+          txType: FeeType.TRANSFER,
+          txId: outTx.id,
+          grossAmount: transfer.amount,
+          feeAmount: transfer.fee,
+          netAmount: transfer.netAmount,
+          feeConfigId: transfer.feeConfigId,
+        });
+      }
+
       // WebSocket events
-      await this.gateway.emitToUser(transfer.fromUserId, WS_EVENTS.TRANSFER_SENT, confirmed);
-      await this.gateway.emitToUser(transfer.toUserId, WS_EVENTS.TRANSFER_RECEIVED, confirmed);
+      await this.gateway.emitToUser(
+        transfer.fromUserId,
+        WS_EVENTS.TRANSFER_SENT,
+        confirmed,
+      );
+      await this.gateway.emitToUser(
+        transfer.toUserId,
+        WS_EVENTS.TRANSFER_RECEIVED,
+        confirmed,
+      );
 
       // In-app notifications
       await Promise.all([
@@ -143,17 +184,23 @@ export class TransferProcessor {
           );
         }
       } catch (err) {
-        this.logger.warn(`Email queue failed for transfer ${transferId}: ${(err as Error).message}`);
+        this.logger.warn(
+          `Email queue failed for transfer ${transferId}: ${(err as Error).message}`,
+        );
       }
     } catch (err) {
-      this.logger.error(`Transfer ${transferId} failed: ${(err as Error).message}`);
+      this.logger.error(
+        `Transfer ${transferId} failed: ${(err as Error).message}`,
+      );
       await this.transfersService.markFailed(transferId);
     }
   }
 
   @OnQueueFailed()
   async onFailed(job: Job<ProcessTransferJobData>, err: Error): Promise<void> {
-    this.logger.error(`Transfer job failed transferId=${job.data.transferId}: ${err.message}`);
+    this.logger.error(
+      `Transfer job failed transferId=${job.data.transferId}: ${err.message}`,
+    );
     await this.transfersService.markFailed(job.data.transferId);
   }
 }

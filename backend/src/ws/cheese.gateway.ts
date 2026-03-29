@@ -23,7 +23,10 @@ export const WS_EVENTS = {
   SYSTEM_MESSAGE: 'system_message',
   SYSTEM_MAINTENANCE_START: 'system_maintenance_start',
   SYSTEM_MAINTENANCE_END: 'system_maintenance_end',
+  SYSTEM_MAINTENANCE_CANCELLED: 'system_maintenance_cancelled',
   SYSTEM_ANNOUNCEMENT: 'system_announcement',
+  EXPENSE_NEW: 'expense_new',
+  EXPENSE_SETTLED: 'expense_settled',
 } as const;
 
 const REDIS_WS_PREFIX = 'ws:connections:';

@@ -65,8 +65,18 @@ describe('MaintenanceWindowMiddleware', () => {
       expect(maintenanceService.getActive).not.toHaveBeenCalled();
     });
 
-    it('should allow superadmin users to bypass maintenance', async () => {
-      mockRequest.user = { id: 'superadmin-id', role: 'superadmin' };
+    it('should allow super_admin JWT users to bypass maintenance', async () => {
+      mockRequest.user = { id: 'sa-id', role: 'super_admin' };
+      maintenanceService.getActive.mockResolvedValue([mockActiveWindow]);
+
+      await middleware.use(mockRequest as any, mockResponse as any, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(maintenanceService.getActive).not.toHaveBeenCalled();
+    });
+
+    it('should allow admin-console superadmin role to bypass maintenance', async () => {
+      mockRequest.user = { id: 'admin-console-id', role: 'superadmin' };
       maintenanceService.getActive.mockResolvedValue([mockActiveWindow]);
 
       await middleware.use(mockRequest as any, mockResponse as any, mockNext);
@@ -88,7 +98,17 @@ describe('MaintenanceWindowMiddleware', () => {
     });
 
     it('should allow admin routes', async () => {
-      mockRequest.path = '/admin/users';
+      mockRequest.path = '/api/v1/admin/users';
+      maintenanceService.getActive.mockResolvedValue([mockActiveWindow]);
+
+      await middleware.use(mockRequest as any, mockResponse as any, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(maintenanceService.getActive).not.toHaveBeenCalled();
+    });
+
+    it('should allow public system maintenance status route', async () => {
+      mockRequest.path = '/api/v1/system/maintenance';
       maintenanceService.getActive.mockResolvedValue([mockActiveWindow]);
 
       await middleware.use(mockRequest as any, mockResponse as any, mockNext);

@@ -22,6 +22,7 @@ describe('PayLinkService (sandbox)', () => {
   const emailService = { queue: jest.fn() };
   const notificationService = { create: jest.fn() };
   const balanceService = { invalidateCache: jest.fn() };
+  const feesService = { computeFee: jest.fn(), recordFee: jest.fn() };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -42,6 +43,7 @@ describe('PayLinkService (sandbox)', () => {
       emailService as any,
       notificationService as any,
       balanceService as any,
+      feesService as any,
     );
 
     const creator = { id: 'u1', username: 'merchant' } as any;

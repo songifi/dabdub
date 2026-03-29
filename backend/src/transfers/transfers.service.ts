@@ -13,7 +13,8 @@ import { CreateTransferDto } from './dto/create-transfer.dto';
 import { TransferQueryDto, TransferDirection } from './dto/transfer-query.dto';
 import { UsersService } from '../users/users.service';
 import { TierService } from '../tier-config/tier.service';
-import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
+import { FeeType } from '../fee-config/entities/fee-config.entity';
+import { FeesService } from '../fees/fees.service';
 
 export const TRANSFER_QUEUE = 'process-transfer';
 export const PROCESS_TRANSFER_JOB = 'process-transfer';
@@ -30,14 +31,12 @@ export class TransfersService {
     @InjectRepository(Transfer)
     private readonly transferRepo: Repository<Transfer>,
 
-    @InjectRepository(FeeConfig)
-    private readonly feeConfigRepo: Repository<FeeConfig>,
-
     @InjectQueue(TRANSFER_QUEUE)
     private readonly transferQueue: Queue,
 
     private readonly usersService: UsersService,
     private readonly tierService: TierService,
+    private readonly feesService: FeesService,
   ) {}
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -64,7 +63,10 @@ export class TransfersService {
     // Tier limit check (throws TierLimitExceededException → 403 if exceeded)
     await this.tierService.checkTransferLimit(fromUserId, amount);
 
-    const { fee, netAmount } = await this.computeFee(amount);
+    const computedFee = await this.feesService.computeFee(
+      FeeType.TRANSFER,
+      dto.amount,
+    );
 
     const transfer = this.transferRepo.create({
       fromUserId,
@@ -72,10 +74,11 @@ export class TransfersService {
       fromUsername,
       toUsername: toUser.username,
       amount: dto.amount,
-      fee,
-      netAmount,
+      fee: computedFee.fee,
+      netAmount: computedFee.net,
       note: dto.note ?? null,
       status: TransferStatus.PENDING,
+      feeConfigId: computedFee.feeConfigId,
     });
 
     await this.transferRepo.save(transfer);
@@ -97,20 +100,29 @@ export class TransfersService {
   ): Promise<{ data: Transfer[]; nextCursor: string | null }> {
     const limit = Math.min(query.limit ?? 20, 100);
 
-    const qb = this.transferRepo.createQueryBuilder('t').orderBy('t.createdAt', 'DESC').limit(limit + 1);
+    const qb = this.transferRepo
+      .createQueryBuilder('t')
+      .orderBy('t.createdAt', 'DESC')
+      .limit(limit + 1);
 
     if (query.direction === TransferDirection.SENT) {
       qb.where('t.from_user_id = :userId', { userId });
     } else if (query.direction === TransferDirection.RECEIVED) {
       qb.where('t.to_user_id = :userId', { userId });
     } else {
-      qb.where('t.from_user_id = :userId OR t.to_user_id = :userId', { userId });
+      qb.where('t.from_user_id = :userId OR t.to_user_id = :userId', {
+        userId,
+      });
     }
 
     if (query.cursor) {
-      const cursor = await this.transferRepo.findOne({ where: { id: query.cursor } });
+      const cursor = await this.transferRepo.findOne({
+        where: { id: query.cursor },
+      });
       if (cursor) {
-        qb.andWhere('t.createdAt < :cursorDate', { cursorDate: cursor.createdAt });
+        qb.andWhere('t.createdAt < :cursorDate', {
+          cursorDate: cursor.createdAt,
+        });
       }
     }
 
@@ -124,7 +136,10 @@ export class TransfersService {
 
   async findOne(userId: string, id: string): Promise<Transfer> {
     const transfer = await this.transferRepo.findOne({ where: { id } });
-    if (!transfer || (transfer.fromUserId !== userId && transfer.toUserId !== userId)) {
+    if (
+      !transfer ||
+      (transfer.fromUserId !== userId && transfer.toUserId !== userId)
+    ) {
       throw new NotFoundException('Transfer not found');
     }
     return transfer;
@@ -133,34 +148,14 @@ export class TransfersService {
   // ── Status helpers (used by processor) ───────────────────────────────────
 
   async markConfirmed(id: string, txHash: string): Promise<Transfer> {
-    await this.transferRepo.update(id, { status: TransferStatus.CONFIRMED, txHash });
+    await this.transferRepo.update(id, {
+      status: TransferStatus.CONFIRMED,
+      txHash,
+    });
     return this.transferRepo.findOneOrFail({ where: { id } });
   }
 
   async markFailed(id: string): Promise<void> {
     await this.transferRepo.update(id, { status: TransferStatus.FAILED });
-  }
-
-  // ── Fee ───────────────────────────────────────────────────────────────────
-
-  private async computeFee(amount: number): Promise<{ fee: string; netAmount: string }> {
-    const config = await this.feeConfigRepo.findOne({
-      where: { feeType: FeeType.TRANSFER, isActive: true },
-    });
-
-    if (!config) {
-      return { fee: '0', netAmount: amount.toFixed(6) };
-    }
-
-    let fee = amount * parseFloat(config.baseFeeRate);
-    const min = parseFloat(config.minFee);
-    if (fee < min) fee = min;
-    if (config.maxFee !== null) {
-      const max = parseFloat(config.maxFee);
-      if (fee > max) fee = max;
-    }
-
-    const netAmount = amount - fee;
-    return { fee: fee.toFixed(6), netAmount: netAmount.toFixed(6) };
   }
 }

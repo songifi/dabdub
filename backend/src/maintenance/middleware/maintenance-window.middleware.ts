@@ -4,10 +4,22 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { AdminRole } from '../../admin/entities/admin.entity';
+import { Role } from '../../rbac/rbac.types';
 import { MaintenanceService } from '../maintenance.service';
 
 interface RequestWithUser extends Request {
   user?: { id?: string; role?: string };
+}
+
+function bypassesMaintenanceForRole(role: string | undefined): boolean {
+  if (!role) return false;
+  return (
+    role === Role.Admin ||
+    role === Role.SuperAdmin ||
+    role === AdminRole.ADMIN ||
+    role === AdminRole.SUPERADMIN
+  );
 }
 
 @Injectable()
@@ -15,13 +27,16 @@ export class MaintenanceWindowMiddleware implements NestMiddleware {
   constructor(private readonly maintenanceService: MaintenanceService) {}
 
   async use(req: RequestWithUser, res: Response, next: NextFunction) {
-    // Skip middleware for admin users (they can access during maintenance)
-    if (req.user?.role === 'admin' || req.user?.role === 'superadmin') {
+    if (bypassesMaintenanceForRole(req.user?.role)) {
       return next();
     }
 
-    // Skip for health checks and admin routes
-    if (req.path.startsWith('/health') || req.path.startsWith('/admin')) {
+    const path = req.path;
+    if (
+      path.includes('/health') ||
+      path.includes('/admin/') ||
+      path.includes('/system/maintenance')
+    ) {
       return next();
     }
 

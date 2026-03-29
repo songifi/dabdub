@@ -27,6 +27,7 @@ import { ReferralAnalyticsService } from '../referrals/referral-analytics.servic
 import { FunnelStatsDto, TopReferrersDto, CohortComparisonDto, RewardSpendDto, UserReferralStatsDto } from '../referrals/dto/referral-analytics.dto';
 import { OffRampService } from '../offramp/offramp.service';
 import { AdminOffRampQueryDto, OffRampResponseDto } from '../offramp/dto/offramp.dto';
+import { GeoService } from '../geo/geo.service';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -39,6 +40,7 @@ export class AdminController {
     private readonly receiptService: ReceiptService,
     private readonly referralAnalyticsService: ReferralAnalyticsService,
     private readonly offRampService: OffRampService,
+    private readonly geoService: GeoService,
   ) {}
 
   @Get('users')
@@ -146,5 +148,12 @@ export class AdminController {
   @ApiOperation({ summary: 'Manually trigger USDC refund for a failed off-ramp order' })
   async refundOffRamp(@Param('id') id: string): Promise<OffRampResponseDto> {
     return this.offRampService.adminRefund(id);
+  @Get('geo/stats')
+  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
+  @ApiOperation({
+    summary: 'Geo-blocked request counts by country in the last 24 hours',
+  })
+  async getGeoStats() {
+    return this.geoService.getBlockedCountryStatsLast24h();
   }
 }

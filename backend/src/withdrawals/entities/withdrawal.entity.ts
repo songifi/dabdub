@@ -26,10 +26,17 @@ export class Withdrawal extends BaseEntity {
   @Column({ name: 'net_amount', type: 'varchar', length: 50 })
   netAmount!: string;
 
+  @Column({ name: 'fee_config_id', nullable: true })
+  feeConfigId!: string | null;
+
   @Column({ name: 'tx_hash', length: 100, nullable: true })
   txHash!: string | null;
 
-  @Column({ type: 'enum', enum: WithdrawalStatus, default: WithdrawalStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: WithdrawalStatus,
+    default: WithdrawalStatus.PENDING,
+  })
   status!: WithdrawalStatus;
 
   @Column({ name: 'failure_reason', type: 'text', nullable: true })

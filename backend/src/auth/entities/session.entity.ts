@@ -16,6 +16,9 @@ export class Session extends BaseEntity {
   @Column({ name: 'ip_address', length: 45, nullable: true })
   ipAddress!: string | null;
 
+  @Column({ length: 2, nullable: true })
+  country!: string | null;
+
   @Column({ name: 'last_seen_at', type: 'timestamptz', default: () => 'NOW()' })
   lastSeenAt!: Date;
 }
