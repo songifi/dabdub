@@ -76,6 +76,21 @@ export class R2Service {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
+  async uploadBuffer(
+    key: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+      }),
+    );
+  }
+
   getPublicUrl(key: string): string {
     return `${this.publicDomain}/${key}`;
   }

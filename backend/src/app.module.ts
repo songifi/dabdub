@@ -80,6 +80,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { DeepLinkModule } from './deeplink/deeplink.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 import { FeatureFlagModule } from './feature-flags/feature-flag.module';
+import { BulkPaymentModule } from './bulk-payments/bulk-payment.module';
 
 @Module({
   imports: [
@@ -163,6 +164,7 @@ import { FeatureFlagModule } from './feature-flags/feature-flag.module';
     UsersModule,
     PinModule,
     TransfersModule,
+    BulkPaymentModule,
     WithdrawalsModule,
     SecurityModule,
     SandboxModule,
