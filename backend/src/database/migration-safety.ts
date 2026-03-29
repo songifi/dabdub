@@ -14,7 +14,7 @@ const RULES: Array<{ rule: string; regex: RegExp }> = [
     rule: 'CREATE INDEX without CONCURRENTLY',
     regex: /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b(?!\s+CONCURRENTLY)/i,
   },
-  { rule: 'ALTER COLUMN TYPE detected', regex: /\bALTER\s+COLUMN\b[\s\S]*?\bTYPE\b/i },
+  { rule: 'ALTER COLUMN TYPE detected', regex: /\bALTER\s+COLUMN\b.*\bTYPE\b/i },
   { rule: 'RENAME COLUMN detected', regex: /\bRENAME\s+COLUMN\b/i },
 ];
 

@@ -5,7 +5,12 @@ import { RateSnapshot } from './entities/rate-snapshot.entity';
 import { CacheService } from '../cache/cache.service';
 
 const mockCache = { get: jest.fn(), set: jest.fn() };
-const mockRepo = { findOne: jest.fn(), save: jest.fn(), create: jest.fn() };
+const mockRepo = {
+  findOne: jest.fn(),
+  save: jest.fn(),
+  create: jest.fn(),
+  manager: { query: jest.fn() },
+};
 
 const freshSnapshot: Partial<RateSnapshot> = {
   rate: '1580.00',
@@ -75,5 +80,42 @@ describe('RatesService.getRate', () => {
     await expect(service.getRate('USDC', 'NGN')).rejects.toBeInstanceOf(
       StaleRateException,
     );
+  });
+});
+
+describe('RatesService.getRateHistory', () => {
+  let service: RatesService;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        RatesService,
+        { provide: getRepositoryToken(RateSnapshot), useValue: mockRepo },
+        { provide: CacheService, useValue: mockCache },
+      ],
+    }).compile();
+    service = module.get(RatesService);
+  });
+
+  it('returns hourly buckets for last 7 days from rate_snapshots', async () => {
+    const bucket = new Date('2026-03-20T14:00:00.000Z');
+    mockRepo.manager.query.mockResolvedValue([
+      { bucket, rate: '1580.12345678' },
+    ]);
+
+    const rows = await service.getRateHistory();
+
+    expect(mockRepo.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining("date_trunc('hour'"),
+      ['USDC', 'NGN', expect.any(Date)],
+    );
+    expect(rows).toEqual([
+      {
+        fetchedAt: bucket,
+        rate: '1580.12345678',
+        source: 'hourly_avg',
+      },
+    ]);
   });
 });

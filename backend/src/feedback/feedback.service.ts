@@ -8,25 +8,15 @@ import type Redis from 'ioredis';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { REDIS_CLIENT } from '../cache/redis.module';
 import { FraudFlag, FraudStatus } from '../fraud/entities/fraud-flag.entity';
-import {
-  AdminFeedbackQueryDto,
-} from './dto/admin-feedback-query.dto';
+import { AdminFeedbackQueryDto } from './dto/admin-feedback-query.dto';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
-import {
-  FeedbackPromptTrigger,
-} from './dto/should-prompt-query.dto';
+import { FeedbackPromptTrigger } from './dto/should-prompt-query.dto';
 import { Feedback, FeedbackType } from './entities/feedback.entity';
-import {
-  SupportTicket,
-  SupportTicketStatus,
-} from './entities/support-ticket.entity';
-import {
-  Transaction,
-  TransactionStatus,
-} from '../transactions/entities/transaction.entity';
+import { SupportTicket, SupportTicketStatus } from './entities/support-ticket.entity';
+import { Transaction, TransactionStatus } from '../transactions/entities/transaction.entity';
 import { User } from '../users/entities/user.entity';
 
-const PROMPT_COOLDOWN_SECONDS = 7 * 24 * 60 * 60;
+const PROMPT_COOLDOWN_SECONDS = 7 * 24 * 60 * 60; // 604800
 
 @Injectable()
 export class FeedbackService {
@@ -54,12 +44,14 @@ export class FeedbackService {
     shouldPrompt: boolean;
     reason?: string;
   }> {
-    const cooldownKey = this.promptCooldownKey(userId, trigger);
+    // Rule 1: max 1 prompt per 7 days per user per trigger
+    const cooldownKey = `feedback:prompted:${userId}:${trigger}`;
     const onCooldown = await this.redis.get(cooldownKey);
     if (onCooldown) {
       return { shouldPrompt: false, reason: 'cooldown_active' };
     }
 
+    // Rule 4: never prompt if account inactive or has open dispute/frozen account
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user || !user.isActive) {
       return { shouldPrompt: false, reason: 'account_inactive' };
@@ -72,42 +64,26 @@ export class FeedbackService {
       return { shouldPrompt: false, reason: 'account_restricted' };
     }
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentCompletedTxCount = await this.txRepo.count({
-      where: {
-        userId,
-        status: TransactionStatus.COMPLETED,
-        createdAt: MoreThanOrEqual(thirtyDaysAgo),
-      },
-    });
-
-    const hasRecentActivity =
-      recentCompletedTxCount > 0 || user.updatedAt >= thirtyDaysAgo;
-
-    if (!hasRecentActivity) {
-      return { shouldPrompt: false, reason: 'inactive_30_days' };
-    }
-
+    // Rule 2: transaction_rating shown after 3rd completed transaction
     if (trigger === FeedbackPromptTrigger.TRANSACTION_RATING) {
       const totalCompletedTx = await this.txRepo.count({
-        where: {
-          userId,
-          status: TransactionStatus.COMPLETED,
-        },
+        where: { userId, status: TransactionStatus.COMPLETED },
       });
-
       if (totalCompletedTx < 3) {
         return { shouldPrompt: false, reason: 'requires_three_transactions' };
       }
     }
 
-    await this.redis.set(
-      cooldownKey,
-      '1',
-      'EX',
-      PROMPT_COOLDOWN_SECONDS,
-    );
+    // Rule 3: NPS shown after 30 days of active use
+    if (trigger === FeedbackPromptTrigger.NPS) {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const hasOldEnoughActivity = user.createdAt <= thirtyDaysAgo;
+      if (!hasOldEnoughActivity) {
+        return { shouldPrompt: false, reason: 'requires_30_days_active_use' };
+      }
+    }
 
+    await this.redis.set(cooldownKey, '1', 'EX', PROMPT_COOLDOWN_SECONDS);
     return { shouldPrompt: true };
   }
 
@@ -133,8 +109,9 @@ export class FeedbackService {
       }),
     );
 
+    // rating <= 2 → auto-create SupportTicket with category=general
     let supportTicket: SupportTicket | null = null;
-    if ((dto.rating ?? 5) <= 2) {
+    if (dto.rating !== undefined && dto.rating <= 2) {
       supportTicket = await this.supportTicketRepo.save(
         this.supportTicketRepo.create({
           userId,
@@ -166,9 +143,15 @@ export class FeedbackService {
 
     if (query.maxRating !== undefined) {
       qb.andWhere('feedback.rating IS NOT NULL');
-      qb.andWhere('feedback.rating <= :maxRating', {
-        maxRating: query.maxRating,
-      });
+      qb.andWhere('feedback.rating <= :maxRating', { maxRating: query.maxRating });
+    }
+
+    if (query.from) {
+      qb.andWhere('feedback.createdAt >= :from', { from: new Date(query.from) });
+    }
+
+    if (query.to) {
+      qb.andWhere('feedback.createdAt <= :to', { to: new Date(query.to) });
     }
 
     qb.orderBy('feedback.createdAt', 'DESC');
@@ -176,19 +159,15 @@ export class FeedbackService {
     qb.take(limit);
 
     const [data, total] = await qb.getManyAndCount();
-
     return { data, total, page, limit };
   }
 
   async getAggregates(): Promise<{
+    avgTransactionRating: number;
+    npsScore: number;
     totalFeedback: number;
-    ratingAverage: number;
-    nps: number;
-    promoters: number;
-    detractors: number;
-    passive: number;
-    byType: Record<string, number>;
-    outreachRequired: number;
+    ratingDistribution: Record<number, number>;
+    recentComments: string[];
   }> {
     const totalFeedback = await this.feedbackRepo.count();
 
@@ -206,43 +185,46 @@ export class FeedbackService {
       .getRawMany<{ score: string }>();
 
     const npsScores = npsRows
-      .map((row: { score: string }) => Number(row.score))
-      .filter((score: number) => Number.isFinite(score));
+      .map((row) => Number(row.score))
+      .filter((s) => Number.isFinite(s));
 
-    const promoters = npsScores.filter((score: number) => score >= 9).length;
-    const detractors = npsScores.filter((score: number) => score <= 6).length;
-    const passive = npsScores.length - promoters - detractors;
-
-    const nps =
+    const promoters = npsScores.filter((s) => s >= 9).length;
+    const detractors = npsScores.filter((s) => s <= 6).length;
+    const npsScore =
       npsScores.length === 0
         ? 0
         : Math.round(((promoters - detractors) / npsScores.length) * 100);
 
-    const typeRows = await this.feedbackRepo
+    // Rating distribution 1–5
+    const distRows = await this.feedbackRepo
       .createQueryBuilder('feedback')
-      .select('feedback.type', 'type')
+      .select('feedback.rating', 'rating')
       .addSelect('COUNT(*)', 'count')
-      .groupBy('feedback.type')
-      .getRawMany<{ type: string; count: string }>();
+      .where('feedback.rating IS NOT NULL')
+      .groupBy('feedback.rating')
+      .getRawMany<{ rating: string; count: string }>();
 
-    const byType: Record<string, number> = {};
-    for (const row of typeRows) {
-      byType[row.type] = Number(row.count);
+    const ratingDistribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const row of distRows) {
+      ratingDistribution[Number(row.rating)] = Number(row.count);
     }
 
-    const outreachRequired = await this.feedbackRepo.count({
-      where: { requiresOutreach: true },
-    });
+    const recentRows = await this.feedbackRepo
+      .createQueryBuilder('feedback')
+      .select('feedback.message', 'message')
+      .where('feedback.message IS NOT NULL')
+      .orderBy('feedback.createdAt', 'DESC')
+      .limit(10)
+      .getRawMany<{ message: string }>();
+
+    const recentComments = recentRows.map((r) => r.message);
 
     return {
+      avgTransactionRating: Number(ratingRow?.avgRating ?? 0),
+      npsScore,
       totalFeedback,
-      ratingAverage: Number(ratingRow?.avgRating ?? 0),
-      nps,
-      promoters,
-      detractors,
-      passive,
-      byType,
-      outreachRequired,
+      ratingDistribution,
+      recentComments,
     };
   }
 
@@ -272,7 +254,6 @@ export class FeedbackService {
       }
       return;
     }
-
     if (dto.rating === undefined) {
       throw new BadRequestException('rating is required for this feedback type');
     }
@@ -280,11 +261,8 @@ export class FeedbackService {
 
   private shouldMarkForOutreach(dto: CreateFeedbackDto): boolean {
     const lowRating = dto.rating !== undefined && dto.rating <= 2;
-    const detractorNps = dto.type === FeedbackType.NPS && (dto.npsScore ?? 10) <= 6;
+    // npsScore <= 6 → detractor
+    const detractorNps = dto.type === FeedbackType.NPS && dto.npsScore !== undefined && dto.npsScore <= 6;
     return lowRating || detractorNps;
-  }
-
-  private promptCooldownKey(userId: string, trigger: FeedbackPromptTrigger): string {
-    return `feedback:prompt:cooldown:${userId}:${trigger}`;
   }
 }

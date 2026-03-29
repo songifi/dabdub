@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { FeedbackType } from '../entities/feedback.entity';
 
 export class AdminFeedbackQueryDto {
@@ -31,4 +31,14 @@ export class AdminFeedbackQueryDto {
   @Min(1)
   @Max(5)
   maxRating?: number;
+
+  @ApiPropertyOptional({ description: 'Filter from date (ISO 8601)' })
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional({ description: 'Filter to date (ISO 8601)' })
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 }

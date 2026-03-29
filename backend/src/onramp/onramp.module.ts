@@ -4,9 +4,12 @@ import { BullModule, InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { FeeConfig } from '../fee-config/entities/fee-config.entity';
 import { User } from '../users/entities/user.entity';
+import { Transaction } from '../transactions/entities/transaction.entity';
+import { SorobanModule } from '../soroban/soroban.module';
 import { OnRampController } from './onramp.controller';
 import { OnRampOrder } from './onramp-order.entity';
 import { OnRampService } from './onramp.service';
+import { OnRampCronService } from './onramp-cron.service';
 import { FlutterwaveClient } from './flutterwave.client';
 import { OnRampWebhookController } from './onramp-webhook.controller';
 import {
@@ -17,10 +20,11 @@ import {
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OnRampOrder, FeeConfig, User]),
+    TypeOrmModule.forFeature([OnRampOrder, FeeConfig, User, Transaction]),
     BullModule.registerQueue({ name: ONRAMP_QUEUE }),
+    SorobanModule,
   ],
-  providers: [OnRampService, FlutterwaveClient, OnRampExpiryProcessor],
+  providers: [OnRampService, OnRampCronService, FlutterwaveClient, OnRampExpiryProcessor],
   controllers: [OnRampController, OnRampWebhookController],
   exports: [OnRampService],
 })

@@ -1,19 +1,12 @@
 import {
   ConflictException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { ConfigType } from '@nestjs/config';
-import {
-  S3Client,
-  GetObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { r2Config } from '../config/r2.config';
 import { KycSubmission, KycSubmissionStatus } from './entities/kyc-submission.entity';
+import { VerificationResult, VerificationType, VerificationStatus } from './entities/verification-result.entity';
 import { SubmitKycDto } from './dto/submit-kyc.dto';
 import { RejectKycDto } from './dto/reject-kyc.dto';
 import { AdminKycQueryDto } from './dto/admin-kyc-query.dto';
@@ -22,39 +15,29 @@ import { TierName } from '../tier-config/entities/tier-config.entity';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notifications.types';
-
-const PRESIGN_EXPIRY = 15 * 60; // 15 minutes
+import { R2Service } from '../r2/r2.service';
+import { PremblyService, VerifyResult } from '../prembly/prembly.service';
+import { TierUpgradeService } from '../tier-config/tier-upgrade.service';
 
 @Injectable()
 export class KycService {
-  private readonly s3: S3Client;
-  private readonly bucket: string;
-
   constructor(
     @InjectRepository(KycSubmission)
     private readonly repo: Repository<KycSubmission>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    @Inject(r2Config.KEY)
-    private readonly cfg: ConfigType<typeof r2Config>,
+    @InjectRepository(VerificationResult)
+    private readonly verificationRepo: Repository<VerificationResult>,
+    private readonly r2: R2Service,
     private readonly emailService: EmailService,
     private readonly notificationService: NotificationService,
-  ) {
-    this.bucket = cfg.bucketName;
-    this.s3 = new S3Client({
-      region: 'auto',
-      endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: cfg.accessKeyId,
-        secretAccessKey: cfg.secretAccessKey,
-      },
-    });
-  }
+    private readonly premblyService: PremblyService,
+    private readonly tierUpgradeService: TierUpgradeService,
+  ) {}
 
   // ── User endpoints ──────────────────────────────────────────────────────────
 
   async submit(userId: string, dto: SubmitKycDto): Promise<KycSubmission> {
-    // Max 1 active submission per user
     const active = await this.repo.findOne({
       where: [
         { userId, status: KycSubmissionStatus.PENDING },
@@ -79,10 +62,8 @@ export class KycService {
 
     const saved = await this.repo.save(submission);
 
-    // Update user kyc_status
     await this.userRepo.update(userId, { kycStatus: KycStatus.PENDING });
 
-    // Notify admin via email (fire-and-forget)
     this.emailService
       .queue('admin@system.local', 'kyc-new-submission', {
         submissionId: saved.id,
@@ -111,7 +92,7 @@ export class KycService {
 
     const qb = this.repo
       .createQueryBuilder('k')
-      .orderBy('k.created_at', 'ASC'); // FIFO
+      .orderBy('k.created_at', 'ASC');
 
     if (query.status) qb.andWhere('k.status = :status', { status: query.status });
     if (query.targetTier) qb.andWhere('k.target_tier = :targetTier', { targetTier: query.targetTier });
@@ -133,9 +114,11 @@ export class KycService {
     if (!submission) throw new NotFoundException('KYC submission not found');
 
     const [documentFrontUrl, selfieUrl, documentBackUrl] = await Promise.all([
-      this.presign(submission.documentFrontKey),
-      this.presign(submission.selfieKey),
-      submission.documentBackKey ? this.presign(submission.documentBackKey) : Promise.resolve(null),
+      this.r2.getPresignedDownloadUrl(submission.documentFrontKey),
+      this.r2.getPresignedDownloadUrl(submission.selfieKey),
+      submission.documentBackKey
+        ? this.r2.getPresignedDownloadUrl(submission.documentBackKey)
+        : Promise.resolve(null),
     ]);
 
     return Object.assign(submission, { documentFrontUrl, documentBackUrl, selfieUrl });
@@ -149,30 +132,31 @@ export class KycService {
     submission.reviewedAt = new Date();
     await this.repo.save(submission);
 
-    // Upgrade user tier
-    const newTier = submission.targetTier as TierName;
     await this.userRepo.update(submission.userId, {
-      tier: newTier,
       kycStatus: KycStatus.APPROVED,
     });
 
-    const user = await this.userRepo.findOne({ where: { id: submission.userId } });
+    const upgradedViaPending = await this.tierUpgradeService.checkAutoUpgrade(
+      submission.userId,
+    );
 
-    // WebSocket + in-app notification
+    if (!upgradedViaPending) {
+      await this.tierUpgradeService.applySubmissionTierAfterKyc(
+        submission.userId,
+        submission.targetTier as TierName,
+      );
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: submission.userId } });
+    const effectiveTier = user?.tier ?? (submission.targetTier as TierName);
+
     await this.notificationService.create(
       submission.userId,
       NotificationType.TIER_UPGRADED,
       'KYC Approved',
-      `Your KYC has been approved. You are now on the ${newTier} tier.`,
-      { submissionId: id, tier: newTier },
+      `Your KYC has been approved. You are now on the ${effectiveTier} tier.`,
+      { submissionId: id, tier: effectiveTier },
     );
-
-    // Email notification
-    if (user) {
-      this.emailService
-        .queue(user.email, 'kyc-approved', { tier: newTier })
-        .catch(() => undefined);
-    }
 
     return submission;
   }
@@ -190,7 +174,6 @@ export class KycService {
 
     const user = await this.userRepo.findOne({ where: { id: submission.userId } });
 
-    // WebSocket + in-app notification
     await this.notificationService.create(
       submission.userId,
       NotificationType.KYC_UPDATE,
@@ -199,7 +182,6 @@ export class KycService {
       { submissionId: id, reviewNote: dto.reviewNote },
     );
 
-    // Email with reason
     if (user) {
       this.emailService
         .queue(user.email, 'kyc-rejected', { reviewNote: dto.reviewNote })
@@ -219,7 +201,6 @@ export class KycService {
 
     await this.userRepo.update(submission.userId, { kycStatus: KycStatus.PENDING });
 
-    // Notify user
     await this.notificationService.create(
       submission.userId,
       NotificationType.KYC_UPDATE,
@@ -231,16 +212,94 @@ export class KycService {
     return submission;
   }
 
+  // ── Prembly auto-verification ───────────────────────────────────────────────
+
+  async runVerification(submissionId: string): Promise<VerificationResult[]> {
+    const submission = await this.repo.findOne({ where: { id: submissionId } });
+    if (!submission) throw new NotFoundException('KYC submission not found');
+
+    const user = await this.userRepo.findOneOrFail({ where: { id: submission.userId } });
+
+    const [bvnSettled, ninSettled] = await Promise.allSettled([
+      this.premblyService.verifyBvn(submission.bvnLast4, submission.userId),
+      this.premblyService.verifyNin(submission.ninLast4, submission.userId),
+    ]);
+
+    const entries: [VerificationType, PromiseSettledResult<VerifyResult>, string][] = [
+      [VerificationType.BVN, bvnSettled, submission.bvnLast4],
+      [VerificationType.NIN, ninSettled, submission.ninLast4],
+    ];
+
+    const results: VerificationResult[] = [];
+
+    for (const [type, settled, maskedInput] of entries) {
+      const passed = settled.status === 'fulfilled' && settled.value.verified;
+      const status = passed ? VerificationStatus.PASSED : VerificationStatus.FAILED;
+
+      const verifiedName = passed
+        ? `${(settled as PromiseFulfilledResult<VerifyResult>).value.firstName} ${(settled as PromiseFulfilledResult<VerifyResult>).value.lastName}`
+        : null;
+
+      const rawResponse =
+        settled.status === 'fulfilled'
+          ? settled.value
+          : { error: String((settled as PromiseRejectedResult).reason) };
+
+      const record = this.verificationRepo.create({
+        userId: submission.userId,
+        submissionId,
+        verificationType: type,
+        status,
+        maskedInput,
+        verifiedName,
+        rawResponse: rawResponse as Record<string, unknown>,
+      });
+
+      results.push(await this.verificationRepo.save(record));
+    }
+
+    const allPassed = results.every((r) => r.status === VerificationStatus.PASSED);
+
+    if (allPassed) {
+      await this.approve(submissionId, 'system');
+    } else {
+      submission.status = KycSubmissionStatus.UNDER_REVIEW;
+      submission.reviewNote = results
+        .filter((r) => r.status === VerificationStatus.FAILED)
+        .map((r) => `${r.verificationType} verification failed`)
+        .join('; ');
+      await this.repo.save(submission);
+
+      await this.notificationService.create(
+        submission.userId,
+        NotificationType.KYC_UPDATE,
+        'KYC Under Manual Review',
+        'Your identity verification requires manual review.',
+        { submissionId },
+      );
+
+      this.emailService
+        .queue(user.email, 'kyc-manual-review', { submissionId })
+        .catch(() => undefined);
+    }
+
+    return results;
+  }
+
+  async getVerificationResults(submissionId: string): Promise<VerificationResult[]> {
+    const submission = await this.repo.findOne({ where: { id: submissionId } });
+    if (!submission) throw new NotFoundException('KYC submission not found');
+    return this.verificationRepo.find({
+      where: { submissionId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private async findActiveOrFail(id: string): Promise<KycSubmission> {
     const submission = await this.repo.findOne({ where: { id } });
     if (!submission) throw new NotFoundException('KYC submission not found');
     return submission;
-  }
-
-  private async presign(key: string): Promise<string> {
-    const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
-    return getSignedUrl(this.s3, command, { expiresIn: PRESIGN_EXPIRY });
   }
 }

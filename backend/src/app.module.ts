@@ -45,6 +45,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { PasskeyModule } from './passkey/passkey.module';
 import { SecurityModule } from './security/security.module';
 import { SandboxModule } from './sandbox/sandbox.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { MaintenanceWindowMiddleware } from './maintenance/middleware/maintenance-window.middleware';
 
@@ -60,13 +61,14 @@ import { ReportsModule } from './reports/reports.module';
 import { WalletsModule } from './wallets/wallets.module';
 import { BlockchainTransactionsModule } from './blockchain-transactions/blockchain-transactions.module';
 import { ApiVersionModule } from './api-version/api-version.module';
+import { OffRampModule } from './offramp/offramp.module';
+import { OtpModule } from './otp/otp.module';
 import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers.interceptor';
 import { CronModule } from './cron/cron.module';
 import { ActivityModule } from './activity/activity.module';
 import { BalanceModule } from './balance/balance.module';
 import { SentryModule as SentryUserContextModule } from './sentry/sentry.module';
 import { SentryUserMiddleware } from './sentry/sentry-user.middleware';
-import { OtpModule } from './otp/otp.module';
 import { PwaModule } from './pwa/pwa.module';
 import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
 import { ComplianceModule } from './compliance/compliance.module';
@@ -75,6 +77,9 @@ import { UsernameModule } from './username/username.module';
 import { SplitsModule } from './splits/splits.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { FeesModule } from './fees/fees.module';
+import { DeepLinkModule } from './deeplink/deeplink.module';
+import { FlutterwaveModule } from './flutterwave/flutterwave.module';
+import { FeatureFlagModule } from './feature-flags/feature-flag.module';
 
 @Module({
   imports: [
@@ -161,6 +166,7 @@ import { FeesModule } from './fees/fees.module';
     WithdrawalsModule,
     SecurityModule,
     SandboxModule,
+    FeatureFlagsModule,
     MaintenanceModule,
     AlertModule,
     GroupsModule,
@@ -209,6 +215,8 @@ import { FeesModule } from './fees/fees.module';
     // Reports — async CSV data exports via BullMQ + R2.
     ReportsModule,
 
+    // Off-Ramp — USDC to NGN conversion and bank transfer.
+    OffRampModule,
     // Activity — chronological feed with cursor pagination, summary, and breakdown.
     ActivityModule,
     // Balance — unified balance aggregation with caching.
@@ -228,6 +236,16 @@ import { FeesModule } from './fees/fees.module';
     SplitsModule,
     FeedbackModule,
     FeesModule,
+
+    // Deep linking — universal links, AASA, asset links, QR web fallbacks.
+    DeepLinkModule,
+
+    // Flutterwave — virtual accounts, transfers, balance.
+    FlutterwaveModule,
+
+    // User-level feature flags (rollouts, A/B) — Redis-cached evaluation.
+    FeatureFlagModule,
+
   ],
 
   providers: [

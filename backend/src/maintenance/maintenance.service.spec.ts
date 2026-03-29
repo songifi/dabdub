@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getQueueToken } from '@nestjs/bull';
-import { Repository, MoreThan, LessThanOrEqual } from 'typeorm';
+import { Repository, And, MoreThan, LessThanOrEqual } from 'typeorm';
 import { Queue } from 'bull';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MaintenanceService, MAINTENANCE_QUEUE } from './maintenance.service';
@@ -90,8 +90,7 @@ describe('MaintenanceService', () => {
       expect(repository.find).toHaveBeenCalledWith({
         where: {
           status: MaintenanceStatus.SCHEDULED,
-          startAt: MoreThan(expect.any(Date)),
-          startAt: LessThanOrEqual(expect.any(Date)),
+          startAt: And(MoreThan(expect.any(Date)), LessThanOrEqual(expect.any(Date))),
         },
         order: { startAt: 'ASC' },
       });
@@ -139,20 +138,41 @@ describe('MaintenanceService', () => {
     };
 
     it('should create a maintenance window successfully', async () => {
-      repository.create.mockReturnValue(mockWindow);
-      repository.save.mockResolvedValue(mockWindow);
-      queue.add.mockResolvedValue({} as any);
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2024-03-29T00:00:00Z'));
+      try {
+        repository.create.mockReturnValue(mockWindow);
+        repository.save.mockResolvedValue(mockWindow);
+        queue.add.mockResolvedValue({} as any);
 
-      const result = await service.create(createDto, 'admin-id');
+        const result = await service.create(createDto, 'admin-id');
 
-      expect(result).toEqual(mockWindow);
-      expect(repository.create).toHaveBeenCalledWith({
-        ...createDto,
-        startAt: new Date(createDto.startAt),
-        endAt: new Date(createDto.endAt),
-        createdBy: 'admin-id',
-      });
-      expect(queue.add).toHaveBeenCalledTimes(4); // start, end, notify_24h, notify_1h
+        expect(result).toEqual(mockWindow);
+        expect(repository.create).toHaveBeenCalledWith({
+          ...createDto,
+          startAt: new Date(createDto.startAt),
+          endAt: new Date(createDto.endAt),
+          createdBy: 'admin-id',
+        });
+        expect(queue.add).toHaveBeenCalledTimes(4); // start, end, notify_24h, notify_1h
+
+        const notify24h = queue.add.mock.calls.find(
+          (c) => (c[0] as { action?: string }).action === 'notify_24h',
+        );
+        const notify1h = queue.add.mock.calls.find(
+          (c) => (c[0] as { action?: string }).action === 'notify_1h',
+        );
+        expect(notify24h?.[1]).toMatchObject({
+          delay: 2 * 60 * 60 * 1000,
+          jobId: `notify24h-${mockWindow.id}`,
+        });
+        expect(notify1h?.[1]).toMatchObject({
+          delay: 25 * 60 * 60 * 1000,
+          jobId: `notify1h-${mockWindow.id}`,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should throw error if start time is after end time', async () => {
@@ -195,6 +215,10 @@ describe('MaintenanceService', () => {
         ...scheduledWindow,
         status: MaintenanceStatus.CANCELLED,
       });
+      expect(queue.add).toHaveBeenCalledWith(
+        { windowId: 'test-id', action: 'cancel_notify' },
+        expect.objectContaining({ removeOnComplete: true }),
+      );
     });
 
     it('should throw error if window not found', async () => {

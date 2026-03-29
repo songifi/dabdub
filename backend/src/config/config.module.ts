@@ -14,6 +14,8 @@ import { paystackConfig } from './paystack.config';
 import { firebaseConfig } from './firebase.config';
 import { sudoAfricaConfig } from './sudo-africa.config';
 import { webPushConfig } from './web-push.config';
+import { premblyConfig } from './prembly.config';
+import { deeplinkConfig } from './deeplink.config';
 
 /**
  * Combined Joi validation schema for all environment variables.
@@ -143,6 +145,10 @@ const validationSchema = Joi.object({
   R2_BUCKET_NAME: Joi.string()
     .required()
     .messages({ 'any.required': 'R2_BUCKET_NAME is required' }),
+  R2_PUBLIC_DOMAIN: Joi.string()
+    .uri()
+    .required()
+    .messages({ 'any.required': 'R2_PUBLIC_DOMAIN is required (public bucket CDN URL)' }),
 
   // ── Flutterwave ───────────────────────────────────────────────────────────
   FLUTTERWAVE_SECRET_KEY: Joi.string()
@@ -183,6 +189,31 @@ const validationSchema = Joi.object({
   SUDO_AFRICA_WEBHOOK_SECRET: Joi.string()
     .required()
     .messages({ 'any.required': 'SUDO_AFRICA_WEBHOOK_SECRET is required' }),
+
+  // ── Prembly (KYC) ─────────────────────────────────────────────────────────
+  PREMBLY_API_KEY: Joi.string()
+    .required()
+    .messages({ 'any.required': 'PREMBLY_API_KEY is required' }),
+  PREMBLY_APP_ID: Joi.string()
+    .required()
+    .messages({ 'any.required': 'PREMBLY_APP_ID is required' }),
+  PREMBLY_BASE_URL: Joi.string()
+    .uri()
+    .default('https://api.prembly.com/identitypass/verification'),
+
+  // ── Deep Linking ─────────────────────────────────────────────────────────
+  APPLE_TEAM_ID: Joi.string()
+    .required()
+    .messages({ 'any.required': 'APPLE_TEAM_ID is required for universal links' }),
+  APPLE_BUNDLE_ID: Joi.string()
+    .required()
+    .messages({ 'any.required': 'APPLE_BUNDLE_ID is required for universal links' }),
+  ANDROID_PACKAGE: Joi.string()
+    .required()
+    .messages({ 'any.required': 'ANDROID_PACKAGE is required for Android app links' }),
+  ANDROID_SHA256_FINGERPRINT: Joi.string()
+    .required()
+    .messages({ 'any.required': 'ANDROID_SHA256_FINGERPRINT is required for Android app links' }),
 });
 
 @Module({
@@ -203,6 +234,8 @@ const validationSchema = Joi.object({
         firebaseConfig,
         sudoAfricaConfig,
         webPushConfig,
+        premblyConfig,
+        deeplinkConfig,
       ],
       validationSchema,
       validationOptions: { abortEarly: false },

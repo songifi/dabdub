@@ -9,19 +9,18 @@ import {
   Query,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../rbac/guards/roles.guard';
-import { Roles } from '../rbac/decorators/roles.decorator';
-import { Role } from '../rbac/enums/role.enum';
-import { User } from '../users/entities/user.entity';
 import { DisputeService } from './dispute.service';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { QueryDisputesDto, RejectDisputeDto } from './dto/query-dispute.dto';
+import { DisputeAdminGuard } from './guards/dispute-admin.guard';
 
-type AuthReq = Request & { user: User };
+type AuthReq = Request & { user: { id: string } };
 
 @ApiTags('disputes')
 @ApiBearerAuth()
@@ -53,32 +52,29 @@ export class DisputeController {
   // ── Admin routes ──────────────────────────────────────────────────────────
 
   @Get('admin/disputes')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @UseGuards(DisputeAdminGuard)
   @ApiOperation({ summary: 'Admin: list all disputes with filters' })
   adminList(@Query() query: QueryDisputesDto) {
     return this.disputeService.adminList(query);
   }
 
   @Get('admin/disputes/:id')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @UseGuards(DisputeAdminGuard)
   @ApiOperation({ summary: 'Admin: full dispute detail with suggested resolution' })
   adminDetail(@Param('id', ParseUUIDPipe) id: string) {
     return this.disputeService.adminDetail(id);
   }
 
   @Patch('admin/disputes/:id/approve')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @UseGuards(DisputeAdminGuard)
   @ApiOperation({ summary: 'Admin: approve dispute and execute reversal' })
   approve(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthReq) {
     return this.disputeService.approve(id, req.user.id);
   }
 
   @Patch('admin/disputes/:id/reject')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @UseGuards(DisputeAdminGuard)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({ summary: 'Admin: reject dispute with resolution reason' })
   reject(
     @Param('id', ParseUUIDPipe) id: string,

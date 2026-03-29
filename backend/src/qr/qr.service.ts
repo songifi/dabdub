@@ -7,9 +7,9 @@ import * as QRCode from 'qrcode';
 import { createHash } from 'crypto';
 import { PayLink, PayLinkStatus } from '../paylink/entities/pay-link.entity';
 import { QrResponseDto } from './dto/qr-response.dto';
+import { DeepLinkService } from '../deeplink/deeplink.service';
+import { DeepLinkType, DEEP_LINK_SCHEME } from '../common/constants/deep-links';
 
-const DEEP_LINK_SCHEME = 'cheesewallet://';
-const WEB_FALLBACK_BASE = 'https://pay.cheesewallet.app';
 const CACHE_TTL_SECONDS = 3600;
 const QR_WIDTH = 300;
 
@@ -21,6 +21,7 @@ export class QrService {
     @InjectRedis() private readonly redis: Redis,
     @InjectRepository(PayLink)
     private readonly payLinkRepo: Repository<PayLink>,
+    private readonly deepLinkService: DeepLinkService,
   ) {}
 
   /**
@@ -33,11 +34,8 @@ export class QrService {
     amount?: string,
     note?: string,
   ): Promise<QrResponseDto> {
-    const params = new URLSearchParams({ to: username });
-    if (amount) params.set('amount', amount);
-    if (note) params.set('note', note);
-
-    const paymentUrl = `${DEEP_LINK_SCHEME}pay?${params.toString()}`;
+    const deepLink = this.deepLinkService.generate(DeepLinkType.PAY, { to: username, amount });
+    const paymentUrl = this.deepLinkService.generateWebFallback(deepLink);
 
     const cacheKey = this.buildCacheKey({
       type: 'user',
@@ -72,8 +70,8 @@ export class QrService {
       );
     }
 
-    const params = new URLSearchParams({ id: tokenId });
-    const paymentUrl = `${DEEP_LINK_SCHEME}paylink?${params.toString()}`;
+    const deepLink = this.deepLinkService.generate(DeepLinkType.PAYLINK, { id: tokenId });
+    const paymentUrl = this.deepLinkService.generateWebFallback(deepLink);
 
     const cacheKey = this.buildCacheKey({ type: 'paylink', tokenId });
     const cached = await this.redis.get(cacheKey);
@@ -91,10 +89,11 @@ export class QrService {
 
   /**
    * Builds the web fallback URL for a username.
-   * Useful for embedding in email/HTML where deep links may not work.
+   * Delegates to DeepLinkService so URL format stays consistent.
    */
   buildWebFallbackUrl(username: string): string {
-    return `${WEB_FALLBACK_BASE}/${encodeURIComponent(username)}`;
+    const deepLink = this.deepLinkService.generate(DeepLinkType.PAY, { to: username });
+    return this.deepLinkService.generateWebFallback(deepLink);
   }
 
 async renderQr(content: string): Promise<string> {
@@ -134,11 +133,8 @@ async renderQr(content: string): Promise<string> {
     amount?: string,
     note?: string,
   ): Promise<{ qrDataUrl: string; paymentUrl: string }> {
-    const params = new URLSearchParams({ to: username });
-    if (amount) params.set('amount', amount);
-    if (note) params.set('note', note);
-
-    const paymentUrl = `${DEEP_LINK_SCHEME}pay?${params.toString()}`;
+    const deepLink = this.deepLinkService.generate(DeepLinkType.PAY, { to: username, amount });
+    const paymentUrl = this.deepLinkService.generateWebFallback(deepLink);
 
     const isPersistent = !amount && !note;
     const cacheKey = isPersistent 

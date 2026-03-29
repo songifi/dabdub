@@ -19,3 +19,5 @@ export {
   type SudoAfricaConfig,
 } from './sudo-africa.config';
 export { webPushConfig, webPushConfigValidation } from './web-push.config';
+export { premblyConfig, type PremblyConfig } from './prembly.config';
+export { deeplinkConfig, type DeeplinkConfig } from './deeplink.config';

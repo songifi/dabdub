@@ -9,6 +9,7 @@ import { WsModule } from '../ws/ws.module';
 import { RatesModule } from '../rates/rates.module';
 import { SorobanModule } from '../soroban/soroban.module';
 import { DepositsModule } from '../deposits/deposits.module';
+import { FlutterwaveModule } from '../flutterwave/flutterwave.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DepositsModule } from '../deposits/deposits.module';
     RatesModule,
     SorobanModule,
     DepositsModule,
+    FlutterwaveModule,
   ],
   providers: [VirtualAccountService],
   controllers: [VirtualAccountController],
