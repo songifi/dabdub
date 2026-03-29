@@ -45,6 +45,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { PasskeyModule } from './passkey/passkey.module';
 import { SecurityModule } from './security/security.module';
 import { SandboxModule } from './sandbox/sandbox.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { MaintenanceWindowMiddleware } from './maintenance/middleware/maintenance-window.middleware';
 
@@ -78,6 +79,7 @@ import { SplitsModule } from './splits/splits.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { DeepLinkModule } from './deeplink/deeplink.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
+import { FeatureFlagModule } from './feature-flags/feature-flag.module';
 
 @Module({
   imports: [
@@ -164,6 +166,7 @@ import { FlutterwaveModule } from './flutterwave/flutterwave.module';
     WithdrawalsModule,
     SecurityModule,
     SandboxModule,
+    FeatureFlagsModule,
     MaintenanceModule,
     AlertModule,
     GroupsModule,
@@ -239,6 +242,9 @@ import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 
     // Flutterwave — virtual accounts, transfers, balance.
     FlutterwaveModule,
+
+    // User-level feature flags (rollouts, A/B) — Redis-cached evaluation.
+    FeatureFlagModule,
 
   ],
 

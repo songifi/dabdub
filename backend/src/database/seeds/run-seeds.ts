@@ -1,6 +1,7 @@
 import { AppDataSource } from '../data-source';
 import { seedTierConfigs } from './tier-config.seed';
 import { seedAppConfigs } from './app-config.seed';
+import { seedFeatureFlags } from './feature-flags.seed';
 
 async function runSeeds(): Promise<void> {
   await AppDataSource.initialize();
@@ -8,6 +9,7 @@ async function runSeeds(): Promise<void> {
 
   await seedTierConfigs(AppDataSource);
   await seedAppConfigs(AppDataSource);
+  await seedFeatureFlags(AppDataSource);
 
   await AppDataSource.destroy();
   console.log('Seeds complete.');
