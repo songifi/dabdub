@@ -30,6 +30,7 @@ function virtualCardAccessForTier(tier: TierName): boolean {
   return tierRank(tier) >= tierRank(TierName.GOLD);
 }
 
+/** In-app tier upgrades: requirements, KYC gating, pending target, auto-upgrade after approval. */
 @Injectable()
 export class TierUpgradeService {
   constructor(
