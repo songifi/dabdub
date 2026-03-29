@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from "typeorm";
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from "typeorm";
 
 export enum Frequency {
   WEEKLY = "weekly",
@@ -11,47 +17,50 @@ export enum Status {
   CANCELLED = "cancelled",
 }
 
-@Entity()
+@Entity("scheduled_payouts")
 export class ScheduledPayout {
   @PrimaryGeneratedColumn("uuid")
-  id: string;
+  id!: string;
 
   @Column()
-  userId: string;
+  userId!: string;
 
   @Column()
-  toUsername: string;
+  toUsername!: string;
 
   @Column("varchar")
-  amountUsdc: string;
+  amount!: string;
 
   @Column("varchar", { nullable: true })
-  note: string | null;
+  note!: string | null;
 
   @Column({ type: "enum", enum: Frequency })
-  frequency: Frequency;
+  frequency!: Frequency;
 
   @Column({ type: "int", nullable: true })
-  dayOfWeek: number | null; // 0–6
+  dayOfWeek!: number | null; // 0–6
 
   @Column({ type: "int", nullable: true })
-  dayOfMonth: number | null; // 1–28
+  dayOfMonth!: number | null; // 1–28
 
   @Column({ type: "timestamp" })
-  nextRunAt: Date;
+  nextRunAt!: Date;
 
   @Column({ type: "timestamp", nullable: true })
-  lastRunAt: Date | null;
+  lastRunAt!: Date | null;
 
   @Column({ type: "enum", enum: Status, default: Status.ACTIVE })
-  status: Status;
+  status!: Status;
 
   @Column({ type: "int", default: 0 })
-  totalRuns: number;
+  totalRuns!: number;
 
   @Column({ type: "int", default: 0 })
-  failureCount: number;
+  failureCount!: number;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

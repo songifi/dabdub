@@ -50,8 +50,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
 import { MaintenanceWindowMiddleware } from './maintenance/middleware/maintenance-window.middleware';
 
 // TODO: Enable Sentry when @sentry/nestjs module is compatible
-// import { SentryModule } from '@sentry/nestjs';
-import { AlertModule } from './alert/alert.module';
+// import { SentryModule } from '@nestjs/nestjs';
 import { GroupsModule } from './groups/groups.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { PushModule } from './push/push.module';
@@ -81,6 +80,7 @@ import { FeesModule } from './fees/fees.module';
 import { DeepLinkModule } from './deeplink/deeplink.module';
 import { FlutterwaveModule } from './flutterwave/flutterwave.module';
 import { FeatureFlagModule } from './feature-flags/feature-flag.module';
+import { PayoutsModule } from './payouts/payouts.module';
 import { GeoModule } from './geo/geo.module';
 import { GeoBlockMiddleware } from './geo/geo-block.middleware';
 
@@ -171,7 +171,6 @@ import { GeoBlockMiddleware } from './geo/geo-block.middleware';
     SandboxModule,
     FeatureFlagsModule,
     MaintenanceModule,
-    AlertModule,
     GroupsModule,
     BankAccountsModule,
     VirtualAccountModule,
@@ -249,6 +248,8 @@ import { GeoBlockMiddleware } from './geo/geo-block.middleware';
     // User-level feature flags (rollouts, A/B) — Redis-cached evaluation.
     FeatureFlagModule,
     GeoModule,
+
+    PayoutsModule,
 
   ],
 
