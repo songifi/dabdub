@@ -17,6 +17,8 @@ import { UsersService } from '../users/users.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { PushService } from '../push/push.service';
+import { PinService } from '../pin/pin.service';
 import { NotificationType } from '../notifications/notifications.types';
 
 export const SPLIT_QUEUE = 'split-payments';
@@ -35,28 +37,26 @@ export class SplitService {
     private readonly transfersService: TransfersService,
     private readonly notificationService: NotificationService,
     private readonly emailService: EmailService,
+    private readonly pushService: PushService,
+    private readonly pinService: PinService,
     @InjectQueue(SPLIT_QUEUE)
     private readonly splitQueue: Queue,
   ) {}
 
   // ── Create ────────────────────────────────────────────────────────────────
 
-  async create(initiatorId: string, initiatorUsername: string, dto: CreateSplitDto): Promise<SplitRequest> {
-    // Validate amounts sum to total
-    const participantTotal = dto.participants
-      .reduce((sum, p) => sum + parseFloat(p.amountUsdc), 0)
-      .toFixed(6);
-    if (Math.abs(parseFloat(participantTotal) - parseFloat(dto.participants.reduce((s, p) => (parseFloat(s) + parseFloat(p.amountUsdc)).toFixed(6), '0'))) > 0.000001) {
-      // re-check with simple sum
-    }
-    const total = dto.participants.reduce((s, p) => s + parseFloat(p.amountUsdc), 0);
-    const declared = parseFloat(dto.participants.reduce((_, __) => _, dto.participants.reduce((s, p) => (s + parseFloat(p.amountUsdc)), 0).toFixed(6)));
+  async create(initiatorId: string, dto: CreateSplitDto): Promise<SplitRequest> {
+    const initiator = await this.usersService.findById(initiatorId);
 
     // Resolve all usernames → users (validates existence)
     const resolvedUsers = await Promise.all(
       dto.participants.map(async (p) => {
-        if (p.username === initiatorUsername) {
+        if (p.username.toLowerCase() === initiator.username.toLowerCase()) {
           throw new BadRequestException('Initiator cannot be a participant');
+        }
+        const amount = parseFloat(p.amountUsdc);
+        if (Number.isNaN(amount) || amount <= 0) {
+          throw new BadRequestException(`Invalid amount for @${p.username}`);
         }
         const user = await this.usersService.findByUsername(p.username);
         if (!user) throw new NotFoundException(`User @${p.username} not found`);
@@ -96,7 +96,7 @@ export class SplitService {
 
     // Notify each participant
     for (const p of participants) {
-      const amount = p.amountOwedUsdc;
+      const amount = this.toUsdcString(p.amountOwedUsdc);
       await this.notificationService.create(
         p.userId,
         NotificationType.SYSTEM,
@@ -111,6 +111,12 @@ export class SplitService {
         { title: split.title, amountUsdc: amount, splitId: split.id },
         p.userId,
       );
+
+      await this.pushService.send(p.userId, {
+        title: 'Split payment request',
+        body: `You owe ${amount} USDC for "${split.title}"`,
+        data: { splitRequestId: split.id, type: 'split_request' },
+      });
     }
 
     return split;
@@ -118,7 +124,12 @@ export class SplitService {
 
   // ── Pay ───────────────────────────────────────────────────────────────────
 
-  async pay(splitRequestId: string, payerId: string, payerUsername: string): Promise<SplitParticipant> {
+  async pay(
+    splitRequestId: string,
+    payerId: string,
+    payerUsername: string,
+    pin: string,
+  ): Promise<SplitParticipant> {
     const split = await this.findActiveOrFail(splitRequestId);
 
     if (split.initiatorId === payerId) {
@@ -132,6 +143,8 @@ export class SplitService {
     if (participant.status !== SplitParticipantStatus.PENDING) {
       throw new BadRequestException(`Share already ${participant.status}`);
     }
+
+    await this.pinService.verifyPin(payerId, pin);
 
     // Resolve initiator username
     const initiator = await this.usersService.findById(split.initiatorId);
@@ -223,6 +236,13 @@ export class SplitService {
         { splitRequestId },
       );
     }
+    await this.notificationService.create(
+      split.initiatorId,
+      NotificationType.SYSTEM,
+      'Split cancelled',
+      `You cancelled split "${split.title}"`,
+      { splitRequestId },
+    );
 
     return split;
   }
@@ -325,5 +345,9 @@ export class SplitService {
       throw new BadRequestException(`Split is ${split.status}`);
     }
     return split;
+  }
+
+  private toUsdcString(amount: string): string {
+    return parseFloat(amount).toFixed(6);
   }
 }

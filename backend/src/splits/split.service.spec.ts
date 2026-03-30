@@ -9,6 +9,8 @@ import { UsersService } from '../users/users.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { PushService } from '../push/push.service';
+import { PinService } from '../pin/pin.service';
 
 const mockUser = (id: string, username: string) => ({
   id,
@@ -52,6 +54,8 @@ describe('SplitService', () => {
   let transfersService: jest.Mocked<TransfersService>;
   let notificationService: jest.Mocked<NotificationService>;
   let emailService: jest.Mocked<EmailService>;
+  let pushService: jest.Mocked<PushService>;
+  let pinService: jest.Mocked<PinService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -87,6 +91,8 @@ describe('SplitService', () => {
         { provide: TransfersService, useValue: { create: jest.fn() } },
         { provide: NotificationService, useValue: { create: jest.fn() } },
         { provide: EmailService, useValue: { queue: jest.fn() } },
+        { provide: PushService, useValue: { send: jest.fn() } },
+        { provide: PinService, useValue: { verifyPin: jest.fn() } },
         { provide: getQueueToken(SPLIT_QUEUE), useValue: { add: jest.fn() } },
       ],
     }).compile();
@@ -98,6 +104,8 @@ describe('SplitService', () => {
     transfersService = module.get(TransfersService);
     notificationService = module.get(NotificationService);
     emailService = module.get(EmailService);
+    pushService = module.get(PushService);
+    pinService = module.get(PinService);
   });
 
   // ── create ────────────────────────────────────────────────────────────────
@@ -110,7 +118,8 @@ describe('SplitService', () => {
       splitRepo.save.mockResolvedValue(mockSplit());
       participantRepo.save.mockResolvedValue([mockParticipant()]);
 
-      await service.create('user-initiator', 'initiator', {
+      usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
+      await service.create('user-initiator', {
         title: 'Dinner',
         expiresInHours: 24,
         participants: [
@@ -122,11 +131,13 @@ describe('SplitService', () => {
       expect(splitRepo.save).toHaveBeenCalled();
       expect(participantRepo.save).toHaveBeenCalled();
       expect(notificationService.create).toHaveBeenCalled();
+      expect(pushService.send).toHaveBeenCalled();
     });
 
     it('throws if initiator is listed as participant', async () => {
+      usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
       await expect(
-        service.create('user-initiator', 'initiator', {
+        service.create('user-initiator', {
           title: 'Dinner',
           expiresInHours: 24,
           participants: [{ username: 'initiator', amountUsdc: '10.00' }],
@@ -135,15 +146,38 @@ describe('SplitService', () => {
     });
 
     it('throws NotFoundException for unknown participant username', async () => {
+      usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
       usersService.findByUsername.mockResolvedValue(null);
 
       await expect(
-        service.create('user-initiator', 'initiator', {
+        service.create('user-initiator', {
           title: 'Dinner',
           expiresInHours: 24,
           participants: [{ username: 'ghost', amountUsdc: '10.00' }],
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('stores totalAmountUsdc as the participant sum', async () => {
+      usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
+      usersService.findByUsername
+        .mockResolvedValueOnce(mockUser('user-alice', 'alice') as any)
+        .mockResolvedValueOnce(mockUser('user-bob', 'bob') as any);
+      splitRepo.save.mockResolvedValue(mockSplit({ totalAmountUsdc: '30.000000' }));
+      participantRepo.save.mockResolvedValue([mockParticipant()]);
+
+      await service.create('user-initiator', {
+        title: 'Dinner',
+        expiresInHours: 24,
+        participants: [
+          { username: 'alice', amountUsdc: '10.00' },
+          { username: 'bob', amountUsdc: '20.00' },
+        ],
+      });
+
+      expect(splitRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ totalAmountUsdc: '30.000000' }),
+      );
     });
   });
 
@@ -154,12 +188,14 @@ describe('SplitService', () => {
       splitRepo.findOne.mockResolvedValue(mockSplit());
       participantRepo.findOne.mockResolvedValue(mockParticipant());
       participantRepo.count.mockResolvedValue(0); // all paid after this
+      pinService.verifyPin.mockResolvedValue(undefined);
       usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
       transfersService.create.mockResolvedValue({ id: 'tx-1', txHash: 'HASH' } as any);
       participantRepo.save.mockResolvedValue(mockParticipant({ status: SplitParticipantStatus.PAID }));
 
-      await service.pay('split-1', 'user-alice', 'alice');
+      await service.pay('split-1', 'user-alice', 'alice', '1234');
 
+      expect(pinService.verifyPin).toHaveBeenCalledWith('user-alice', '1234');
       expect(transfersService.create).toHaveBeenCalledWith(
         'user-alice',
         'alice',
@@ -172,11 +208,12 @@ describe('SplitService', () => {
       splitRepo.findOne.mockResolvedValue(mockSplit());
       participantRepo.findOne.mockResolvedValue(mockParticipant());
       participantRepo.count.mockResolvedValue(0); // no more pending
+      pinService.verifyPin.mockResolvedValue(undefined);
       usersService.findById.mockResolvedValue(mockUser('user-initiator', 'initiator') as any);
       transfersService.create.mockResolvedValue({ id: 'tx-1' } as any);
       participantRepo.save.mockResolvedValue({});
 
-      await service.pay('split-1', 'user-alice', 'alice');
+      await service.pay('split-1', 'user-alice', 'alice', '1234');
 
       expect(splitRepo.update).toHaveBeenCalledWith('split-1', {
         status: SplitRequestStatus.COMPLETED,
@@ -186,7 +223,7 @@ describe('SplitService', () => {
     it('throws ForbiddenException if initiator tries to pay own split', async () => {
       splitRepo.findOne.mockResolvedValue(mockSplit({ initiatorId: 'user-initiator' }));
 
-      await expect(service.pay('split-1', 'user-initiator', 'initiator')).rejects.toThrow(
+      await expect(service.pay('split-1', 'user-initiator', 'initiator', '1234')).rejects.toThrow(
         ForbiddenException,
       );
     });

@@ -17,6 +17,7 @@ import { User } from '../users/entities/user.entity';
 import { SplitService } from './split.service';
 import { CreateSplitDto } from './dto/create-split.dto';
 import { QuerySplitsDto } from './dto/query-splits.dto';
+import { PaySplitDto } from './dto/pay-split.dto';
 
 type AuthReq = Request & { user: User };
 
@@ -30,7 +31,7 @@ export class SplitController {
   @Post()
   @ApiOperation({ summary: 'Create a split payment request' })
   create(@Req() req: AuthReq, @Body() dto: CreateSplitDto) {
-    return this.splitService.create(req.user.id, req.user.username, dto);
+    return this.splitService.create(req.user.id, dto);
   }
 
   @Get()
@@ -47,8 +48,8 @@ export class SplitController {
 
   @Post(':id/pay')
   @ApiOperation({ summary: 'Pay your share of a split' })
-  pay(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthReq) {
-    return this.splitService.pay(id, req.user.id, req.user.username);
+  pay(@Param('id', ParseUUIDPipe) id: string, @Req() req: AuthReq, @Body() dto: PaySplitDto) {
+    return this.splitService.pay(id, req.user.id, req.user.username, dto.pin);
   }
 
   @Post(':id/decline')

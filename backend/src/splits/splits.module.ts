@@ -11,6 +11,8 @@ import { UsersModule } from '../users/users.module';
 import { TransfersModule } from '../transfers/transfers.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
+import { PushModule } from '../push/push.module';
+import { PinModule } from '../pin/pin.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { EmailModule } from '../email/email.module';
     TransfersModule,
     NotificationsModule,
     EmailModule,
+    PushModule,
+    PinModule,
   ],
   providers: [SplitService, SplitProcessor],
   controllers: [SplitController],
