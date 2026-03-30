@@ -14,6 +14,7 @@ const mockRepo = {
   findOne: jest.fn(),
   update: jest.fn(),
   remove: jest.fn(),
+  count: jest.fn(),
   createQueryBuilder: jest.fn(),
 };
 
