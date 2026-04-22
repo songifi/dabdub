@@ -1,49 +1,26 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# Rust
+/target
+test_snapshots/
 
-# Build outputs
+# Dependencies (never commit package stores or installs)
+node_modules/
+.pnpm-store/
+
+# Build / tooling output
 dist/
 build/
-.next/
-out/
+coverage/
+*.tsbuildinfo
 
-# Environment variables
+# Environment & secrets (keep *.example files tracked)
 .env
 .env.local
-.env.*.local
-!.env.example
-!.env.local.example
 
-# Logs
+# Logs & OS
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
-
-# Rust / Cargo
-target/
-Cargo.lock
-
-# OS files
 .DS_Store
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
-*.swp
-*.swo
-
-# Misc
-*.local
+.vscode/

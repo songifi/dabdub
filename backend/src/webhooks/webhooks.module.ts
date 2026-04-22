@@ -1,13 +1,22 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { WebhooksService } from './webhooks.service';
+import { BullModule } from '@nestjs/bull';
+import { WebhookSubscription } from './entities/webhook-subscription.entity';
+import { WebhookDelivery } from './entities/webhook-delivery.entity';
+import { WebhookService, WEBHOOKS_QUEUE } from './webhook.service';
+import { WebhookProcessor } from './webhook.processor';
 import { WebhooksController } from './webhooks.controller';
-import { Webhook } from './entities/webhook.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Webhook])],
+  imports: [
+    TypeOrmModule.forFeature([WebhookSubscription, WebhookDelivery]),
+    BullModule.registerQueue({ name: WEBHOOKS_QUEUE }),
+    NotificationsModule,
+  ],
+  providers: [WebhookService, WebhookProcessor],
   controllers: [WebhooksController],
-  providers: [WebhooksService],
-  exports: [WebhooksService],
+  exports: [WebhookService],
 })
 export class WebhooksModule {}
+

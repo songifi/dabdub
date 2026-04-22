@@ -1,0 +1,31 @@
+# Prometheus alerting rules — load via `rule_files` in prometheus.yml.
+# Requires scraping the Nest `/metrics` endpoint (see prometheus.example.yml).
+#
+# Tuning: use `evaluation_interval: 15s` (or lower) so conditions are evaluated
+# at least once per minute alongside `for: 1m` on rules below.
+
+groups:
+  - name: bull_queue
+    interval: 15s
+    rules:
+      - alert: BullQueueWaitingDepthHigh
+        expr: bull_queue_jobs_waiting > 1000
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Bull queue {{ $labels.queue }} has high waiting depth'
+          description: 'bull_queue_jobs_waiting is {{ $value }} (threshold 1000).'
+
+      - alert: BullQueueProcessingStalled
+        expr: |
+          (bull_queue_jobs_waiting > 10)
+          and (increase(bull_queue_job_completions_total[2m]) == 0)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Bull queue {{ $labels.queue }} appears stalled (no completions)'
+          description: >
+            Waiting jobs > 10 but zero completions in the last 2 minutes.
+            Workers may be down or jobs failing before completion.

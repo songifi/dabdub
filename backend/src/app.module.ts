@@ -1,41 +1,88 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ScheduleModule } from '@nestjs/schedule';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ConfigType } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppConfigModule, appConfig, redisConfig } from './config';
+import { CacheModule } from './cache/cache.module';
+import { EmailModule } from './email/email.module';
+import { RatesModule } from './rates/rates.module';
+import { DatabaseModule } from './database/database.module';
+import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
-import { MerchantsModule } from './merchants/merchants.module';
-import { PaymentsModule } from './payments/payments.module';
-import { StellarModule } from './stellar/stellar.module';
-import { SettlementsModule } from './settlements/settlements.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { UploadModule } from './uploads/upload.module';
+import { WsModule } from './ws/ws.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { LoggingModule } from './logging/logging.module';
+import { CorrelationIdMiddleware } from './logging/correlation-id.middleware';
+import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
 import { WebhooksModule } from './webhooks/webhooks.module';
-import { WaitlistModule } from './waitlist/waitlist.module';
+import { RbacModule } from './rbac/rbac.module';
+import { TierConfigModule } from './tier-config/tier-config.module';
+import { VirtualAccountModule } from './virtual-account/virtual-account.module';
+import { SorobanModule } from './soroban/soroban.module';
+import { DepositsModule } from './deposits/deposits.module';
+import { TransactionsModule } from './transactions/transactions.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    ScheduleModule.forRoot(),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get('DB_HOST', 'localhost'),
-        port: config.get<number>('DB_PORT', 5432),
-        username: config.get('DB_USER', 'postgres'),
-        password: config.get('DB_PASSWORD'),
-        database: config.get('DB_NAME', 'cheesepay'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: config.get('NODE_ENV') !== 'production',
-        logging: config.get('NODE_ENV') === 'development',
+    AppConfigModule,
+    LoggingModule,
+    DatabaseModule,
+    CacheModule,
+    BullModule.forRootAsync({
+      inject: [redisConfig.KEY],
+      useFactory: (redis: ConfigType<typeof redisConfig>) => ({
+        redis: {
+          host: redis.host,
+          port: redis.port,
+          password: redis.password,
+        },
       }),
-      inject: [ConfigService],
     }),
+    ThrottlerModule.forRootAsync({
+      inject: [appConfig.KEY],
+      useFactory: (app: ConfigType<typeof appConfig>) => ({
+        throttlers: [
+          {
+            ttl: app.throttleTtl * 1000,
+            limit: app.throttleLimit,
+          },
+        ],
+      }),
+    }),
+    HealthModule,
+    EmailModule,
+    RatesModule,
     AuthModule,
-    MerchantsModule,
-    PaymentsModule,
-    StellarModule,
-    SettlementsModule,
+    UploadModule,
+    WsModule,
+    NotificationsModule,
     WebhooksModule,
-    WaitlistModule,
+    RbacModule,
+    TierConfigModule,
+    VirtualAccountModule,
+    SorobanModule,
+    DepositsModule,
+    TransactionsModule,
+    MonitoringModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpLoggingInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}
