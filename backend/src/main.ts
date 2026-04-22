@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -18,7 +18,13 @@ async function bootstrap(): Promise<void> {
   const apiPrefix = config.get<AppConfig['apiPrefix']>('app.apiPrefix')!;
 
   app.enableCors();
-  app.setGlobalPrefix(apiPrefix);
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: [
+      { path: 'docs', method: RequestMethod.ALL },
+      { path: 'docs/(.*)', method: RequestMethod.ALL },
+      { path: 'docs-json', method: RequestMethod.GET },
+    ],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -30,16 +36,46 @@ async function bootstrap(): Promise<void> {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Cheese Backend API')
-    .setDescription('API documentation')
+    .setDescription(
+      'REST API for Cheese. Use **Authorize** to set JWT Bearer and/or **X-API-Key** for integrator calls. ' +
+        `Prefixed routes live under \`/${apiPrefix}\`; Swagger UI is mounted at \`/docs\`.`,
+    )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT access token (Authorization: Bearer <token>)',
+      },
+      'bearer',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'Optional API key for server-to-server / integrator access',
+      },
+      'api-key',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
+  SwaggerModule.setup('docs', app, document, {
+    customSiteTitle: 'Cheese API',
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'list',
+      filter: true,
+      tryItOutEnabled: true,
+      displayRequestDuration: true,
+    },
+  });
 
   await app.listen(port);
   logger.log(`Application running on http://localhost:${port}/${apiPrefix}`);
-  logger.log(`Swagger docs at http://localhost:${port}/${apiPrefix}/docs`);
+  logger.log(`Swagger UI at http://localhost:${port}/docs`);
+  logger.log(`OpenAPI JSON at http://localhost:${port}/docs-json`);
 }
 
 bootstrap();

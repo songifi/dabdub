@@ -7,7 +7,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+  ApiUnauthorizedResponse,
+  ApiConflictResponse,
+  ApiBadRequestResponse,
+} from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -33,6 +41,9 @@ export class AuthController {
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register a new user and receive a token pair' })
+  @ApiResponse({ status: 201, description: 'User created; token pair returned', type: TokenResponseDto })
+  @ApiConflictResponse({ description: 'Email or username already in use' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
   register(
     @Body() dto: RegisterDto,
     @Req() req: RequestWithUser,
@@ -45,6 +56,9 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login and receive a token pair' })
+  @ApiResponse({ status: 200, description: 'Authenticated', type: TokenResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Invalid credentials or inactive account' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
   login(
     @Body() dto: LoginDto,
     @Req() req: RequestWithUser,
@@ -57,14 +71,19 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate a refresh token and receive a new pair' })
+  @ApiResponse({ status: 200, description: 'New token pair issued', type: TokenResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
   refresh(@Body() dto: RefreshDto): Promise<TokenResponseDto> {
     return this.authService.refresh(dto.refreshToken);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiBearerAuth()
+  @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Revoke the current session refresh token' })
+  @ApiResponse({ status: 204, description: 'Session revoked or no-op if no bearer token' })
+  @ApiUnauthorizedResponse({ description: 'Invalid or missing JWT' })
   async logout(@Req() req: RequestWithUser): Promise<void> {
     const raw = req.headers.authorization?.replace('Bearer ', '');
     if (!raw) return;

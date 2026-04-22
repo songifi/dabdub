@@ -1,5 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiServiceUnavailableResponse,
+} from '@nestjs/swagger';
+import { HealthCheckResponseDto } from './dto/health-check-response.dto';
 import {
   HealthCheck,
   HealthCheckService,
@@ -43,8 +49,14 @@ export class HealthController {
       'Returns per-component status for database, Redis, and the Stellar RPC node. ' +
       'Returns HTTP 200 when all are healthy, HTTP 503 when any component is down.',
   })
-  @ApiResponse({ status: 200, description: 'All components healthy' })
-  @ApiResponse({ status: 503, description: 'One or more components degraded' })
+  @ApiOkResponse({
+    description: 'All components healthy',
+    type: HealthCheckResponseDto,
+  })
+  @ApiServiceUnavailableResponse({
+    description: 'One or more components degraded',
+    type: HealthCheckResponseDto,
+  })
   check() {
     return this.health.check([
       () => this.db.pingCheck('db'),

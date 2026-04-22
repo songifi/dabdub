@@ -1,7 +1,12 @@
+import { ApiProperty } from '@nestjs/swagger';
+
 export class QrResponseDto {
-  /** Base64 PNG data URL: data:image/png;base64,... */
+  @ApiProperty({
+    description: 'Base64 PNG data URL: data:image/png;base64,...',
+    example: 'data:image/png;base64,iVBORw0KGgo...',
+  })
   qrDataUrl!: string;
 
-  /** The deep link URL encoded in the QR code */
+  @ApiProperty({ description: 'Deep link URL encoded in the QR code' })
   paymentUrl!: string;
 }

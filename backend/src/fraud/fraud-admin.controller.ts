@@ -7,16 +7,28 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { FraudService, AuditLogPort, UserFreezePort } from './fraud.service';
 import { QueryFlagsDto } from './dto/query-flags.dto';
 import { ResolveFlagDto } from './dto/resolve-flag.dto';
-import { FraudFlag } from './entities/fraud-flag.entity';
+import type { FraudFlag } from './entities/fraud-flag.entity';
 import { Logger } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
+} from '@nestjs/swagger';
 import { Roles } from '../rbac/decorators/roles.decorator';
 import { Role } from '../rbac/rbac.types';
 import { RolesGuard } from '../rbac/guards/roles.guard';
+import { FraudFlagsListResponseDto } from './dto/fraud-flags-list-response.dto';
+import { FraudFlagResponseDto } from './dto/fraud-flag-response.dto';
 
 /** Stub ports — replace with real injected services when available */
 class StubUserFreezePort implements UserFreezePort {
@@ -33,6 +45,8 @@ class StubAuditLogPort implements AuditLogPort {
   }
 }
 
+@ApiTags('admin')
+@ApiBearerAuth('bearer')
 @Controller('admin/fraud')
 @UseGuards(RolesGuard)
 @Roles(Role.Admin, Role.SuperAdmin)
@@ -43,6 +57,11 @@ export class FraudAdminController {
    * GET /admin/fraud/flags?severity=high&status=open&userId=xxx&page=1&limit=20
    */
   @Get('flags')
+  @ApiOperation({ summary: 'List fraud flags (paginated, filterable)' })
+  @ApiOkResponse({ type: FraudFlagsListResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiForbiddenResponse({ description: 'Insufficient role' })
+  @ApiBadRequestResponse({ description: 'Invalid query parameters' })
   async listFlags(
     @Query() query: QueryFlagsDto,
   ): Promise<{
@@ -59,6 +78,12 @@ export class FraudAdminController {
    * Body: { resolution: 'resolved' | 'false_positive', note?: string }
    */
   @Patch('flags/:id/resolve')
+  @ApiOperation({ summary: 'Resolve a fraud flag' })
+  @ApiOkResponse({ type: FraudFlagResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiForbiddenResponse({ description: 'Insufficient role' })
+  @ApiNotFoundResponse({ description: 'Flag not found' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
   async resolveFlag(
     @Param('id') id: string,
     @Body() dto: ResolveFlagDto,
