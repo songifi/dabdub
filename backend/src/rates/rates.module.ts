@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { RatesService } from './rates.service';
+import { RateSnapshot } from './entities/rate-snapshot.entity';
 
 @Module({
-  imports: [HttpModule],
+  imports: [TypeOrmModule.forFeature([RateSnapshot])],
   providers: [RatesService],
   exports: [RatesService],
 })

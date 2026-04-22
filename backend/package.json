@@ -102,6 +102,9 @@
       "ts"
     ],
     "rootDir": "src",
+    "moduleNameMapper": {
+      "^@nestjs/axios$": "<rootDir>/test-mocks/nestjs-axios-stub.ts"
+    },
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

@@ -41,13 +41,12 @@ export class DepositsService {
     const transaction = this.transactionRepo.create({
       userId,
       type: TransactionType.DEPOSIT,
-      amount: usdcAmount,
+      amountUsdc: usdcAmount.toString(),
       currency: 'USDC',
       status: TransactionStatus.COMPLETED,
       reference,
       description: `NGN deposit via virtual account`,
       depositId: savedDeposit.id,
-      deposit: savedDeposit,
     });
 
     await this.transactionRepo.save(transaction);
