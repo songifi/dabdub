@@ -44,6 +44,7 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User created; token pair returned', type: TokenResponseDto })
   @ApiConflictResponse({ description: 'Email or username already in use' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   register(
     @Body() dto: RegisterDto,
     @Req() req: RequestWithUser,
@@ -59,6 +60,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Authenticated', type: TokenResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials or inactive account' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   login(
     @Body() dto: LoginDto,
     @Req() req: RequestWithUser,
@@ -74,6 +76,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'New token pair issued', type: TokenResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
   @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   refresh(@Body() dto: RefreshDto): Promise<TokenResponseDto> {
     return this.authService.refresh(dto.refreshToken);
   }
@@ -84,6 +87,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke the current session refresh token' })
   @ApiResponse({ status: 204, description: 'Session revoked or no-op if no bearer token' })
   @ApiUnauthorizedResponse({ description: 'Invalid or missing JWT' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async logout(@Req() req: RequestWithUser): Promise<void> {
     const raw = req.headers.authorization?.replace('Bearer ', '');
     if (!raw) return;

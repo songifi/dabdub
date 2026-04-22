@@ -8,6 +8,7 @@ import { jwtConfig } from './jwt.config';
 import { stellarConfig } from './stellar.config';
 import { zeptoConfig } from './zepto.config';
 import { r2Config } from './r2.config';
+import { flutterwaveConfig } from './flutterwave.config';
 
 /**
  * Combined Joi validation schema for all environment variables.
@@ -103,13 +104,24 @@ const validationSchema = Joi.object({
   R2_BUCKET_NAME: Joi.string()
     .required()
     .messages({ 'any.required': 'R2_BUCKET_NAME is required' }),
+
+  // ── Flutterwave ───────────────────────────────────────────────────────────
+  FLUTTERWAVE_SECRET_KEY: Joi.string()
+    .required()
+    .messages({ 'any.required': 'FLUTTERWAVE_SECRET_KEY is required' }),
+  FLUTTERWAVE_WEBHOOK_SECRET: Joi.string()
+    .required()
+    .messages({ 'any.required': 'FLUTTERWAVE_WEBHOOK_SECRET is required' }),
+  FLUTTERWAVE_BASE_URL: Joi.string()
+    .uri()
+    .default('https://api.flutterwave.com'),
 });
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, jwtConfig, stellarConfig, zeptoConfig, r2Config],
+      load: [appConfig, databaseConfig, redisConfig, jwtConfig, stellarConfig, zeptoConfig, r2Config, flutterwaveConfig],
       validationSchema,
       validationOptions: { abortEarly: false },
     }),

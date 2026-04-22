@@ -381,3 +381,34 @@ vercel --prod
 
 
 Built with ❤️ by the CheesePay team
+
+## Contract Development
+
+### Prerequisites
+
+```bash
+# Rust + wasm target
+rustup target add wasm32v1-none
+
+# Stellar CLI (v25.2.0)
+cargo install --locked stellar-cli
+```
+
+### Run tests
+
+```bash
+cargo test
+```
+
+### Build WASM
+
+```bash
+cargo wasm-build
+```
+
+### Environment
+
+```bash
+cp .env.example .env
+# fill in ADMIN_SECRET_KEY and USDC_SAC_ADDRESS
+```

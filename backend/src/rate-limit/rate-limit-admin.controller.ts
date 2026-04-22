@@ -8,12 +8,13 @@ import {
 } from '@nestjs/common';
 import {
   ApiTags,
-  ApiOperation,
   ApiBearerAuth,
+  ApiOperation,
   ApiOkResponse,
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { IpBlockService } from './ip-block.service';
 import { Roles } from '../rbac/decorators/roles.decorator';
@@ -29,12 +30,8 @@ import { BlockedIpsResponseDto, UnblockIpResponseDto } from './dto/rate-limit-ad
 export class RateLimitAdminController {
   constructor(private readonly ipBlockService: IpBlockService) {}
 
-  /**
-   * GET /admin/rate-limits/blocked-ips
-   * Returns list of all currently blocked IP addresses.
-   */
   @Get('blocked-ips')
-  @ApiOperation({ summary: 'List all blocked IP addresses' })
+  @ApiOperation({ summary: 'List all currently blocked IP addresses' })
   @ApiOkResponse({ type: BlockedIpsResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiForbiddenResponse({ description: 'Insufficient role' })
@@ -43,16 +40,13 @@ export class RateLimitAdminController {
     return { blockedIps };
   }
 
-  /**
-   * DELETE /admin/rate-limits/blocked-ips/:ip
-   * Removes the block and clears the hit counter for the given IP.
-   */
   @Delete('blocked-ips/:ip')
-  @ApiOperation({ summary: 'Unblock an IP address' })
+  @ApiOperation({ summary: 'Unblock an IP address and clear its hit counter' })
+  @ApiParam({ name: 'ip', description: 'IPv4 or IPv6 address to unblock', example: '1.2.3.4' })
   @ApiOkResponse({ type: UnblockIpResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiForbiddenResponse({ description: 'Insufficient role' })
-  @ApiNotFoundResponse({ description: 'IP is not blocked' })
+  @ApiNotFoundResponse({ description: 'IP is not currently blocked' })
   async unblockIp(@Param('ip') ip: string): Promise<{ message: string }> {
     const isBlocked = await this.ipBlockService.isBlocked(ip);
     if (!isBlocked) {

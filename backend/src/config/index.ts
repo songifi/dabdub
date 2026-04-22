@@ -6,3 +6,4 @@ export { jwtConfig, type JwtConfig } from './jwt.config';
 export { stellarConfig, type StellarConfig } from './stellar.config';
 export { zeptoConfig, type ZeptoConfig } from './zepto.config';
 export { r2Config, type R2Config } from './r2.config';
+export { flutterwaveConfig, type FlutterwaveConfig } from './flutterwave.config';

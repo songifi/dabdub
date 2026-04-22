@@ -8,22 +8,23 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { FraudService, AuditLogPort, UserFreezePort } from './fraud.service';
-import { QueryFlagsDto } from './dto/query-flags.dto';
-import { ResolveFlagDto } from './dto/resolve-flag.dto';
-import type { FraudFlag } from './entities/fraud-flag.entity';
-import { Logger } from '@nestjs/common';
-import { UseGuards } from '@nestjs/common';
 import {
   ApiTags,
-  ApiOperation,
   ApiBearerAuth,
+  ApiOperation,
   ApiOkResponse,
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
+  ApiParam,
 } from '@nestjs/swagger';
+import { Logger } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
+import { FraudService, AuditLogPort, UserFreezePort } from './fraud.service';
+import { QueryFlagsDto } from './dto/query-flags.dto';
+import { ResolveFlagDto } from './dto/resolve-flag.dto';
+import type { FraudFlag } from './entities/fraud-flag.entity';
 import { Roles } from '../rbac/decorators/roles.decorator';
 import { Role } from '../rbac/rbac.types';
 import { RolesGuard } from '../rbac/guards/roles.guard';
@@ -53,32 +54,19 @@ class StubAuditLogPort implements AuditLogPort {
 export class FraudAdminController {
   constructor(private readonly fraudService: FraudService) {}
 
-  /**
-   * GET /admin/fraud/flags?severity=high&status=open&userId=xxx&page=1&limit=20
-   */
   @Get('flags')
   @ApiOperation({ summary: 'List fraud flags (paginated, filterable)' })
   @ApiOkResponse({ type: FraudFlagsListResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiForbiddenResponse({ description: 'Insufficient role' })
   @ApiBadRequestResponse({ description: 'Invalid query parameters' })
-  async listFlags(
-    @Query() query: QueryFlagsDto,
-  ): Promise<{
-    data: FraudFlag[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+  async listFlags(@Query() query: QueryFlagsDto) {
     return this.fraudService.findFlags(query);
   }
 
-  /**
-   * PATCH /admin/fraud/flags/:id/resolve
-   * Body: { resolution: 'resolved' | 'false_positive', note?: string }
-   */
   @Patch('flags/:id/resolve')
   @ApiOperation({ summary: 'Resolve a fraud flag' })
+  @ApiParam({ name: 'id', description: 'UUID of the fraud flag', example: 'a1b2c3d4-...' })
   @ApiOkResponse({ type: FraudFlagResponseDto })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiForbiddenResponse({ description: 'Insufficient role' })

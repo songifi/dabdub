@@ -5,6 +5,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
 import type { AppConfig } from './config';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version } = require('../package.json') as { version: string };
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
@@ -40,7 +42,7 @@ async function bootstrap(): Promise<void> {
       'REST API for Cheese. Use **Authorize** to set JWT Bearer and/or **X-API-Key** for integrator calls. ' +
         `Prefixed routes live under \`/${apiPrefix}\`; Swagger UI is mounted at \`/docs\`.`,
     )
-    .setVersion('1.0')
+    .setVersion(version)
     .addBearerAuth(
       {
         type: 'http',
