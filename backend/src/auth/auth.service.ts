@@ -1,223 +1,58 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
-import type { ConfigType } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
-import { jwtConfig } from '../config/jwt.config';
-import { User } from '../users/entities/user.entity';
-import { RefreshToken } from './entities/refresh-token.entity';
-import { Session } from './entities/session.entity';
-import type { RegisterDto } from './dto/register.dto';
-import type { LoginDto } from './dto/login.dto';
-import type { TokenResponseDto } from './dto/token-response.dto';
-
-export interface JwtPayload {
-  sub: string;
-  username: string;
-  role: 'admin' | 'user';
-  sessionId: string;
-}
+import { Merchant, MerchantStatus } from '../merchants/entities/merchant.entity';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
-
-    @InjectRepository(RefreshToken)
-    private readonly tokenRepo: Repository<RefreshToken>,
-
-    @InjectRepository(Session)
-    private readonly sessionRepo: Repository<Session>,
-
-    private readonly jwtService: JwtService,
-
-    @Inject(jwtConfig.KEY)
-    private readonly jwt: ConfigType<typeof jwtConfig>,
+    @InjectRepository(Merchant)
+    private merchantsRepo: Repository<Merchant>,
+    private jwtService: JwtService,
   ) {}
 
-  // ── Register ────────────────────────────────────────────────────
-
-  async register(
-    dto: RegisterDto,
-    ipAddress?: string,
-    deviceInfo?: Record<string, unknown>,
-  ): Promise<TokenResponseDto> {
-    const [existingEmail, existingUsername] = await Promise.all([
-      this.userRepo.findOne({ where: { email: dto.email } }),
-      this.userRepo.findOne({ where: { username: dto.username } }),
-    ]);
-
-    if (existingEmail) {
-      throw new ConflictException('Email already in use');
-    }
-    if (existingUsername) {
-      throw new ConflictException('Username already taken');
-    }
+  async register(dto: RegisterDto) {
+    const existing = await this.merchantsRepo.findOne({ where: { email: dto.email } });
+    if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = this.userRepo.create({
+
+    const merchant = this.merchantsRepo.create({
       email: dto.email,
-      username: dto.username,
       passwordHash,
-    });
-    await this.userRepo.save(user);
-
-    const sessionId = crypto.randomUUID();
-    return this.issueTokens(user, sessionId, ipAddress, deviceInfo);
-  }
-
-  // ── Login ───────────────────────────────────────────────────────
-
-  async login(
-    dto: LoginDto,
-    ipAddress?: string,
-    deviceInfo?: Record<string, unknown>,
-  ): Promise<TokenResponseDto> {
-    const user = await this.userRepo.findOne({ where: { email: dto.email } });
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const match = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!match) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedException('Account is disabled');
-    }
-
-    const sessionId = crypto.randomUUID();
-    return this.issueTokens(user, sessionId, ipAddress, deviceInfo);
-  }
-
-  // ── Refresh ─────────────────────────────────────────────────────
-
-  async refresh(rawRefreshToken: string): Promise<TokenResponseDto> {
-    let payload: JwtPayload;
-    try {
-      payload = this.jwtService.verify<JwtPayload>(rawRefreshToken, {
-        secret: this.jwt.refreshSecret,
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    const tokenHash = this.hashToken(rawRefreshToken);
-    const stored = await this.tokenRepo.findOne({
-      where: { tokenHash, sessionId: payload.sessionId },
+      businessName: dto.businessName,
+      businessType: dto.businessType,
+      country: dto.country,
+      status: MerchantStatus.ACTIVE,
     });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token is invalid or revoked');
-    }
+    const saved = await this.merchantsRepo.save(merchant);
+    const token = this.signToken(saved.id, saved.email);
 
-    // Revoke old token
-    stored.revokedAt = new Date();
-    await this.tokenRepo.save(stored);
-
-    const user = await this.userRepo.findOne({ where: { id: payload.sub } });
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('User not found or disabled');
-    }
-
-    return this.issueTokens(user, payload.sessionId);
+    return { accessToken: token, merchant: this.sanitize(saved) };
   }
 
-  // ── Logout ──────────────────────────────────────────────────────
+  async login(dto: LoginDto) {
+    const merchant = await this.merchantsRepo.findOne({ where: { email: dto.email } });
+    if (!merchant) throw new UnauthorizedException('Invalid credentials');
 
-  async logout(sessionId: string): Promise<void> {
-    const token = await this.tokenRepo.findOne({ where: { sessionId } });
-    if (token && !token.revokedAt) {
-      token.revokedAt = new Date();
-      await this.tokenRepo.save(token);
-    }
+    const valid = await bcrypt.compare(dto.password, merchant.passwordHash);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    const token = this.signToken(merchant.id, merchant.email);
+    return { accessToken: token, merchant: this.sanitize(merchant) };
   }
 
-  // ── Issue tokens ────────────────────────────────────────────────
-
-  async issueTokens(
-    user: User,
-    sessionId: string,
-    ipAddress?: string,
-    deviceInfo?: Record<string, unknown>,
-  ): Promise<TokenResponseDto> {
-    const role: 'admin' | 'user' = user.isAdmin ? 'admin' : 'user';
-    const payload: JwtPayload = {
-      sub: user.id,
-      username: user.username,
-      role,
-      sessionId,
-    };
-
-    // @nestjs/jwt v11 signs expect expiresIn as a StringValue; cast to satisfy TS.
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.jwt.accessSecret,
-      expiresIn: this.jwt.accessExpiry as unknown as number,
-    });
-
-    const rawRefreshToken = this.jwtService.sign(payload, {
-      secret: this.jwt.refreshSecret,
-      expiresIn: this.jwt.refreshExpiry as unknown as number,
-    });
-
-    const refreshExpMs = this.parseExpiry(this.jwt.refreshExpiry);
-    const expiresAt = new Date(Date.now() + refreshExpMs);
-
-    const tokenHash = this.hashToken(rawRefreshToken);
-    const refreshToken = this.tokenRepo.create({
-      userId: user.id,
-      tokenHash,
-      sessionId,
-      deviceInfo: deviceInfo ?? null,
-      ipAddress: ipAddress ?? null,
-      expiresAt,
-    });
-    const savedToken = await this.tokenRepo.save(refreshToken);
-
-    await this.sessionRepo.save(
-      this.sessionRepo.create({
-        userId: user.id,
-        refreshTokenId: savedToken.id,
-        deviceInfo: deviceInfo ?? null,
-        ipAddress: ipAddress ?? null,
-        lastSeenAt: new Date(),
-      }),
-    );
-
-    const accessExpMs = this.parseExpiry(this.jwt.accessExpiry);
-
-    return {
-      accessToken,
-      refreshToken: rawRefreshToken,
-      expiresIn: Math.floor(accessExpMs / 1000),
-    };
+  private signToken(sub: string, email: string): string {
+    return this.jwtService.sign({ sub, email });
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────
-
-  private hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
-  }
-
-  /** Converts strings like "15m", "30d", "1h" to milliseconds. */
-  private parseExpiry(expiry: string): number {
-    const units: Record<string, number> = {
-      s: 1000,
-      m: 60 * 1000,
-      h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000,
-    };
-    const match = /^(\d+)([smhd])$/.exec(expiry);
-    if (!match) return 15 * 60 * 1000;
-    return parseInt(match[1], 10) * (units[match[2]] ?? 1000);
+  private sanitize(merchant: Merchant) {
+    const { passwordHash, apiKeyHash, ...rest } = merchant;
+    return rest;
   }
 }
