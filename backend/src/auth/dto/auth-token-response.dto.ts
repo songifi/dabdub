@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Merchant } from '../../merchants/entities/merchant.entity';
 
 export class AuthTokenResponseDto {
   @ApiProperty({ description: 'JWT access token' })
@@ -9,5 +10,5 @@ export class AuthTokenResponseDto {
     additionalProperties: true,
     description: 'Merchant profile (password and key hashes stripped)',
   })
-  merchant!: Record<string, unknown>;
+  merchant!: Merchant;
 }

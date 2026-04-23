@@ -26,11 +26,23 @@ import { AppThrottlerGuard } from './auth/guards/throttler.guard';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot({
-      throttlers: [
-        { name: 'default', ttl: 60000, limit: 100 },
-        { name: 'authenticated', ttl: 60000, limit: 1000 },
-      ],
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: Number(config.get('THROTTLE_DEFAULT_TTL_MS', 60000)),
+            limit: Number(config.get('THROTTLE_DEFAULT_LIMIT', 100)),
+          },
+          {
+            name: 'authenticated',
+            ttl: Number(config.get('THROTTLE_AUTHENTICATED_TTL_MS', 60000)),
+            limit: Number(config.get('THROTTLE_AUTHENTICATED_LIMIT', 1000)),
+          },
+        ],
+      }),
     }),
     BullModule.forRootAsync({
       imports: [ConfigModule],
