@@ -1,26 +1,40 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
+import { QUEUE_NAMES } from '../queues/queue.constants';
 import { Repository } from 'typeorm';
+import { AdminAlertService } from '../alerts/admin-alert.service';
+import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { StellarService } from './stellar.service';
 import { SettlementsService } from '../settlements/settlements.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
-export class StellarMonitorService {
+export class StellarMonitorService implements OnModuleInit {
   private readonly logger = new Logger(StellarMonitorService.name);
   private cursors: Map<string, string> = new Map();
 
   constructor(
     @InjectRepository(Payment)
     private paymentsRepo: Repository<Payment>,
+    private adminAlerts: AdminAlertService,
     private stellar: StellarService,
     private settlements: SettlementsService,
     private webhooks: WebhooksService,
+    @InjectQueue(QUEUE_NAMES.stellarMonitor) private monitorQueue: Queue,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  async onModuleInit(): Promise<void> {
+    await this.monitorQueue.add(
+      'scan',
+      {},
+      { repeat: { every: 30_000 }, jobId: 'stellar-monitor-repeat', removeOnComplete: true },
+    );
+    this.logger.log('Stellar monitor Bull job scheduled every 30 seconds');
+  }
+
   async scanPendingPayments() {
     const pendingPayments = await this.paymentsRepo.find({
       where: { status: PaymentStatus.PENDING },
@@ -39,6 +53,13 @@ export class StellarMonitorService {
       transactions = await this.stellar.getAccountTransactions(depositAddress, cursor);
     } catch (err) {
       this.logger.error('Failed to fetch Stellar transactions', err.message);
+      await this.adminAlerts.raise({
+        type: AdminAlertType.STELLAR_MONITOR,
+        dedupeKey: 'stellar-monitor.fetch',
+        message: `Failed to fetch Stellar transactions: ${err.message}`,
+        metadata: { depositAddress },
+        thresholdValue: 1,
+      });
       return;
     }
 
@@ -54,7 +75,17 @@ export class StellarMonitorService {
       const result = await this.stellar.verifyPayment(tx.hash, paymentMemo);
       if (!result.verified) continue;
 
-      await this.confirmPayment(matched, tx.hash, result.amount, result.asset);
+      try {
+        await this.confirmPayment(matched, tx.hash, result.amount, result.asset);
+      } catch (err) {
+        await this.adminAlerts.raise({
+          type: AdminAlertType.STELLAR_MONITOR,
+          dedupeKey: `stellar-monitor.confirm:${matched.id}`,
+          message: `Failed to confirm payment ${matched.reference}: ${err.message}`,
+          metadata: { txHash: tx.hash, paymentId: matched.id },
+          thresholdValue: 1,
+        });
+      }
     }
 
     await this.expireOldPayments();
