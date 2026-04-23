@@ -1,8 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('waitlist')
 export class WaitlistEntry {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid', { default: () => 'gen_random_uuid()' })
   id: string;
 
   @Column({ unique: true })

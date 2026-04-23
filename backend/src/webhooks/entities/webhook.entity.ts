@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -11,7 +11,7 @@ import { Merchant } from '../../merchants/entities/merchant.entity';
 
 @Entity('webhooks')
 export class Webhook {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid', { default: () => 'gen_random_uuid()' })
   id: string;
 
   @ManyToOne(() => Merchant, (merchant) => merchant.webhooks)

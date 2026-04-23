@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -20,7 +20,7 @@ export enum SettlementStatus {
 
 @Entity('settlements')
 export class Settlement {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid', { default: () => 'gen_random_uuid()' })
   id: string;
 
   @ManyToOne(() => Merchant, (merchant) => merchant.settlements)

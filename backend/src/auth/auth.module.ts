@@ -6,6 +6,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtOrApiKeyGuard } from './guards/jwt-or-api-key.guard';
 import { Merchant } from '../merchants/entities/merchant.entity';
 
 @Module({
@@ -22,7 +23,7 @@ import { Merchant } from '../merchants/entities/merchant.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, JwtStrategy, JwtOrApiKeyGuard],
+  exports: [AuthService, JwtModule, JwtOrApiKeyGuard],
 })
 export class AuthModule {}

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { PaymentsModule } from './payments/payments.module';
@@ -36,6 +37,23 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     SettlementsModule,
     WebhooksModule,
     WaitlistModule,
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        getTracker: (req: { ip?: string; body?: { email?: string } }) => {
+          const email = typeof req.body?.email === 'string' ? req.body.email : '';
+          return `${req.ip ?? 'unknown'}:${email}`;
+        },
+        throttlers: [
+          {
+            name: 'auth-login',
+            ttl: parseInt(String(config.get('THROTTLE_AUTH_TTL_MS', '60000')), 10),
+            limit: parseInt(String(config.get('THROTTLE_AUTH_LIMIT', '30')), 10),
+          },
+        ],
+      }),
+    }),
   ],
 })
 export class AppModule {}

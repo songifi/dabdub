@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -25,7 +25,7 @@ export enum PaymentNetwork {
 
 @Entity('payments')
 export class Payment {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid', { default: () => 'gen_random_uuid()' })
   id: string;
 
   @Column({ unique: true })

@@ -15,6 +15,7 @@ jest.mock('typeorm', () => {
   return {
     Entity: noop,
     Column: noop,
+    PrimaryColumn: noop,
     PrimaryGeneratedColumn: noop,
     CreateDateColumn: noop,
     UpdateDateColumn: noop,
