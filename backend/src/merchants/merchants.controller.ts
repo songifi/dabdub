@@ -2,11 +2,11 @@ import { Controller, Get, Patch, Post, Body, UseGuards, Request } from '@nestjs/
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { MerchantsService } from './merchants.service';
 import { UpdateMerchantDto } from './dto/create-merchant.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 
 @ApiTags('merchants')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtOrApiKeyGuard)
 @Controller('merchants')
 export class MerchantsController {
   constructor(private readonly merchantsService: MerchantsService) {}
