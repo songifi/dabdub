@@ -33,7 +33,7 @@ export class AuthService {
     const saved = await this.merchantsRepo.save(merchant);
     const token = this.signToken(saved.id, saved.email);
 
-    return { accessToken: token, merchant: this.sanitize(saved) };
+    return { accessToken: token, merchant: saved };
   }
 
   async login(dto: LoginDto) {
@@ -44,15 +44,10 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     const token = this.signToken(merchant.id, merchant.email);
-    return { accessToken: token, merchant: this.sanitize(merchant) };
+    return { accessToken: token, merchant };
   }
 
   private signToken(sub: string, email: string): string {
     return this.jwtService.sign({ sub, email });
-  }
-
-  private sanitize(merchant: Merchant) {
-    const { passwordHash, apiKeyHash, ...rest } = merchant;
-    return rest;
   }
 }

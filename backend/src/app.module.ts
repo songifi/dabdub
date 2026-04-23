@@ -10,6 +10,8 @@ import { StellarModule } from './stellar/stellar.module';
 import { SettlementsModule } from './settlements/settlements.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
+import { HealthModule } from './health/health.module';
+import { MerchantAnalyticsModule } from './analytics/merchant-analytics.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { WaitlistModule } from './waitlist/waitlist.module';
       }),
       inject: [ConfigService],
     }),
+    HealthModule,
+    MerchantAnalyticsModule,
     AdminAlertModule,
     AuthModule,
     MerchantsModule,

@@ -8,6 +8,7 @@ import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class SettlementsService {
@@ -109,13 +110,13 @@ export class SettlementsService {
   }
 
   async findAll(merchantId: string, page = 1, limit = 20) {
-    const [settlements, total] = await this.settlementsRepo.findAndCount({
+    const [data, total] = await this.settlementsRepo.findAndCount({
       where: { merchantId },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });
 
-    return { settlements, total, page, limit };
+    return PaginatedResponseDto.of(data, total, page, limit);
   }
 }

@@ -1,8 +1,9 @@
 import { Controller, Post, Get, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('payments')
 @ApiBearerAuth()
@@ -19,10 +20,8 @@ export class PaymentsController {
 
   @Get()
   @ApiOperation({ summary: 'List all payments' })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
-  findAll(@Request() req, @Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.paymentsService.findAll(req.user.merchantId, +page, +limit);
+  findAll(@Request() req, @Query() pagination: PaginationDto) {
+    return this.paymentsService.findAll(req.user.merchantId, pagination.page, pagination.limit);
   }
 
   @Get('stats')

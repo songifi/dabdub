@@ -38,8 +38,6 @@ export class MerchantsService {
   }
 
   async getProfile(id: string) {
-    const merchant = await this.findOne(id);
-    const { passwordHash, apiKeyHash, ...profile } = merchant;
-    return profile;
+    return this.findOne(id);
   }
 }
