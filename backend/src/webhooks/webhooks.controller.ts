@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards, Request, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -48,7 +48,7 @@ export class WebhooksController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiNotFoundResponse({ description: 'Webhook not found' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  remove(@Request() req: { user: { merchantId: string } }, @Param('id') id: string) {
+  remove(@Request() req: { user: { merchantId: string } }, @Param('id', ParseUUIDPipe) id: string) {
     return this.webhooksService.remove(id, req.user.merchantId);
   }
 }

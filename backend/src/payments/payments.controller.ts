@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Query, UseGuards, Request, UseInterceptors, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -14,6 +14,8 @@ import {
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { IdempotencyInterceptor } from '../payment/idempotency.interceptor';
 
 @ApiTags('payments')
 @ApiBearerAuth('bearer')
@@ -23,6 +25,7 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post()
+  @UseInterceptors(IdempotencyInterceptor)
   @ApiOperation({ summary: 'Create a payment request' })
   @ApiOkResponse({ description: 'Payment created' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
@@ -39,12 +42,8 @@ export class PaymentsController {
   @ApiOkResponse({ description: 'Paginated payments' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  findAll(
-    @Request() req: { user: { merchantId: string } },
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    return this.paymentsService.findAll(req.user.merchantId, +page, +limit);
+  findAll(@Request() req: { user: { merchantId: string } }, @Query() pagination: PaginationDto) {
+    return this.paymentsService.findAll(req.user.merchantId, pagination.page, pagination.limit);
   }
 
   @Get('stats')
@@ -63,7 +62,7 @@ export class PaymentsController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiNotFoundResponse({ description: 'Payment not found' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  findOne(@Request() req: { user: { merchantId: string } }, @Param('id') id: string) {
+  findOne(@Request() req: { user: { merchantId: string } }, @Param('id', ParseUUIDPipe) id: string) {
     return this.paymentsService.findOne(id, req.user.merchantId);
   }
 }

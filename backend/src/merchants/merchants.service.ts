@@ -3,14 +3,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { Merchant } from './entities/merchant.entity';
+import { Merchant, MerchantStatus } from './entities/merchant.entity';
+import { AdminAuditLog } from './entities/admin-audit-log.entity';
 import { UpdateMerchantDto } from './dto/create-merchant.dto';
+import { BulkMerchantActionDto, BulkActionResponseDto, BulkActionResultDto } from './dto/bulk-merchant-action.dto';
 
 @Injectable()
 export class MerchantsService {
   constructor(
     @InjectRepository(Merchant)
     private merchantsRepo: Repository<Merchant>,
+    @InjectRepository(AdminAuditLog)
+    private auditRepo: Repository<AdminAuditLog>,
   ) {}
 
   async findOne(id: string): Promise<Merchant> {
@@ -23,6 +27,52 @@ export class MerchantsService {
     const merchant = await this.findOne(id);
     Object.assign(merchant, dto);
     return this.merchantsRepo.save(merchant);
+  }
+
+  async bulkUpdateStatus(
+    adminId: string,
+    dto: BulkMerchantActionDto,
+    status: MerchantStatus,
+  ): Promise<BulkActionResponseDto> {
+    const results: BulkActionResultDto[] = [];
+    let successful = 0;
+    let failed = 0;
+
+    for (const id of dto.ids) {
+      try {
+        const merchant = await this.merchantsRepo.findOne({ where: { id } });
+        if (!merchant) {
+          throw new Error('Merchant not found');
+        }
+
+        const oldStatus = merchant.status;
+        merchant.status = status;
+        await this.merchantsRepo.save(merchant);
+
+        await this.auditRepo.save({
+          adminId,
+          action: `merchant_${status}`,
+          targetId: id,
+          details: {
+            oldStatus,
+            newStatus: status,
+          },
+        });
+
+        results.push({ id, success: true });
+        successful++;
+      } catch (error) {
+        results.push({ id, success: false, error: error.message });
+        failed++;
+      }
+    }
+
+    return {
+      results,
+      total: dto.ids.length,
+      successful,
+      failed,
+    };
   }
 
   async generateApiKey(id: string): Promise<{ apiKey: string }> {
@@ -38,8 +88,6 @@ export class MerchantsService {
   }
 
   async getProfile(id: string) {
-    const merchant = await this.findOne(id);
-    const { passwordHash, apiKeyHash, ...profile } = merchant;
-    return profile;
+    return this.findOne(id);
   }
 }

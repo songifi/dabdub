@@ -6,6 +6,7 @@ import * as QRCode from 'qrcode';
 import { Payment, PaymentStatus } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { StellarService } from '../stellar/stellar.service';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -48,14 +49,14 @@ export class PaymentsService {
   }
 
   async findAll(merchantId: string, page = 1, limit = 20) {
-    const [payments, total] = await this.paymentsRepo.findAndCount({
+    const [data, total] = await this.paymentsRepo.findAndCount({
       where: { merchantId },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });
 
-    return { payments, total, page, limit };
+    return PaginatedResponseDto.of(data, total, page, limit);
   }
 
   async findOne(id: string, merchantId: string): Promise<Payment> {

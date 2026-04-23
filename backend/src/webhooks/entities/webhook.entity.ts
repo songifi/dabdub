@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Merchant } from '../../merchants/entities/merchant.entity';
 
 @Entity('webhooks')
@@ -27,6 +28,7 @@ export class Webhook {
   @Column({ type: 'simple-array' })
   events: string[];
 
+  @Exclude()
   @Column({ nullable: true })
   secret: string;
 

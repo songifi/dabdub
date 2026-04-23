@@ -1,24 +1,46 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
+import { NestFactory, Reflector, HttpAdapterHost } from '@nestjs/core';
+import { ClassSerializerInterceptor, ValidationPipe, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { readTelemetryConfig, shutdownTelemetry, startTelemetry } from './telemetry/telemetry';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require('../package.json') as { version: string };
 
 async function bootstrap(): Promise<void> {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
-  });
+  startTelemetry(readTelemetryConfig());
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const config = app.get(ConfigService);
   const port = parseInt(String(config.get('PORT', 3000)), 10);
   const apiPrefix = String(config.get('API_PREFIX', 'api/v1'));
 
-  app.enableCors();
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : [];
+
+  app.enableCors({
+    origin: isDevelopment
+      ? true
+      : (origin, callback) => {
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error(`CORS: origin '${origin}' not allowed`));
+          }
+        },
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+  });
+
   app.setGlobalPrefix(apiPrefix, {
     exclude: [
+      { path: 'health', method: RequestMethod.ALL },
+      { path: 'health/ready', method: RequestMethod.ALL },
       { path: 'docs', method: RequestMethod.ALL },
       { path: 'docs/(.*)', method: RequestMethod.ALL },
       { path: 'docs-json', method: RequestMethod.GET },
@@ -28,10 +50,13 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost), config));
+  app.useGlobalInterceptors(new LoggingInterceptor(), new ClassSerializerInterceptor(app.get(Reflector)));
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('CheesePay API')
@@ -72,10 +97,14 @@ async function bootstrap(): Promise<void> {
     },
   });
 
+  process.once('SIGTERM', () => {
+    void shutdownTelemetry();
+  });
+  process.once('SIGINT', () => {
+    void shutdownTelemetry();
+  });
+
   await app.listen(port);
-  logger.log(`CheesePay API at http://localhost:${port}/${apiPrefix}`);
-  logger.log(`Swagger UI at http://localhost:${port}/docs`);
-  logger.log(`OpenAPI JSON at http://localhost:${port}/docs-json`);
 }
 
-bootstrap();
+void bootstrap();

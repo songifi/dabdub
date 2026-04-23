@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import axios from 'axios';
+import { AdminAlertService } from '../alerts/admin-alert.service';
+import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Webhook } from './entities/webhook.entity';
 
 @Injectable()
@@ -12,6 +14,7 @@ export class WebhooksService {
   constructor(
     @InjectRepository(Webhook)
     private webhooksRepo: Repository<Webhook>,
+    private adminAlerts: AdminAlertService,
   ) {}
 
   async dispatch(merchantId: string, event: string, payload: Record<string, any>): Promise<void> {
@@ -42,6 +45,17 @@ export class WebhooksService {
         await this.webhooksRepo.save(webhook);
       } catch (err) {
         this.logger.warn(`Webhook delivery failed to ${webhook.url}: ${err.message}`);
+        await this.adminAlerts.raise({
+          type: AdminAlertType.WEBHOOK_FAILURE,
+          dedupeKey: `webhook:${webhook.id}`,
+          message: `Webhook delivery failed to ${webhook.url}: ${err.message}`,
+          metadata: {
+            merchantId,
+            event,
+            webhookId: webhook.id,
+          },
+          thresholdValue: webhook.failureCount + 1,
+        });
         webhook.failureCount += 1;
         if (webhook.failureCount >= 10) webhook.isActive = false;
         await this.webhooksRepo.save(webhook);
