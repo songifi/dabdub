@@ -1,11 +1,22 @@
 import { Controller, Post, Get, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
 @ApiTags('payments')
-@ApiBearerAuth()
+@ApiBearerAuth('bearer')
 @UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
@@ -13,7 +24,11 @@ export class PaymentsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a payment request' })
-  create(@Request() req, @Body() dto: CreatePaymentDto) {
+  @ApiOkResponse({ description: 'Payment created' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  create(@Request() req: { user: { merchantId: string } }, @Body() dto: CreatePaymentDto) {
     return this.paymentsService.create(req.user.merchantId, dto);
   }
 
@@ -21,19 +36,34 @@ export class PaymentsController {
   @ApiOperation({ summary: 'List all payments' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
-  findAll(@Request() req, @Query('page') page = 1, @Query('limit') limit = 20) {
+  @ApiOkResponse({ description: 'Paginated payments' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  findAll(
+    @Request() req: { user: { merchantId: string } },
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
     return this.paymentsService.findAll(req.user.merchantId, +page, +limit);
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Payment statistics' })
-  getStats(@Request() req) {
+  @ApiOkResponse({ description: 'Aggregated stats' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  getStats(@Request() req: { user: { merchantId: string } }) {
     return this.paymentsService.getStats(req.user.merchantId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get payment by ID' })
-  findOne(@Request() req, @Param('id') id: string) {
+  @ApiParam({ name: 'id', description: 'Payment UUID' })
+  @ApiOkResponse({ description: 'Payment detail' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiNotFoundResponse({ description: 'Payment not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  findOne(@Request() req: { user: { merchantId: string } }, @Param('id') id: string) {
     return this.paymentsService.findOne(id, req.user.merchantId);
   }
 }
@@ -45,6 +75,10 @@ export class PublicPaymentController {
 
   @Get(':reference')
   @ApiOperation({ summary: 'Get payment details by reference (public)' })
+  @ApiParam({ name: 'reference', example: 'PAY-abc123' })
+  @ApiOkResponse({ description: 'Public payment view' })
+  @ApiNotFoundResponse({ description: 'Unknown reference' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   getByReference(@Param('reference') reference: string) {
     return this.paymentsService.findByReference(reference);
   }

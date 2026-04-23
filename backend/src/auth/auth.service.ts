@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { Merchant, MerchantStatus } from '../merchants/entities/merchant.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import type { AuthTokenResponseDto } from './dto/auth-token-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -15,7 +16,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto): Promise<AuthTokenResponseDto> {
     const existing = await this.merchantsRepo.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email already registered');
 
@@ -36,7 +37,7 @@ export class AuthService {
     return { accessToken: token, merchant: this.sanitize(saved) };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto): Promise<AuthTokenResponseDto> {
     const merchant = await this.merchantsRepo.findOne({ where: { email: dto.email } });
     if (!merchant) throw new UnauthorizedException('Invalid credentials');
 
