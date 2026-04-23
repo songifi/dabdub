@@ -10,6 +10,8 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notifications/notifications.service';
 import { CacheService } from '../cache/cache.service';
+import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
+import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.entity';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -17,6 +19,8 @@ describe('AdminService', () => {
   let sessionRepo: any;
   let tokenRepo: any;
   let fraudRepo: any;
+  let feeConfigRepo: any;
+  let feeHistoryRepo: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -53,6 +57,21 @@ describe('AdminService', () => {
           useValue: { update: jest.fn() },
         },
         {
+          provide: getRepositoryToken(FeeConfig),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(FeeHistory),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
           provide: EmailService,
           useValue: { queue: jest.fn() },
         },
@@ -76,6 +95,8 @@ describe('AdminService', () => {
     sessionRepo = module.get(getRepositoryToken(Session));
     tokenRepo = module.get(getRepositoryToken(RefreshToken));
     fraudRepo = module.get(getRepositoryToken(FraudFlag));
+    feeConfigRepo = module.get(getRepositoryToken(FeeConfig));
+    feeHistoryRepo = module.get(getRepositoryToken(FeeHistory));
   });
 
   it('should revoke sessions on freezeUser', async () => {
@@ -99,5 +120,62 @@ describe('AdminService', () => {
       expect.objectContaining({ revokedAt: expect.any(Date) }),
     );
     expect(fraudRepo.save).toHaveBeenCalled();
+  });
+
+  describe('Fee Management', () => {
+    it('should return all global fees', async () => {
+      const fees = [
+        { feeType: FeeType.TRANSFER, baseFeeRate: '0.010000' },
+        { feeType: FeeType.WITHDRAWAL, baseFeeRate: '0.020000' },
+      ];
+      feeConfigRepo.find.mockResolvedValue(fees);
+
+      const result = await service.getGlobalFees();
+
+      expect(result).toEqual(fees);
+      expect(feeConfigRepo.find).toHaveBeenCalledWith({
+        order: { feeType: 'ASC' },
+      });
+    });
+
+    it('should update global fee and record history', async () => {
+      const feeConfig = {
+        feeType: FeeType.TRANSFER,
+        baseFeeRate: '0.010000',
+      };
+      feeConfigRepo.findOne.mockResolvedValue(feeConfig);
+      feeConfigRepo.save.mockResolvedValue({ ...feeConfig, baseFeeRate: '0.015000' });
+      feeHistoryRepo.create.mockReturnValue({});
+
+      const result = await service.updateGlobalFee(
+        FeeType.TRANSFER,
+        '0.015000',
+        'admin-123',
+        'Increased due to market conditions',
+      );
+
+      expect(feeConfigRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ baseFeeRate: '0.015000' }),
+      );
+      expect(feeHistoryRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feeType: FeeType.TRANSFER,
+          changeType: FeeChangeType.GLOBAL,
+          previousValue: '0.010000',
+          newValue: '0.015000',
+          actorId: 'admin-123',
+          reason: 'Increased due to market conditions',
+        }),
+      );
+      expect(feeHistoryRepo.save).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when fee config not found', async () => {
+      feeConfigRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateGlobalFee(FeeType.DEPOSIT, '0.005000', 'admin-123'),
+      ).rejects.toThrow('Fee config for deposit not found');
+    });
   });
 });

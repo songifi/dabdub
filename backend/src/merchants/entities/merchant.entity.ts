@@ -62,4 +62,15 @@ export class Merchant extends BaseEntity {
     },
   })
   settlementThresholdUsdc!: number;
+
+  /** Per-merchant custom fee rate override. Null means use global default. */
+  @Column({
+    name: 'custom_fee_rate',
+    type: 'numeric',
+    precision: 7,
+    scale: 6,
+    nullable: true,
+    default: null,
+  })
+  customFeeRate!: string | null;
 }

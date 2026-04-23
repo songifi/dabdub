@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike, Raw } from 'typeorm';
 import { User, KycStatus } from '../users/entities/user.entity';
@@ -15,9 +20,14 @@ import { Session } from '../auth/entities/session.entity';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationService } from '../notifications/notifications.service';
 import { CacheService } from '../cache/cache.service';
 import { TierName } from '../tier-config/entities/tier-config.entity';
+import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
+import {
+  FeeHistory,
+  FeeChangeType,
+} from '../fee-config/entities/fee-history.entity';
 
 @Injectable()
 export class AdminService {
@@ -32,9 +42,13 @@ export class AdminService {
     private readonly sessionRepo: Repository<Session>,
     @InjectRepository(RefreshToken)
     private readonly tokenRepo: Repository<RefreshToken>,
+    @InjectRepository(FeeConfig)
+    private readonly feeConfigRepo: Repository<FeeConfig>,
+    @InjectRepository(FeeHistory)
+    private readonly feeHistoryRepo: Repository<FeeHistory>,
     private readonly emailService: EmailService,
     private readonly auditService: AuditService,
-    private readonly notificationsService: NotificationsService,
+    private readonly notificationService: NotificationService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -241,9 +255,56 @@ export class AdminService {
   }
 
   async broadcast(dto: { title: string; body: string; segment: string }) {
-    // This would typically involve a background job
-    // NotificationsService should have a broadcast method
-    await this.notificationsService.broadcast(dto.title, dto.body, dto.segment);
+    await this.notificationService.broadcast(dto.title, dto.body, dto.segment);
     return { success: true };
+  }
+
+  // ── Fee Management ─────────────────────────────────────────────────────────
+
+  async getGlobalFees(): Promise<FeeConfig[]> {
+    return this.feeConfigRepo.find({ order: { feeType: 'ASC' } });
+  }
+
+  async updateGlobalFee(
+    feeType: FeeType,
+    newRate: string,
+    adminId: string,
+    reason?: string,
+  ): Promise<FeeConfig> {
+    const feeConfig = await this.feeConfigRepo.findOne({
+      where: { feeType },
+    });
+    if (!feeConfig) {
+      throw new NotFoundException(`Fee config for ${feeType} not found`);
+    }
+
+    const previousValue = feeConfig.baseFeeRate;
+    feeConfig.baseFeeRate = newRate;
+    const updated = await this.feeConfigRepo.save(feeConfig);
+
+    await this.recordFeeHistory({
+      feeType,
+      changeType: FeeChangeType.GLOBAL,
+      merchantId: null,
+      previousValue,
+      newValue: newRate,
+      actorId: adminId,
+      reason: reason ?? null,
+    });
+
+    return updated;
+  }
+
+  async recordFeeHistory(dto: {
+    feeType: string;
+    changeType: FeeChangeType;
+    merchantId: string | null;
+    previousValue: string;
+    newValue: string;
+    actorId: string;
+    reason: string | null;
+  }): Promise<FeeHistory> {
+    const entry = this.feeHistoryRepo.create(dto);
+    return this.feeHistoryRepo.save(entry);
   }
 }

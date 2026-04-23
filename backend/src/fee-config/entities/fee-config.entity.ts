@@ -5,6 +5,7 @@ export enum FeeType {
   TRANSFER = 'transfer',
   WITHDRAWAL = 'withdrawal',
   DEPOSIT = 'deposit',
+  MERCHANT_SETTLEMENT = 'merchant_settlement',
 }
 
 /**

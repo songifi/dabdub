@@ -33,30 +33,6 @@ export class MerchantsService {
       throw new ConflictException('Merchant profile already exists');
     }
 
-    const merchant = await this.dataSource.transaction(
-      async (trx: EntityManager) => {
-        const merchantEntity = trx.getRepository(Merchant).create({
-          userId: user.id,
-          businessName: dto.businessName,
-          businessType: dto.businessType,
-          logoKey: dto.logoKey ?? null,
-          description: dto.description ?? null,
-          settlementCurrency: dto.settlementCurrency,
-          autoSettleEnabled: dto.autoSettleEnabled ?? true,
-          settlementThresholdUsdc: dto.threshold ?? 10,
-        });
-
-        const savedMerchant = await trx
-          .getRepository(Merchant)
-          .save(merchantEntity);
-
-        user.isMerchant = true;
-        user.role = UserRole.MERCHANT;
-        await trx.getRepository(User).save(user);
-
-        return savedMerchant;
-      },
-    );
     const merchant = await this.dataSource.transaction(async (trx: EntityManager) => {
       const merchantEntity = trx.getRepository(Merchant).create({
         userId: user.id,
@@ -67,6 +43,7 @@ export class MerchantsService {
         settlementCurrency: dto.settlementCurrency,
         autoSettleEnabled: dto.autoSettleEnabled ?? true,
         settlementThresholdUsdc: dto.threshold ?? 10,
+        customFeeRate: dto.customFeeRate != null ? String(dto.customFeeRate) : null,
       });
 
       const savedMerchant = await trx.getRepository(Merchant).save(merchantEntity);
@@ -113,6 +90,9 @@ export class MerchantsService {
     }
     if (dto.threshold !== undefined) {
       merchant.settlementThresholdUsdc = dto.threshold;
+    }
+    if (dto.customFeeRate !== undefined) {
+      merchant.customFeeRate = dto.customFeeRate != null ? String(dto.customFeeRate) : null;
     }
 
     return this.merchantRepo.save(merchant);
@@ -167,5 +147,21 @@ export class MerchantsService {
     }
 
     return merchant;
+  }
+
+  async updateMerchantFee(
+    merchantId: string,
+    customFeeRate: number | null,
+  ): Promise<Merchant> {
+    const merchant = await this.merchantRepo.findOne({
+      where: { id: merchantId },
+    });
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+
+    merchant.customFeeRate =
+      customFeeRate != null ? String(customFeeRate) : null;
+    return this.merchantRepo.save(merchant);
   }
 }

@@ -2,6 +2,7 @@ import { Processor, Process, InjectQueue } from '@nestjs/bull';
 import { Logger, OnModuleInit } from '@nestjs/common';
 import { Job, Queue } from 'bull';
 import { RatesService } from './rates.service';
+import { CronJobService } from '../cron/cron-job.service';
 
 export const RATES_QUEUE = 'rates';
 export const FETCH_RATE_JOB = 'fetch-rate';
@@ -13,6 +14,7 @@ export class RatesProcessor implements OnModuleInit {
   constructor(
     private readonly ratesService: RatesService,
     @InjectQueue(RATES_QUEUE) private readonly ratesQueue: Queue,
+    private readonly cronJobService: CronJobService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -29,11 +31,14 @@ export class RatesProcessor implements OnModuleInit {
 
   @Process(FETCH_RATE_JOB)
   async handleFetchRate(_job: Job): Promise<void> {
-    try {
-      await this.ratesService.fetchAndCache();
-    } catch (err) {
-      // Log WARN only — do NOT evict Redis so last known rate stays alive
-      this.logger.warn(`fetch-rate failed: ${(err as Error).message}`);
-    }
+    await this.cronJobService.run('fetch-exchange-rate', async () => {
+      try {
+        await this.ratesService.fetchAndCache();
+      } catch (err) {
+        // Log WARN only — do NOT evict Redis so last known rate stays alive
+        this.logger.warn(`fetch-rate failed: ${(err as Error).message}`);
+      }
+    });
   }
 }
+

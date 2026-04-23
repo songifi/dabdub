@@ -46,6 +46,7 @@ import { KycModule } from './kyc/kyc.module';
 import { ReportsModule } from './reports/reports.module';
 import { ApiVersionModule } from './api-version/api-version.module';
 import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers.interceptor';
+import { CronModule } from './cron/cron.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers
     HealthModule,
     ApiVersionModule,
     SorobanModule,
+    CronModule,
 
     // 6. Email — async transactional delivery via ZeptoMail + BullMQ.
     EmailModule,

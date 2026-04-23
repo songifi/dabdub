@@ -11,7 +11,12 @@ import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { EmailModule } from '../email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AdminAuthModule } from './auth/admin-auth.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { CronModule } from '../cron/cron.module';
+import { CronAdminController } from './cron-admin.controller';
 import { AuditModule } from '../audit/audit.module';
+import { FeeConfig } from '../fee-config/entities/fee-config.entity';
+import { FeeHistory } from '../fee-config/entities/fee-history.entity';
 
 @Module({
   imports: [
@@ -22,14 +27,18 @@ import { AuditModule } from '../audit/audit.module';
       FraudFlag,
       Session,
       RefreshToken,
+      FeeConfig,
+      FeeHistory,
     ]),
     EmailModule,
     NotificationsModule,
     AdminAuthModule,
     AuditModule,
+    AnalyticsModule,
+    CronModule,
   ],
   providers: [AdminService],
-  controllers: [AdminController],
-  exports: [AdminService, AdminAuthModule],
+  controllers: [AdminController, CronAdminController],
+  exports: [AdminService, AdminAuthModule, AnalyticsModule],
 })
 export class AdminModule {}
