@@ -9,6 +9,7 @@ import { StellarModule } from './stellar/stellar.module';
 import { SettlementsModule } from './settlements/settlements.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     SettlementsModule,
     WebhooksModule,
     WaitlistModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}
