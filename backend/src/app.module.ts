@@ -53,6 +53,7 @@ import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers
 import { CronModule } from './cron/cron.module';
 import { SentryModule } from './sentry/sentry.module';
 import { PrometheusModule } from './prometheus/prometheus.module';
+import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
 
 @Module({
   imports: [
@@ -184,6 +185,10 @@ import { PrometheusModule } from './prometheus/prometheus.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: DeprecationHeadersInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpMetricsInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

@@ -8,6 +8,9 @@ export class MetricsService {
   readonly settlementFailedTotal: Counter<string>;
   readonly settlementDurationSeconds: Histogram<string>;
 
+  readonly httpRequestsTotal: Counter<string>;
+  readonly httpRequestDurationMs: Histogram<string>;
+
   constructor() {
     this.paymentCreatedTotal = new Counter({
       name: 'payment_created_total',
@@ -33,6 +36,19 @@ export class MetricsService {
       labelNames: ['type'],
       buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 30],
     });
+
+    this.httpRequestsTotal = new Counter({
+      name: 'http_requests_total',
+      help: 'Total number of HTTP requests',
+      labelNames: ['method', 'route', 'status'],
+    });
+
+    this.httpRequestDurationMs = new Histogram({
+      name: 'http_request_duration_ms',
+      help: 'HTTP request latency in milliseconds',
+      labelNames: ['method', 'route', 'status'],
+      buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+    });
   }
 
   incrementPaymentCreated(type: string): void {
@@ -49,6 +65,17 @@ export class MetricsService {
 
   observeSettlementDuration(type: string, durationSeconds: number): void {
     this.settlementDurationSeconds.observe({ type }, durationSeconds);
+  }
+
+  recordHttpRequest(
+    method: string,
+    route: string,
+    status: number | string,
+    durationMs: number,
+  ): void {
+    const labels = { method, route, status: String(status) };
+    this.httpRequestsTotal.inc(labels);
+    this.httpRequestDurationMs.observe(labels, durationMs);
   }
 }
 
