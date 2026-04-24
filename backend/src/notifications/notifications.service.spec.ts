@@ -126,4 +126,72 @@ describe('NotificationService', () => {
     const count = await service.getUnreadCount('u1');
     expect(count).toBe(0);
   });
+
+  it('listForUser returns paginated results and encodes nextCursor', async () => {
+    const now = new Date();
+    const rows = Array.from({ length: 3 }, (_, idx) => ({
+      id: `n${idx + 1}`,
+      userId: 'u1',
+      createdAt: new Date(now.getTime() - idx * 1000),
+    })) as Notification[];
+    const qb = {
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(rows),
+    };
+    repo.createQueryBuilder.mockReturnValue(qb as any);
+
+    const result = await service.listForUser('u1', { limit: 2 });
+
+    expect(qb.take).toHaveBeenCalledWith(3);
+    expect(result.items).toHaveLength(2);
+    expect(result.nextCursor).toBeDefined();
+  });
+
+  it('listForUser throws when cursor is invalid', async () => {
+    const qb = {
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    repo.createQueryBuilder.mockReturnValue(qb as any);
+
+    await expect(
+      service.listForUser('u1', { cursor: 'invalid-cursor', limit: 2 }),
+    ).rejects.toThrow('Invalid cursor');
+  });
+
+  it('markRead with already read notification does not re-save record but invalidates cache', async () => {
+    repo.findOne.mockResolvedValueOnce({
+      id: 'n1',
+      userId: 'u1',
+      isRead: true,
+      readAt: new Date(),
+    } as Notification);
+
+    await service.markRead('u1', 'n1');
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(mockRedis.del).toHaveBeenCalledWith('notifications:unread-count:u1');
+  });
+
+  it('getUnreadCount returns 0 for invalid cached values', async () => {
+    mockRedis.get.mockResolvedValueOnce('not-a-number');
+    const result = await service.getUnreadCount('u1');
+    expect(result).toBe(0);
+  });
+
+  it('broadcast logs the broadcast payload', async () => {
+    const spy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    await service.broadcast('Title', 'Body', 'segment-a');
+    expect(spy).toHaveBeenCalledWith(
+      '[BROADCAST] Segment: segment-a, Title: Title, Body: Body',
+    );
+    spy.mockRestore();
+  });
 });
