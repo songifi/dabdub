@@ -72,6 +72,75 @@ GET /api/v1/admin/analytics/top-merchants?limit=10&period=30d
 }
 ```
 
+### GET /api/v1/analytics/funnel
+
+Retrieves payment conversion funnel analytics showing the percentage of payments that progress through each stage from creation to settlement.
+
+#### Query Parameters
+
+- `startDate` (optional): Start date for analysis (ISO 8601 format, default: 30 days ago)
+- `endDate` (optional): End date for analysis (ISO 8601 format, default: current date)
+- `network` (optional): Filter by payment network (`stellar`)
+- `period` (optional): Grouping period (`day`, `week`, `month`)
+
+#### Example Request
+
+```bash
+GET /api/v1/analytics/funnel?startDate=2026-03-01&endDate=2026-04-01&network=stellar
+```
+
+#### Response Format
+
+```json
+{
+  "stages": [
+    {
+      "stage": "created",
+      "count": 1000,
+      "percentage": 100
+    },
+    {
+      "stage": "confirmed",
+      "count": 850,
+      "percentage": 85,
+      "dropOffCount": 150,
+      "dropOffPercentage": 15
+    },
+    {
+      "stage": "settling",
+      "count": 800,
+      "percentage": 80,
+      "dropOffCount": 50,
+      "dropOffPercentage": 5.88
+    },
+    {
+      "stage": "settled",
+      "count": 750,
+      "percentage": 75,
+      "dropOffCount": 50,
+      "dropOffPercentage": 6.25
+    }
+  ],
+  "totalCreated": 1000,
+  "period": {
+    "startDate": "2026-03-01T00:00:00.000Z",
+    "endDate": "2026-04-01T00:00:00.000Z"
+  },
+  "network": "stellar",
+  "generatedAt": "2026-04-24T10:00:00.000Z"
+}
+```
+
+## Payment Funnel Features
+
+- **Stage tracking**: Monitors payments through created → confirmed → settling → settled
+- **Conversion rates**: Calculates percentage conversion at each stage
+- **Drop-off analysis**: Shows count and percentage of payments lost at each transition
+- **Network filtering**: Filter analysis by payment network (e.g., Stellar)
+- **Date range filtering**: Analyze specific time periods
+- **Failed/expired tracking**: Separate tracking for failed and expired payments
+- **Real-time data**: No caching for up-to-date conversion metrics
+
 ## Top Merchants Features
 
 - **Volume-based ranking**: Merchants ordered by total USD volume
@@ -83,6 +152,10 @@ GET /api/v1/admin/analytics/top-merchants?limit=10&period=30d
 
 ## Use Cases
 
+- **Payment funnel optimization**: Identify bottlenecks in payment processing
+- **Conversion rate monitoring**: Track payment success rates over time
+- **Network performance analysis**: Compare conversion rates across different networks
+- **Drop-off investigation**: Understand where payments fail in the process
 - Identify platform's most valuable merchants
 - Analyze merchant performance distribution
 - Monitor merchant growth trends
