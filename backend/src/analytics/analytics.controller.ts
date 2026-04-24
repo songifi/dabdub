@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { MerchantRole } from '../merchants/entities/merchant.entity';
 
 @ApiTags('analytics')
 @ApiBearerAuth()
@@ -9,6 +10,29 @@ import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('revenue')
+  @ApiOperation({ summary: 'Get settlement fee revenue analytics' })
+  @ApiQuery({ name: 'period', enum: ['daily', 'monthly'], required: false })
+  @ApiQuery({ name: 'from', required: false, description: 'Start date in YYYY-MM-DD format' })
+  @ApiQuery({ name: 'to', required: false, description: 'End date in YYYY-MM-DD format' })
+  async getRevenue(
+    @Request() req: { user: { merchantId: string; role: MerchantRole } },
+    @Query('period') period: 'daily' | 'monthly' = 'daily',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const isAdmin =
+      req.user.role === MerchantRole.ADMIN || req.user.role === MerchantRole.SUPERADMIN;
+
+    return this.analyticsService.getRevenue({
+      scope: isAdmin ? 'admin' : 'merchant',
+      merchantId: isAdmin ? undefined : req.user.merchantId,
+      period,
+      from,
+      to,
+    });
+  }
 
   @Get('volume')
   @ApiOperation({ summary: 'Get payment volume aggregation' })
