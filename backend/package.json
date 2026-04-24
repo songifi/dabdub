@@ -66,6 +66,8 @@
     "qrcode": "^1.5.3",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
+    "@willsoto/nestjs-prometheus": "^6.0.2",
+    "prom-client": "^15.1.3",
     "typeorm": "^0.2.41",
     "uuid": "^14.0.0"
   },

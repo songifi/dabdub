@@ -26,6 +26,8 @@ import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { SentryModule } from './sentry/sentry.module';
 import { CronModule } from './cron/cron.module';
+import { PrometheusModule } from './prometheus/prometheus.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -77,6 +79,7 @@ import { CronModule } from './cron/cron.module';
     }),
     HealthModule,
     SentryModule,
+    PrometheusModule,
     CronModule,
     EmailModule,
     AdminModule,
