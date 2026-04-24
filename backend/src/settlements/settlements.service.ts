@@ -8,6 +8,7 @@ import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Settlement, SettlementStatus } from './entities/settlement.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { AnalyticsCacheService } from '../cache/analytics-cache.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 export interface PartnerCallbackPayload {
@@ -28,6 +29,7 @@ export class SettlementsService {
     private config: ConfigService,
     private webhooks: WebhooksService,
     private adminAlerts: AdminAlertService,
+    private readonly analyticsCache: AnalyticsCacheService,
   ) {}
 
   async initiateSettlement(payment: Payment): Promise<void> {
@@ -88,6 +90,7 @@ export class SettlementsService {
         settlementId: settlement.id,
         amount: settlement.netAmountUsd,
       });
+      await this.analyticsCache.invalidateAfterPaymentSettled(settlement.merchantId);
     } catch (err) {
       this.logger.error(`Settlement failed for ${settlement.id}`, err.message);
       await this.adminAlerts.raise({
@@ -153,6 +156,7 @@ export class SettlementsService {
           settlementId: settlement.id,
           amount: settlement.netAmountUsd,
         });
+        await this.analyticsCache.invalidateAfterPaymentSettled(settlement.merchantId);
       }
     } else {
       settlement.status = SettlementStatus.FAILED;

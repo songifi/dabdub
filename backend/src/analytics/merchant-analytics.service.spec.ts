@@ -11,12 +11,23 @@ describe('MerchantAnalyticsService', () => {
       .mockResolvedValueOnce([{ count: '3', total: '5' }])
       .mockResolvedValueOnce([{ count: '4' }]);
 
-    const service = new MerchantAnalyticsService({
-      query,
-    } as never);
+    const mockCache = {
+      getParsed: jest.fn().mockResolvedValue(null),
+      setParsed: jest.fn().mockResolvedValue(undefined),
+    };
 
-    const result = await service.getMetrics(
-      new Date('2026-04-22T10:00:00.000Z'),
+    const service = new MerchantAnalyticsService({ query } as never, mockCache as never);
+
+    const result = await service.getMetrics(new Date('2026-04-22T10:00:00.000Z'));
+
+    expect(mockCache.setParsed).toHaveBeenCalledWith(
+      'admin',
+      'merchants',
+      '2026-04-22',
+      'admin',
+      expect.objectContaining({
+        generatedAt: '2026-04-22T10:00:00.000Z',
+      }),
     );
 
     expect(result.generatedAt).toBe('2026-04-22T10:00:00.000Z');
@@ -43,5 +54,31 @@ describe('MerchantAnalyticsService', () => {
       month: '2026-04',
       count: 4,
     });
+  });
+
+  it('returns cached admin metrics without querying DB', async () => {
+    const cached = {
+      generatedAt: 'cached',
+      dailySignups: [],
+      activationRate: {
+        windowDays: 7,
+        activatedMerchants: 0,
+        totalMerchants: 0,
+        percentage: 0,
+      },
+      monthlyActiveMerchants: { month: '2026-01', count: 0 },
+    };
+    const query = jest.fn();
+    const mockCache = {
+      getParsed: jest.fn().mockResolvedValue(cached),
+      setParsed: jest.fn(),
+    };
+    const service = new MerchantAnalyticsService({ query } as never, mockCache as never);
+
+    const result = await service.getMetrics(new Date('2026-01-15T12:00:00.000Z'));
+
+    expect(result).toBe(cached);
+    expect(query).not.toHaveBeenCalled();
+    expect(mockCache.setParsed).not.toHaveBeenCalled();
   });
 });

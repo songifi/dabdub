@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { InjectConnection } from '@nestjs/typeorm';
+import { Connection } from 'typeorm';
+import { AnalyticsCacheService } from '../cache/analytics-cache.service';
 
 const DAILY_SIGNUP_WINDOW_DAYS = 30;
 const ACTIVATION_WINDOW_DAYS = 7;
@@ -36,13 +37,32 @@ export interface MerchantAnalyticsResponse {
 
 @Injectable()
 export class MerchantAnalyticsService {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    private readonly analyticsCache: AnalyticsCacheService,
+  ) {}
 
   async getMetrics(asOf = new Date()): Promise<MerchantAnalyticsResponse> {
-    const [dailySignupsRows, activationRows, monthlyActiveRows] =
-      await Promise.all([
-        this.dataSource.query<SignupRow[]>(
-          `
+    const dateRange = asOf.toISOString().slice(0, 10);
+    const cached = await this.analyticsCache.getParsed<MerchantAnalyticsResponse>(
+      'admin',
+      'merchants',
+      dateRange,
+      'admin',
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const computed = await this.computeMetrics(asOf);
+    await this.analyticsCache.setParsed('admin', 'merchants', dateRange, 'admin', computed);
+    return computed;
+  }
+
+  private async computeMetrics(asOf: Date): Promise<MerchantAnalyticsResponse> {
+    const [dailySignupsRows, activationRows, monthlyActiveRows] = await Promise.all([
+      this.connection.query(
+        `
             SELECT
               DATE_TRUNC('day', "createdAt")::date::text AS day,
               COUNT(*)::text AS count
@@ -53,10 +73,10 @@ export class MerchantAnalyticsService {
             GROUP BY 1
             ORDER BY 1 ASC
           `,
-          [asOf.toISOString()],
-        ),
-        this.dataSource.query<CountRow[]>(
-          `
+        [asOf.toISOString()],
+      ),
+      this.connection.query(
+        `
             SELECT
               COUNT(*) FILTER (
                 WHERE EXISTS (
@@ -71,9 +91,9 @@ export class MerchantAnalyticsService {
             WHERE "is_admin" = false
               AND "is_treasury" = false
           `,
-        ),
-        this.dataSource.query<CountRow[]>(
-          `
+      ),
+      this.connection.query(
+        `
             SELECT COUNT(DISTINCT sessions.user_id)::text AS count
             FROM sessions
             INNER JOIN users ON users.id = sessions.user_id
@@ -81,9 +101,9 @@ export class MerchantAnalyticsService {
               AND users."is_treasury" = false
               AND DATE_TRUNC('month', sessions.last_seen_at) = DATE_TRUNC('month', $1::timestamptz)
           `,
-          [asOf.toISOString()],
-        ),
-      ]);
+        [asOf.toISOString()],
+      ),
+    ]);
 
     const activation = activationRows[0] as CountRow & { total: string };
     const activatedMerchants = Number(activation?.count ?? 0);
@@ -97,9 +117,7 @@ export class MerchantAnalyticsService {
         activatedMerchants,
         totalMerchants,
         percentage:
-          totalMerchants === 0
-            ? 0
-            : Number(((activatedMerchants / totalMerchants) * 100).toFixed(2)),
+          totalMerchants === 0 ? 0 : Number(((activatedMerchants / totalMerchants) * 100).toFixed(2)),
       },
       monthlyActiveMerchants: {
         month: asOf.toISOString().slice(0, 7),
@@ -108,10 +126,7 @@ export class MerchantAnalyticsService {
     };
   }
 
-  private buildDailySignupSeries(
-    asOf: Date,
-    rows: SignupRow[],
-  ): MerchantAnalyticsPoint[] {
+  private buildDailySignupSeries(asOf: Date, rows: SignupRow[]): MerchantAnalyticsPoint[] {
     const counts = new Map(rows.map((row) => [row.day, Number(row.count)]));
     const series: MerchantAnalyticsPoint[] = [];
 
