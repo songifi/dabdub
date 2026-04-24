@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Session } from '../auth/entities/session.entity';
-import { User } from '../users/entities/user.entity';
+import { Payment } from '../payments/entities/payment.entity';
 import { MerchantAnalyticsController } from './merchant-analytics.controller';
 import { MerchantAnalyticsService } from './merchant-analytics.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Session])],
+  imports: [TypeOrmModule.forFeature([Payment])],
   controllers: [MerchantAnalyticsController],
   providers: [MerchantAnalyticsService],
 })

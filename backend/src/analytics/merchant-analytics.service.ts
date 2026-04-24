@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { PaymentFunnelQueryDto } from './dto/payment-funnel-query.dto';
 
 const DAILY_SIGNUP_WINDOW_DAYS = 30;
 const ACTIVATION_WINDOW_DAYS = 7;
@@ -45,6 +46,25 @@ export interface TopMerchant {
 export interface TopMerchantsResponse {
   merchants: TopMerchant[];
   period: string;
+  generatedAt: string;
+}
+
+export interface FunnelStage {
+  stage: string;
+  count: number;
+  percentage: number;
+  dropOffCount?: number;
+  dropOffPercentage?: number;
+}
+
+export interface PaymentFunnelResponse {
+  stages: FunnelStage[];
+  totalCreated: number;
+  period: {
+    startDate: string;
+    endDate: string;
+  };
+  network?: string;
   generatedAt: string;
 }
 
@@ -200,6 +220,92 @@ export class MerchantAnalyticsService {
       return response;
     } catch (error) {
       this.logger.error(`Failed to get top merchants: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async getPaymentFunnel(
+    startDate?: string,
+    endDate?: string,
+    network?: string,
+  ): Promise<PaymentFunnelResponse> {
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    // Build the base query with optional network filter
+    const networkFilter = network ? 'AND p.network = $3' : '';
+    const queryParams = [start.toISOString(), end.toISOString()];
+    if (network) {
+      queryParams.push(network);
+    }
+
+    const query = `
+      SELECT 
+        COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired')) AS created,
+        COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled')) AS confirmed,
+        COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled')) AS settling,
+        COUNT(*) FILTER (WHERE p.status = 'settled') AS settled,
+        COUNT(*) FILTER (WHERE p.status = 'failed') AS failed,
+        COUNT(*) FILTER (WHERE p.status = 'expired') AS expired
+      FROM payments p
+      WHERE p."createdAt" >= $1 
+        AND p."createdAt" <= $2
+        ${networkFilter}
+    `;
+
+    try {
+      const result = await this.dataSource.query(query, queryParams);
+      const data = result[0];
+
+      const created = parseInt(data.created);
+      const confirmed = parseInt(data.confirmed);
+      const settling = parseInt(data.settling);
+      const settled = parseInt(data.settled);
+      const failed = parseInt(data.failed);
+      const expired = parseInt(data.expired);
+
+      // Calculate stages with percentages and drop-offs
+      const stages: FunnelStage[] = [
+        {
+          stage: 'created',
+          count: created,
+          percentage: 100,
+        },
+        {
+          stage: 'confirmed',
+          count: confirmed,
+          percentage: created > 0 ? Number(((confirmed / created) * 100).toFixed(2)) : 0,
+          dropOffCount: created - confirmed,
+          dropOffPercentage: created > 0 ? Number((((created - confirmed) / created) * 100).toFixed(2)) : 0,
+        },
+        {
+          stage: 'settling',
+          count: settling,
+          percentage: created > 0 ? Number(((settling / created) * 100).toFixed(2)) : 0,
+          dropOffCount: confirmed - settling,
+          dropOffPercentage: confirmed > 0 ? Number((((confirmed - settling) / confirmed) * 100).toFixed(2)) : 0,
+        },
+        {
+          stage: 'settled',
+          count: settled,
+          percentage: created > 0 ? Number(((settled / created) * 100).toFixed(2)) : 0,
+          dropOffCount: settling - settled,
+          dropOffPercentage: settling > 0 ? Number((((settling - settled) / settling) * 100).toFixed(2)) : 0,
+        },
+      ];
+
+      return {
+        stages,
+        totalCreated: created,
+        period: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        },
+        network,
+        generatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get payment funnel: ${error.message}`, error.stack);
       throw error;
     }
   }
