@@ -24,6 +24,7 @@ api.interceptors.response.use(
 );
 
 export default api;
+export { api };
 
 export const authApi = {
   register: (data: { email: string; password: string; businessName: string; country?: string }) =>
