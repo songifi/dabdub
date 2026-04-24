@@ -19,6 +19,7 @@ const SUBJECTS: Record<string, string> = {
   'payment-confirmed': 'Payment Confirmed',
   'settlement-completed': 'Settlement Completed',
   'payment-failed': 'Payment Failed',
+  'analytics-report-ready': 'Your Analytics Report Is Ready',
 };
 
 @Injectable()
