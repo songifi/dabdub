@@ -35,6 +35,39 @@ export interface MerchantAnalyticsResponse {
   };
 }
 
+export interface TopMerchant {
+  businessName: string;
+  volume: number;
+  paymentCount: number;
+  settlementCount: number;
+  country: string;
+}
+
+export interface TopMerchantsResponse {
+  merchants: TopMerchant[];
+  period: string;
+  generatedAt: string;
+}
+
+export interface FunnelStage {
+  stage: string;
+  count: number;
+  percentage: number;
+  dropOffCount?: number;
+  dropOffPercentage?: number;
+}
+
+export interface PaymentFunnelResponse {
+  stages: FunnelStage[];
+  totalCreated: number;
+  period: {
+    startDate: string;
+    endDate: string;
+  };
+  network?: string;
+  generatedAt: string;
+}
+
 @Injectable()
 export class MerchantAnalyticsService {
   constructor(
@@ -141,5 +174,163 @@ export class MerchantAnalyticsService {
     }
 
     return series;
+  }
+
+  async getTopMerchants(limit: number = 10, period: string = '30d'): Promise<TopMerchantsResponse> {
+    const cacheKey = `${limit}-${period}`;
+    const cached = this.topMerchantsCache.get(cacheKey);
+    
+    if (cached && cached.expiresAt > Date.now()) {
+      this.logger.debug(`Returning cached top merchants for ${cacheKey}`);
+      return cached.data;
+    }
+
+    const periodDays = this.getPeriodDays(period);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - periodDays);
+
+    const query = `
+      SELECT 
+        m."businessName",
+        COALESCE(SUM(p."amountUsd"), 0)::decimal AS volume,
+        COUNT(p.id)::int AS "paymentCount",
+        COUNT(DISTINCT p."settlementId") FILTER (WHERE p."settlementId" IS NOT NULL)::int AS "settlementCount",
+        m.country
+      FROM merchants m
+      LEFT JOIN payments p ON m.id = p."merchantId" 
+        AND p."createdAt" >= $1
+        AND p.status IN ('confirmed', 'settling', 'settled')
+      WHERE m.status = 'active'
+      GROUP BY m.id, m."businessName", m.country
+      ORDER BY volume DESC, "paymentCount" DESC
+      LIMIT $2
+    `;
+
+    try {
+      const merchants = await this.dataSource.query(query, [cutoffDate.toISOString(), limit]);
+      
+      const response: TopMerchantsResponse = {
+        merchants: merchants.map((row: any) => ({
+          businessName: row.businessName,
+          volume: parseFloat(row.volume),
+          paymentCount: row.paymentCount,
+          settlementCount: row.settlementCount,
+          country: row.country || 'Unknown',
+        })),
+        period,
+        generatedAt: new Date().toISOString(),
+      };
+
+      // Cache for 10 minutes
+      this.topMerchantsCache.set(cacheKey, {
+        data: response,
+        expiresAt: Date.now() + 10 * 60 * 1000,
+      });
+
+      this.logger.debug(`Generated top merchants for ${cacheKey}: ${merchants.length} results`);
+      return response;
+    } catch (error) {
+      this.logger.error(`Failed to get top merchants: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async getPaymentFunnel(
+    startDate?: string,
+    endDate?: string,
+    network?: string,
+  ): Promise<PaymentFunnelResponse> {
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    // Build the base query with optional network filter
+    const networkFilter = network ? 'AND p.network = $3' : '';
+    const queryParams = [start.toISOString(), end.toISOString()];
+    if (network) {
+      queryParams.push(network);
+    }
+
+    const query = `
+      SELECT 
+        COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired')) AS created,
+        COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled')) AS confirmed,
+        COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled')) AS settling,
+        COUNT(*) FILTER (WHERE p.status = 'settled') AS settled,
+        COUNT(*) FILTER (WHERE p.status = 'failed') AS failed,
+        COUNT(*) FILTER (WHERE p.status = 'expired') AS expired
+      FROM payments p
+      WHERE p."createdAt" >= $1 
+        AND p."createdAt" <= $2
+        ${networkFilter}
+    `;
+
+    try {
+      const result = await this.dataSource.query(query, queryParams);
+      const data = result[0];
+
+      const created = parseInt(data.created);
+      const confirmed = parseInt(data.confirmed);
+      const settling = parseInt(data.settling);
+      const settled = parseInt(data.settled);
+      const failed = parseInt(data.failed);
+      const expired = parseInt(data.expired);
+
+      // Calculate stages with percentages and drop-offs
+      const stages: FunnelStage[] = [
+        {
+          stage: 'created',
+          count: created,
+          percentage: 100,
+        },
+        {
+          stage: 'confirmed',
+          count: confirmed,
+          percentage: created > 0 ? Number(((confirmed / created) * 100).toFixed(2)) : 0,
+          dropOffCount: created - confirmed,
+          dropOffPercentage: created > 0 ? Number((((created - confirmed) / created) * 100).toFixed(2)) : 0,
+        },
+        {
+          stage: 'settling',
+          count: settling,
+          percentage: created > 0 ? Number(((settling / created) * 100).toFixed(2)) : 0,
+          dropOffCount: confirmed - settling,
+          dropOffPercentage: confirmed > 0 ? Number((((confirmed - settling) / confirmed) * 100).toFixed(2)) : 0,
+        },
+        {
+          stage: 'settled',
+          count: settled,
+          percentage: created > 0 ? Number(((settled / created) * 100).toFixed(2)) : 0,
+          dropOffCount: settling - settled,
+          dropOffPercentage: settling > 0 ? Number((((settling - settled) / settling) * 100).toFixed(2)) : 0,
+        },
+      ];
+
+      return {
+        stages,
+        totalCreated: created,
+        period: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        },
+        network,
+        generatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get payment funnel: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private getPeriodDays(period: string): number {
+    switch (period) {
+      case '7d':
+        return 7;
+      case '30d':
+        return 30;
+      case '90d':
+        return 90;
+      default:
+        return 30;
+    }
   }
 }

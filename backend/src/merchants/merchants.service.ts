@@ -90,4 +90,17 @@ export class MerchantsService {
   async getProfile(id: string) {
     return this.findOne(id);
   }
+
+  async updateMerchantFee(
+    merchantId: string,
+    customFeeRate: number | null,
+  ): Promise<Merchant> {
+    const merchant = await this.merchantsRepo.findOne({ where: { id: merchantId } });
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+
+    merchant.customFeeRate = customFeeRate != null ? String(customFeeRate) : null;
+    return this.merchantsRepo.save(merchant);
+  }
 }

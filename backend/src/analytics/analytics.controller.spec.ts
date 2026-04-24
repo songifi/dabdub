@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { MerchantRole } from '../merchants/entities/merchant.entity';
 
 describe('AnalyticsController', () => {
   let controller: AnalyticsController;
   let service: AnalyticsService;
 
   const mockAnalyticsService = {
+    getRevenue: jest.fn(),
     getVolume: jest.fn(),
     getFunnel: jest.fn(),
     getComparison: jest.fn(),
@@ -16,6 +18,7 @@ describe('AnalyticsController', () => {
   const mockReq = {
     user: {
       merchantId: 'merchant-123',
+      role: MerchantRole.MERCHANT,
     },
   };
 
@@ -48,6 +51,43 @@ describe('AnalyticsController', () => {
 
       expect(await controller.getVolume(mockReq, 'daily')).toBe(result);
       expect(service.getVolume).toHaveBeenCalledWith('merchant-123', 'daily');
+    });
+  });
+
+  describe('getRevenue', () => {
+    it('should call service.getRevenue with merchant scope for merchants', async () => {
+      const result = { scope: 'merchant', breakdown: [], cacheHit: false };
+      mockAnalyticsService.getRevenue.mockResolvedValue(result);
+
+      expect(await controller.getRevenue(mockReq, 'daily', '2026-04-01', '2026-04-30')).toBe(
+        result,
+      );
+      expect(service.getRevenue).toHaveBeenCalledWith({
+        scope: 'merchant',
+        merchantId: 'merchant-123',
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-30',
+      });
+    });
+
+    it('should call service.getRevenue with admin scope for admins', async () => {
+      const result = { scope: 'admin', breakdown: [], cacheHit: false };
+      mockAnalyticsService.getRevenue.mockResolvedValue(result);
+
+      expect(
+        await controller.getRevenue(
+          { user: { merchantId: 'admin-merchant', role: MerchantRole.ADMIN } },
+          'monthly',
+        ),
+      ).toBe(result);
+      expect(service.getRevenue).toHaveBeenCalledWith({
+        scope: 'admin',
+        merchantId: undefined,
+        period: 'monthly',
+        from: undefined,
+        to: undefined,
+      });
     });
   });
 

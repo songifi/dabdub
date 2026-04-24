@@ -20,6 +20,7 @@ export enum MerchantStatus {
 export enum MerchantRole {
   ADMIN = 'admin',
   MERCHANT = 'merchant',
+  SUPERADMIN = 'superadmin',
 }
 
 @Entity('merchants')
@@ -71,6 +72,32 @@ export class Merchant {
 
   @Column({ type: 'decimal', precision: 5, scale: 4, default: 0.015 })
   feeRate: number;
+
+  /** Per-merchant custom fee rate override. Null means use global default. */
+  @Column({
+    name: 'custom_fee_rate',
+    type: 'numeric',
+    precision: 7,
+    scale: 6,
+    nullable: true,
+    default: null,
+  })
+  customFeeRate: string | null;
+
+  @Column({ default: false })
+  sandboxMode: boolean;
+
+  @Column({ nullable: true })
+  totpSecret: string | null;
+
+  @Column({ default: false })
+  totpEnabled: boolean;
+
+  @Column({ nullable: true, type: 'text' })
+  allowedIps: string | null;
+
+  @Column({ default: true })
+  paymentConfirmedEmailEnabled: boolean;
 
   @OneToMany(() => Payment, (payment) => payment.merchant)
   payments: Payment[];

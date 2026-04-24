@@ -10,6 +10,9 @@ import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { StellarService } from './stellar.service';
 import { SettlementsService } from '../settlements/settlements.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { Merchant } from '../merchants/entities/merchant.entity';
 
 @Injectable()
 export class StellarMonitorService implements OnModuleInit {
@@ -23,6 +26,8 @@ export class StellarMonitorService implements OnModuleInit {
     private stellar: StellarService,
     private settlements: SettlementsService,
     private webhooks: WebhooksService,
+    private emailService: EmailService,
+    private config: ConfigService,
     @InjectQueue(QUEUE_NAMES.stellarMonitor) private monitorQueue: Queue,
   ) {}
 
@@ -76,7 +81,7 @@ export class StellarMonitorService implements OnModuleInit {
       if (!result.verified) continue;
 
       try {
-        await this.confirmPayment(matched, tx.hash, result.amount, result.asset);
+        await this.confirmPayment(matched, tx.hash, result.amount, result.asset, result.from);
       } catch (err) {
         await this.adminAlerts.raise({
           type: AdminAlertType.STELLAR_MONITOR,
@@ -96,17 +101,21 @@ export class StellarMonitorService implements OnModuleInit {
     txHash: string,
     amount: number,
     asset: string,
+    from?: string,
   ) {
     this.logger.log(`Payment confirmed: ${payment.reference} | tx: ${txHash}`);
 
     payment.status = PaymentStatus.CONFIRMED;
     payment.txHash = txHash;
     payment.confirmedAt = new Date();
+    payment.customerWalletAddress = from;
 
     if (asset === 'USDC') payment.amountUsdc = amount;
     else payment.amountXlm = amount;
 
     await this.paymentsRepo.save(payment);
+
+    await this.queuePaymentConfirmedEmail(payment, asset);
 
     await this.webhooks.dispatch(payment.merchantId, 'payment.confirmed', {
       paymentId: payment.id,
@@ -117,6 +126,49 @@ export class StellarMonitorService implements OnModuleInit {
     });
 
     await this.settlements.initiateSettlement(payment);
+  }
+
+  private async queuePaymentConfirmedEmail(
+    payment: Payment & { merchant?: Merchant },
+    asset: string,
+  ): Promise<void> {
+    const merchant = payment.merchant;
+    if (!merchant?.email || merchant.paymentConfirmedEmailEnabled === false) {
+      return;
+    }
+
+    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const paymentDetailUrl = `${frontendUrl.replace(/\/$/, '')}/pay/${payment.reference}`;
+    const txUrl = this.buildExplorerUrl(payment.txHash);
+    const assetAmount =
+      asset === 'USDC'
+        ? Number(payment.amountUsdc ?? 0).toFixed(6)
+        : Number(payment.amountXlm ?? 0).toFixed(7);
+
+    await this.emailService.queue(
+      merchant.email,
+      'payment-confirmed',
+      {
+        merchantName: merchant.businessName,
+        reference: payment.reference,
+        amountUsd: Number(payment.amountUsd).toFixed(2),
+        assetAmount,
+        asset,
+        txHash: payment.txHash,
+        txUrl,
+        confirmedAt: payment.confirmedAt?.toISOString() ?? new Date().toISOString(),
+        paymentDetailUrl,
+      },
+      merchant.id,
+    );
+  }
+
+  private buildExplorerUrl(txHash?: string): string {
+    const network = this.config.get<string>('STELLAR_NETWORK', 'TESTNET');
+    const networkPath = network === 'PUBLIC' ? 'public' : 'testnet';
+    return txHash
+      ? `https://stellar.expert/explorer/${networkPath}/tx/${txHash}`
+      : '';
   }
 
   private async expireOldPayments() {

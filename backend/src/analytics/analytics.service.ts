@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
@@ -171,7 +171,59 @@ export class AnalyticsService {
     };
   }
 
-  private async getVolumeForPeriod(merchantId: string, start: Date, end: Date): Promise<number> {
+  async getRevenue(options: RevenueOptions) {
+    const { merchantId, period, scope, from, to } = options;
+    const { current, previous } = this.resolveRevenueRanges(period, from, to);
+    const cacheKey = [
+      'revenue',
+      scope,
+      merchantId ?? 'all',
+      period,
+      current.start.toISOString(),
+      current.endExclusive.toISOString(),
+    ].join(':');
+
+    return this.getCachedData(cacheKey, async () => {
+      const [currentRows, currentTotal, previousTotal] = await Promise.all([
+        this.getRevenueBreakdown(merchantId, period, current.start, current.endExclusive),
+        this.getRevenueTotal(merchantId, current.start, current.endExclusive),
+        this.getRevenueTotal(merchantId, previous.start, previous.endExclusive),
+      ]);
+
+      const currentTotalValue = this.normalizeDecimal(currentTotal);
+      const previousTotalValue = this.normalizeDecimal(previousTotal);
+      const absoluteChange = this.subtractDecimalStrings(currentTotalValue, previousTotalValue);
+
+      return {
+        scope,
+        period,
+        currentPeriod: {
+          start: current.labelStart,
+          end: current.labelEnd,
+          totalFeeRevenueUsd: currentTotalValue,
+        },
+        previousPeriod: {
+          start: previous.labelStart,
+          end: previous.labelEnd,
+          totalFeeRevenueUsd: previousTotalValue,
+        },
+        comparison: {
+          absoluteChangeUsd: absoluteChange,
+          percentageChange: this.calculatePercentageChange(
+            currentTotalValue,
+            previousTotalValue,
+          ),
+        },
+        breakdown: this.buildRevenueSeries(period, current, currentRows),
+      };
+    });
+  }
+
+  private async getVolumeForPeriod(
+    merchantId: string,
+    start: Date,
+    end: Date,
+  ): Promise<number> {
     const result = await this.paymentsRepo
       .createQueryBuilder('payment')
       .select('SUM(payment.amountUsd)', 'total')

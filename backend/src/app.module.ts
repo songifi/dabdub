@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bull';
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,6 +11,7 @@ import { AmlModule } from './aml/aml.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { MerchantAnalyticsModule } from './analytics/merchant-analytics.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { GroupsModule } from './groups/groups.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -21,6 +22,14 @@ import { StellarModule } from './stellar/stellar.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AppThrottlerGuard } from './auth/guards/throttler.guard';
+import { EmailModule } from './email/email.module';
+import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { SentryModule } from './sentry/sentry.module';
+import { CronModule } from './cron/cron.module';
+import { PrometheusModule } from './prometheus/prometheus.module';
+import { AuditModule } from './audit/audit.module';
+import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
 
 @Module({
   imports: [
@@ -71,8 +80,13 @@ import { AppThrottlerGuard } from './auth/guards/throttler.guard';
       inject: [ConfigService],
     }),
     HealthModule,
+    SentryModule,
+    PrometheusModule,
+    CronModule,
+    EmailModule,
     AdminModule,
     AmlModule,
+    AnalyticsModule,
     MerchantAnalyticsModule,
     AdminAlertModule,
     AuthModule,
@@ -85,11 +99,24 @@ import { AppThrottlerGuard } from './auth/guards/throttler.guard';
     WebhooksModule,
     WaitlistModule,
     QueueModule,
+    AuditModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpMetricsInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SentryInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: SentryExceptionFilter,
     },
   ],
 })

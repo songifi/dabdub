@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';

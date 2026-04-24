@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { RefundPaymentDto } from './dto/refund-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IdempotencyInterceptor } from '../payment/idempotency.interceptor';
@@ -64,6 +65,22 @@ export class PaymentsController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   findOne(@Request() req: { user: { merchantId: string } }, @Param('id', ParseUUIDPipe) id: string) {
     return this.paymentsService.findOne(id, req.user.merchantId);
+  }
+
+  @Post(':id/refund')
+  @ApiOperation({ summary: 'Initiate a refund for a settled payment' })
+  @ApiParam({ name: 'id', description: 'Payment UUID' })
+  @ApiOkResponse({ description: 'Refund successful' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiNotFoundResponse({ description: 'Payment not found' })
+  @ApiBadRequestResponse({ description: 'Refund not possible' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  refund(
+    @Request() req: { user: { merchantId: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RefundPaymentDto,
+  ) {
+    return this.paymentsService.refund(id, req.user.merchantId, dto);
   }
 }
 

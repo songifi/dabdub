@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindManyOptions, Between } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { AdminAlertService } from '../alerts/admin-alert.service';
@@ -10,6 +10,7 @@ import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { AnalyticsCacheService } from '../cache/analytics-cache.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { AdminSettlementsQueryDto } from './dto/admin-settlements-query.dto';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -36,6 +37,7 @@ export class SettlementsService {
     const feeRate = 0.015;
     const feeUsd = payment.amountUsd * feeRate;
     const netUsd = payment.amountUsd - feeUsd;
+    const LARGE_SETTLEMENT_THRESHOLD = 10000;
 
     const settlement = this.settlementsRepo.create({
       merchantId: payment.merchantId,
@@ -43,7 +45,8 @@ export class SettlementsService {
       feeAmountUsd: feeUsd,
       netAmountUsd: netUsd,
       fiatCurrency: 'NGN',
-      status: SettlementStatus.PROCESSING,
+      status: netUsd >= LARGE_SETTLEMENT_THRESHOLD ? SettlementStatus.PENDING_APPROVAL : SettlementStatus.PROCESSING,
+      requiresApproval: netUsd >= LARGE_SETTLEMENT_THRESHOLD,
     });
 
     const saved = await this.settlementsRepo.save(settlement);
@@ -58,7 +61,23 @@ export class SettlementsService {
       settlementId: saved.id,
     });
 
-    await this.executeFiatTransfer(saved, payment);
+    // Only execute transfer if no approval required
+    if (!settlement.requiresApproval) {
+      await this.executeFiatTransfer(saved, payment);
+    } else {
+      // Alert admin about large settlement requiring approval
+      await this.adminAlerts.raise({
+        type: AdminAlertType.SETTLEMENT_FAILURE, // Reusing existing type for now
+        dedupeKey: `large-settlement:${saved.id}`,
+        message: `Large settlement ${saved.id} requires manual approval: $${netUsd.toFixed(2)}`,
+        metadata: {
+          merchantId: saved.merchantId,
+          paymentId: payment.id,
+          amount: netUsd,
+        },
+        thresholdValue: 1,
+      });
+    }
   }
 
   private async executeFiatTransfer(settlement: Settlement, payment: Payment): Promise<void> {
@@ -174,3 +193,121 @@ export class SettlementsService {
     }
   }
 }
+
+  // Admin methods
+  async findAllAdmin(query: AdminSettlementsQueryDto) {
+    const { page = 1, limit = 20, status, merchantId, startDate, endDate, partnerReference, bankReference } = query;
+    
+    const whereConditions: any = {};
+    
+    if (status) {
+      whereConditions.status = status;
+    }
+    
+    if (merchantId) {
+      whereConditions.merchantId = merchantId;
+    }
+    
+    if (partnerReference) {
+      whereConditions.partnerReference = partnerReference;
+    }
+    
+    if (bankReference) {
+      whereConditions.bankReference = bankReference;
+    }
+    
+    if (startDate && endDate) {
+      whereConditions.createdAt = Between(new Date(startDate), new Date(endDate));
+    } else if (startDate) {
+      whereConditions.createdAt = Between(new Date(startDate), new Date());
+    } else if (endDate) {
+      whereConditions.createdAt = Between(new Date('1970-01-01'), new Date(endDate));
+    }
+
+    const options: FindManyOptions<Settlement> = {
+      where: whereConditions,
+      relations: ['merchant', 'payments'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    };
+
+    const [data, total] = await this.settlementsRepo.findAndCount(options);
+
+    return PaginatedResponseDto.of(data, total, page, limit);
+  }
+
+  async retrySettlement(id: string): Promise<{ success: boolean; message: string }> {
+    const settlement = await this.settlementsRepo.findOne({
+      where: { id },
+      relations: ['payments'],
+    });
+
+    if (!settlement) {
+      return { success: false, message: 'Settlement not found' };
+    }
+
+    if (settlement.status !== SettlementStatus.FAILED) {
+      return { success: false, message: 'Only failed settlements can be retried' };
+    }
+
+    // Reset settlement status and clear failure reason
+    settlement.status = SettlementStatus.PROCESSING;
+    settlement.failureReason = null;
+    settlement.partnerReference = null;
+    settlement.completedAt = null;
+    await this.settlementsRepo.save(settlement);
+
+    // Update associated payments
+    for (const payment of settlement.payments) {
+      payment.status = PaymentStatus.SETTLING;
+      await this.paymentsRepo.save(payment);
+    }
+
+    // Retry the fiat transfer
+    if (settlement.payments.length > 0) {
+      await this.executeFiatTransfer(settlement, settlement.payments[0]);
+    }
+
+    this.logger.log(`Settlement ${id} retry initiated by admin`);
+    return { success: true, message: 'Settlement retry initiated' };
+  }
+
+  async approveSettlement(id: string): Promise<{ success: boolean; message: string }> {
+    const settlement = await this.settlementsRepo.findOne({
+      where: { id },
+      relations: ['payments'],
+    });
+
+    if (!settlement) {
+      return { success: false, message: 'Settlement not found' };
+    }
+
+    if (settlement.status !== SettlementStatus.PENDING_APPROVAL) {
+      return { success: false, message: 'Only settlements pending approval can be approved' };
+    }
+
+    if (!settlement.requiresApproval) {
+      return { success: false, message: 'Settlement does not require manual approval' };
+    }
+
+    // Approve and process the settlement
+    settlement.status = SettlementStatus.PROCESSING;
+    settlement.approvedAt = new Date();
+    settlement.approvedBy = 'admin'; // In a real app, this would be the admin user ID
+    await this.settlementsRepo.save(settlement);
+
+    // Update associated payments
+    for (const payment of settlement.payments) {
+      payment.status = PaymentStatus.SETTLING;
+      await this.paymentsRepo.save(payment);
+    }
+
+    // Execute the fiat transfer
+    if (settlement.payments.length > 0) {
+      await this.executeFiatTransfer(settlement, settlement.payments[0]);
+    }
+
+    this.logger.log(`Large settlement ${id} approved and processed by admin`);
+    return { success: true, message: 'Settlement approved and processing initiated' };
+  }

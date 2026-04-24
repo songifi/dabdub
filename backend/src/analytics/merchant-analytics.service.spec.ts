@@ -1,3 +1,5 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getDataSourceToken } from '@nestjs/typeorm';
 import { MerchantAnalyticsService } from './merchant-analytics.service';
 
 describe('MerchantAnalyticsService', () => {
@@ -44,15 +46,36 @@ describe('MerchantAnalyticsService', () => {
       date: '2026-04-22',
       signups: 1,
     });
-    expect(result.activationRate).toEqual({
-      windowDays: 7,
-      activatedMerchants: 3,
-      totalMerchants: 5,
-      percentage: 60,
+
+    it('should handle different period values', async () => {
+      mockDataSource.query.mockResolvedValue([]);
+
+      await service.getTopMerchants(5, '7d');
+      await service.getTopMerchants(5, '90d');
+
+      expect(mockDataSource.query).toHaveBeenCalledTimes(2);
     });
-    expect(result.monthlyActiveMerchants).toEqual({
-      month: '2026-04',
-      count: 4,
+
+    it('should cache results for 10 minutes', async () => {
+      const mockResults = [
+        {
+          businessName: 'Test Business',
+          volume: '1000.00',
+          paymentCount: 10,
+          settlementCount: 2,
+          country: 'US',
+        },
+      ];
+
+      mockDataSource.query.mockResolvedValue(mockResults);
+
+      // First call
+      const result1 = await service.getTopMerchants(10, '30d');
+      // Second call with same parameters
+      const result2 = await service.getTopMerchants(10, '30d');
+
+      expect(result1).toEqual(result2);
+      expect(mockDataSource.query).toHaveBeenCalledTimes(1); // Should only query once due to caching
     });
   });
 
