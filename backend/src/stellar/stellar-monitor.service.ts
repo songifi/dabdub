@@ -76,7 +76,7 @@ export class StellarMonitorService implements OnModuleInit {
       if (!result.verified) continue;
 
       try {
-        await this.confirmPayment(matched, tx.hash, result.amount, result.asset);
+        await this.confirmPayment(matched, tx.hash, result.amount, result.asset, result.from);
       } catch (err) {
         await this.adminAlerts.raise({
           type: AdminAlertType.STELLAR_MONITOR,
@@ -96,12 +96,14 @@ export class StellarMonitorService implements OnModuleInit {
     txHash: string,
     amount: number,
     asset: string,
+    from?: string,
   ) {
     this.logger.log(`Payment confirmed: ${payment.reference} | tx: ${txHash}`);
 
     payment.status = PaymentStatus.CONFIRMED;
     payment.txHash = txHash;
     payment.confirmedAt = new Date();
+    payment.customerWalletAddress = from;
 
     if (asset === 'USDC') payment.amountUsdc = amount;
     else payment.amountXlm = amount;
