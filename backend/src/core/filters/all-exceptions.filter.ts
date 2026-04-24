@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nestjs";
 
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
