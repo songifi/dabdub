@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/auth/entities/session.entity.ts",
+    "src/auth/entities/refresh-token.entity.ts",
+    "src/otp/entities/otp.entity.ts",
+    "src/passkey/entities/passkey-credential.entity.ts",
+    "src/push/entities/device-token.entity.ts",
+    "src/email/entities/email-log.entity.ts",
+    "src/sms/entities/sms-log.entity.ts",
+    "src/notifications/entities/notification.entity.ts",
+    "src/bank-accounts/entities/bank-account.entity.ts",
+    "src/kyc/entities/kyc-submission.entity.ts",
+    "src/kyc/entities/verification-result.entity.ts",
+    "src/compliance/entities/compliance-event.entity.ts",
+    "src/compliance/entities/suspicious-activity-report.entity.ts",
+    "src/rates/entities/rate-alert.entity.ts",
+    "src/referrals/entities/referral.entity.ts",
+    "src/virtual-account/entities/virtual-account.entity.ts",
+    "src/wallets/entities/wallet.entity.ts",
+    "src/announcements/entities/announcement-dismissal.entity.ts",
+    "src/feedback/entities/feedback.entity.ts"
+  ]
+}

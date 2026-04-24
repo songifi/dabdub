@@ -1,5 +1,13 @@
-import { Column, Entity, Index } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
+import { Transaction } from '../../transactions/entities/transaction.entity';
 
 export enum ComplianceEventType {
   AML_THRESHOLD = 'aml_threshold',
@@ -35,6 +43,10 @@ export class ComplianceEvent extends BaseEntity {
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;
 
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
+
   @Column({ name: 'event_type', type: 'enum', enum: ComplianceEventType })
   eventType!: ComplianceEventType;
 
@@ -50,6 +62,10 @@ export class ComplianceEvent extends BaseEntity {
 
   @Column({ name: 'tx_id', type: 'uuid', nullable: true, default: null })
   txId!: string | null;
+
+  @ManyToOne(() => Transaction, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'tx_id' })
+  transaction!: Transaction | null;
 
   @Column({ type: 'text' })
   description!: string;

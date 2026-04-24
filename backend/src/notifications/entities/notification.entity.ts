@@ -4,8 +4,11 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { NotificationType } from '../notifications.types';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('notifications')
 @Index(['userId', 'isRead', 'createdAt'])
@@ -15,6 +18,10 @@ export class Notification {
 
   @Column({ name: 'user_id' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ type: 'enum', enum: NotificationType })
   type!: NotificationType;

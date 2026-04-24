@@ -1,5 +1,13 @@
-import { Column, Entity, Index } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
+import { KycSubmission } from './kyc-submission.entity';
 
 export enum VerificationType {
   BVN = 'bvn',
@@ -20,8 +28,16 @@ export class VerificationResult extends BaseEntity {
   @Column({ name: 'user_id' })
   userId!: string;
 
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
+
   @Column({ name: 'submission_id' })
   submissionId!: string;
+
+  @ManyToOne(() => KycSubmission, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'submission_id' })
+  submission!: KycSubmission;
 
   @Column({ name: 'verification_type', type: 'enum', enum: VerificationType })
   verificationType!: VerificationType;

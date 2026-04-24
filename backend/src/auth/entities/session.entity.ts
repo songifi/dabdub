@@ -1,11 +1,22 @@
-import { Entity, Column, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('sessions')
 @Index(['userId'])
 export class Session extends BaseEntity {
   @Column({ name: 'user_id' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'refresh_token_id' })
   refreshTokenId!: string;

@@ -1,11 +1,22 @@
-import { Entity, Column, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('wallets')
 export class Wallet extends BaseEntity {
   @Column({ name: 'user_id', unique: true })
   @Index()
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'stellar_address', unique: true, length: 56 })
   stellarAddress!: string;

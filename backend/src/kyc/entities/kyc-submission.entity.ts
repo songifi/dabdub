@@ -1,6 +1,13 @@
-import { Entity, Column, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { TierName } from '../../tier-config/entities/tier-config.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum KycSubmissionStatus {
   PENDING = 'pending',
@@ -21,6 +28,10 @@ export enum KycDocumentType {
 export class KycSubmission extends BaseEntity {
   @Column({ name: 'user_id' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'target_tier', type: 'enum', enum: [TierName.GOLD, TierName.BLACK] })
   targetTier!: TierName.GOLD | TierName.BLACK;

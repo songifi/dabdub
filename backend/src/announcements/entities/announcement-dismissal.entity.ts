@@ -9,6 +9,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Announcement } from './announcement.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('announcement_dismissals')
 @Unique('UQ_announcement_dismissals_user_announcement', [
@@ -22,6 +23,10 @@ export class AnnouncementDismissal {
 
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'announcement_id', type: 'uuid' })
   announcementId!: string;

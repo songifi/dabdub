@@ -1,5 +1,12 @@
-import { Column, Entity } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum OtpType {
   EMAIL_VERIFY = 'email_verify',
@@ -13,6 +20,10 @@ export enum OtpType {
 export class Otp extends BaseEntity {
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'code_hash', length: 255 })
   codeHash!: string;

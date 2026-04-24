@@ -1,5 +1,12 @@
-import { Entity, Column, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum VirtualAccountProvider {
   FLUTTERWAVE = 'flutterwave',
@@ -11,6 +18,10 @@ export class VirtualAccount extends BaseEntity {
   @Index({ unique: true })
   @Column({ name: 'user_id' })
   userId!: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User;
 
   @Column({ name: 'account_number', length: 20 })
   accountNumber!: string;

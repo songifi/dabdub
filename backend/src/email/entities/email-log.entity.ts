@@ -1,5 +1,12 @@
-import { Entity, Column } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { User } from '../../users/entities/user.entity';
 
 export enum EmailStatus {
   QUEUED = 'queued',
@@ -10,7 +17,12 @@ export enum EmailStatus {
 @Entity('email_logs')
 export class EmailLog extends BaseEntity {
   @Column({ name: 'user_id', type: 'varchar', nullable: true, default: null })
-  userId!: string | null;
+  @Index()
+  userId!: string;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'user_id' })
+  user!: User | null;
 
   @Column({ type: 'varchar', length: 255 })
   to!: string;
