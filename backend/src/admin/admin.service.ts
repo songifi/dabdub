@@ -12,6 +12,9 @@ import { Merchant, MerchantStatus, MerchantRole } from '../merchants/entities/me
 import { Payment } from '../payments/entities/payment.entity';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.entity';
+import { AuditLog } from './entities/audit-log.entity';
+import { FilterService } from '../common/filter.service';
+import { PaginationDto, PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class AdminService {
@@ -24,6 +27,9 @@ export class AdminService {
     private readonly feeConfigRepo: Repository<FeeConfig>,
     @InjectRepository(FeeHistory)
     private readonly feeHistoryRepo: Repository<FeeHistory>,
+    @InjectRepository(AuditLog)
+    private readonly auditLogRepo: Repository<AuditLog>,
+    private readonly filterService: FilterService,
   ) {}
 
   async findAllMerchants(page = 1, limit = 20) {
@@ -263,6 +269,46 @@ export class AdminService {
     const payments = await this.paymentsRepo.find({ where: { merchantId } });
     await this.paymentsRepo.remove(payments);
     return { deleted: payments.length };
+  }
+
+  // ── Audit Log Viewer ───────────────────────────────────────────────────────
+
+  async getAuditLogs(
+    query: Record<string, any>,
+    pagination: PaginationDto,
+    exportCsv = false,
+  ): Promise<PaginatedResponseDto<AuditLog> | string> {
+    const allowedFields = ['actor', 'action', 'resourceType', 'createdAt'];
+    const where = this.filterService.buildWhereConditions(query, allowedFields);
+
+    if (exportCsv) {
+      const data = await this.auditLogRepo.find({
+        where,
+        order: { createdAt: 'DESC' },
+      });
+      return this.toCsv(data);
+    }
+
+    const [data, total] = await this.auditLogRepo.findAndCount({
+      where,
+      skip: (pagination.page - 1) * pagination.limit,
+      take: pagination.limit,
+      order: { createdAt: 'DESC' },
+    });
+
+    return PaginatedResponseDto.of(data, total, pagination.page, pagination.limit);
+  }
+
+  private toCsv(data: AuditLog[]): string {
+    if (data.length === 0) return 'id,actor,action,resourceType,resourceId,details,createdAt\n';
+
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(row => 
+      Object.values(row).map(val => 
+        typeof val === 'object' ? JSON.stringify(val) : val
+      ).join(',')
+    );
+    return [headers, ...rows].join('\n');
   }
 
   // ── TOTP helpers ───────────────────────────────────────────────────────────

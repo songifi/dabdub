@@ -9,14 +9,17 @@ import {
   Query,
   Req,
   UseGuards,
+  Header,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { AdminService } from './admin.service';
 import { MerchantStatus, MerchantRole } from '../merchants/entities/merchant.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -148,5 +151,27 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete all sandbox payment data for a merchant' })
   resetSandboxData(@Param('id') id: string) {
     return this.adminService.resetSandboxData(id);
+  }
+
+  // ── Audit Log Viewer ───────────────────────────────────────────────────────
+
+  @Get('audit-log')
+  @ApiOperation({ summary: 'Get paginated audit log with filtering' })
+  async getAuditLogs(
+    @Query() query: any,
+    @Query() pagination: PaginationDto,
+    @Query('export') exportType?: string,
+    @Header('Accept') accept?: string,
+    @Res() res: Response,
+  ) {
+    const exportCsv = exportType === 'csv' || accept === 'text/csv';
+    const result = await this.adminService.getAuditLogs(query, pagination, exportCsv);
+    if (exportCsv) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
+      res.send(result);
+    } else {
+      res.json(result);
+    }
   }
 }
