@@ -1,0 +1,179 @@
+apiVersion: 1
+
+# ─── Contact Points ────────────────────────────────────────────────────────────
+# These are provisioned as defaults. Override credentials via Grafana UI or
+# environment variable substitution if your Grafana version supports it.
+contactPoints:
+  - orgId: 1
+    name: CheesePay On-Call
+    receivers:
+      - uid: "oncall-email"
+        type: email
+        settings:
+          addresses: "oncall@cheesepay.xyz"
+          singleEmail: false
+        disableResolveMessage: false
+
+      - uid: "oncall-slack"
+        type: slack
+        settings:
+          url: "${GRAFANA_SLACK_WEBHOOK_URL}"
+          channel: "#alerts"
+          title: |
+            {{ if eq .Status "firing" }}🔴 CheesePay Alert{{ else }}✅ CheesePay Resolved{{ end }}
+          text: |
+            {{ range .Alerts }}
+            *{{ .Annotations.summary }}*
+            {{ .Annotations.description }}
+            {{ end }}
+        disableResolveMessage: false
+
+# ─── Notification Policies ────────────────────────────────────────────────────
+policies:
+  - orgId: 1
+    receiver: CheesePay On-Call
+    group_by: ["alertname", "severity"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 1h
+    routes:
+      - receiver: CheesePay On-Call
+        matchers:
+          - severity = critical
+        group_wait: 0s          # fire immediately for critical
+        repeat_interval: 15m
+
+# ─── Alert Rules ──────────────────────────────────────────────────────────────
+rules:
+  - orgId: 1
+    name: UptimeAlerts
+    folder: "Uptime & Availability"
+    interval: 1m
+    rules:
+
+      # ── High error rate (proxy for downtime in logs) ──────────────────────
+      - uid: "uptime-error-rate"
+        title: "API High Error Rate"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              refId: "A"
+              expr: 'sum(rate({job="backend-logs", level="error"}[2m])) * 60 > 5'
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "High API error rate detected"
+          description: "More than 5 errors/min for 2 consecutive minutes. Value: {{ $values.A.Value | printf \"%.1f\" }} errors/min. Check logs immediately."
+          runbook_url: "https://github.com/cheesepay/dabdub/blob/main/monitoring/README.md"
+        labels:
+          severity: "critical"
+          component: "api"
+
+      # ── Health endpoint returning errors ──────────────────────────────────
+      - uid: "uptime-health-errors"
+        title: "Health Endpoint Errors"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              refId: "A"
+              # Alert if /health or /health/ready logs errors
+              expr: 'count_over_time({job="backend-logs", level="error"} |= "/health" [2m]) > 3'
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Health endpoint is returning errors"
+          description: "The /health or /health/ready endpoint has logged errors in the last 2 minutes. This may indicate DB or Stellar connectivity issues."
+          runbook_url: "https://github.com/cheesepay/dabdub/blob/main/monitoring/README.md"
+        labels:
+          severity: "critical"
+          component: "health"
+
+      # ── No logs at all (process may be down) ─────────────────────────────
+      - uid: "uptime-no-logs"
+        title: "API Process Silent (Possible Crash)"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: "A"
+              # If no logs at all for 5 minutes, the process is likely down
+              expr: 'sum(count_over_time({job="backend-logs"}[5m])) == 0'
+        noDataState: Alerting   # no data itself is the alert condition
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: "No API logs for 5 minutes — process may be down"
+          description: "The backend has emitted zero log lines in the last 5 minutes. This strongly suggests the process has crashed or the log pipeline is broken."
+          runbook_url: "https://github.com/cheesepay/dabdub/blob/main/monitoring/README.md"
+        labels:
+          severity: "critical"
+          component: "api"
+
+      # ── Queue stalled ─────────────────────────────────────────────────────
+      - uid: "uptime-queue-stalled"
+        title: "Queue Processing Stalled"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              refId: "A"
+              expr: 'count_over_time({job="backend-logs"} |= "processing rate dropped to zero" [2m]) > 0'
+        noDataState: OK
+        execErrState: OK
+        for: 0s
+        annotations:
+          summary: "Queue processing has stalled"
+          description: "A Bull queue has stopped processing jobs. Settlement or webhook delivery may be delayed."
+          runbook_url: "https://github.com/cheesepay/dabdub/blob/main/monitoring/README.md"
+        labels:
+          severity: "warning"
+          component: "queue"
+
+      # ── Stellar monitor failures ──────────────────────────────────────────
+      - uid: "uptime-stellar-down"
+        title: "Stellar / Horizon Connectivity Lost"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 120
+              to: 0
+            model:
+              refId: "A"
+              expr: 'count_over_time({job="backend-logs", level="error"} |= "stellar" [2m]) > 2'
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "Stellar Horizon connectivity issues"
+          description: "Multiple Stellar-related errors in the last 2 minutes. Blockchain settlement may be impacted."
+          runbook_url: "https://github.com/cheesepay/dabdub/blob/main/monitoring/README.md"
+        labels:
+          severity: "critical"
+          component: "stellar"
