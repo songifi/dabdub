@@ -6,6 +6,7 @@ import { AnalyticsController } from './analytics.controller';
 import { Payment } from '../payments/entities/payment.entity';
 import { Settlement } from '../settlements/entities/settlement.entity';
 import { Merchant } from '../merchants/entities/merchant.entity';
+import { CacheModule } from '../cache/cache.module';
 import {
   AnalyticsExportController,
   AnalyticsExportDownloadController,
@@ -20,6 +21,7 @@ import { EmailModule } from '../email/email.module';
     TypeOrmModule.forFeature([Payment, Settlement, Merchant, AnalyticsExport]),
     BullModule.registerQueue({ name: ANALYTICS_EXPORT_QUEUE }),
     EmailModule,
+    CacheModule,
   ],
   controllers: [AnalyticsController, AnalyticsExportController, AnalyticsExportDownloadController],
   providers: [AnalyticsService, AnalyticsExportService, AnalyticsExportProcessor],

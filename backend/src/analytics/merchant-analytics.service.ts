@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { PaymentFunnelQueryDto } from './dto/payment-funnel-query.dto';
+import { CacheService } from '../cache/cache.service';
 
 const DAILY_SIGNUP_WINDOW_DAYS = 30;
 const ACTIVATION_WINDOW_DAYS = 7;
@@ -71,78 +71,102 @@ export interface PaymentFunnelResponse {
 @Injectable()
 export class MerchantAnalyticsService {
   private readonly logger = new Logger(MerchantAnalyticsService.name);
-  private readonly topMerchantsCache = new Map<string, { data: TopMerchantsResponse; expiresAt: number }>();
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly cache: CacheService,
+  ) {}
+
+  private analyticsCacheKey(params: {
+    merchantId: string;
+    endpoint: string;
+    dateRange: string;
+  }): string {
+    return `analytics:${params.merchantId}:${params.endpoint}:${params.dateRange}`;
+  }
 
   async getMetrics(asOf = new Date()): Promise<MerchantAnalyticsResponse> {
-    const [dailySignupsRows, activationRows, monthlyActiveRows] =
-      await Promise.all([
-        this.dataSource.query<SignupRow[]>(
-          `
-            SELECT
-              DATE_TRUNC('day', "createdAt")::date::text AS day,
-              COUNT(*)::text AS count
-            FROM users
-            WHERE "is_admin" = false
-              AND "is_treasury" = false
-              AND "createdAt" >= ($1::timestamptz - INTERVAL '${DAILY_SIGNUP_WINDOW_DAYS - 1} days')
-            GROUP BY 1
-            ORDER BY 1 ASC
-          `,
-          [asOf.toISOString()],
-        ),
-        this.dataSource.query<CountRow[]>(
-          `
-            SELECT
-              COUNT(*) FILTER (
-                WHERE EXISTS (
-                  SELECT 1
-                  FROM sessions
-                  WHERE sessions.user_id = users.id
-                    AND sessions."createdAt" <= users."createdAt" + INTERVAL '${ACTIVATION_WINDOW_DAYS} days'
-                )
-              )::text AS count,
-              COUNT(*)::text AS total
-            FROM users
-            WHERE "is_admin" = false
-              AND "is_treasury" = false
-          `,
-        ),
-        this.dataSource.query<CountRow[]>(
-          `
-            SELECT COUNT(DISTINCT sessions.user_id)::text AS count
-            FROM sessions
-            INNER JOIN users ON users.id = sessions.user_id
-            WHERE users."is_admin" = false
-              AND users."is_treasury" = false
-              AND DATE_TRUNC('month', sessions.last_seen_at) = DATE_TRUNC('month', $1::timestamptz)
-          `,
-          [asOf.toISOString()],
-        ),
-      ]);
+    const cacheKey = this.analyticsCacheKey({
+      merchantId: 'admin',
+      endpoint: 'merchants',
+      dateRange: asOf.toISOString().slice(0, 10),
+    });
 
-    const activation = activationRows[0] as CountRow & { total: string };
-    const activatedMerchants = Number(activation?.count ?? 0);
-    const totalMerchants = Number(activation?.total ?? 0);
+    const { value } = await this.cache.getOrSet(
+      cacheKey,
+      async () => {
+        const [dailySignupsRows, activationRows, monthlyActiveRows] =
+          await Promise.all([
+            this.dataSource.query<SignupRow[]>(
+              `
+                SELECT
+                  DATE_TRUNC('day', "createdAt")::date::text AS day,
+                  COUNT(*)::text AS count
+                FROM users
+                WHERE "is_admin" = false
+                  AND "is_treasury" = false
+                  AND "createdAt" >= ($1::timestamptz - INTERVAL '${DAILY_SIGNUP_WINDOW_DAYS - 1} days')
+                GROUP BY 1
+                ORDER BY 1 ASC
+              `,
+              [asOf.toISOString()],
+            ),
+            this.dataSource.query<CountRow[]>(
+              `
+                SELECT
+                  COUNT(*) FILTER (
+                    WHERE EXISTS (
+                      SELECT 1
+                      FROM sessions
+                      WHERE sessions.user_id = users.id
+                        AND sessions."createdAt" <= users."createdAt" + INTERVAL '${ACTIVATION_WINDOW_DAYS} days'
+                    )
+                  )::text AS count,
+                  COUNT(*)::text AS total
+                FROM users
+                WHERE "is_admin" = false
+                  AND "is_treasury" = false
+              `,
+            ),
+            this.dataSource.query<CountRow[]>(
+              `
+                SELECT COUNT(DISTINCT sessions.user_id)::text AS count
+                FROM sessions
+                INNER JOIN users ON users.id = sessions.user_id
+                WHERE users."is_admin" = false
+                  AND users."is_treasury" = false
+                  AND DATE_TRUNC('month', sessions.last_seen_at) = DATE_TRUNC('month', $1::timestamptz)
+              `,
+              [asOf.toISOString()],
+            ),
+          ]);
 
-    return {
-      generatedAt: asOf.toISOString(),
-      dailySignups: this.buildDailySignupSeries(asOf, dailySignupsRows),
-      activationRate: {
-        windowDays: ACTIVATION_WINDOW_DAYS,
-        activatedMerchants,
-        totalMerchants,
-        percentage:
-          totalMerchants === 0
-            ? 0
-            : Number(((activatedMerchants / totalMerchants) * 100).toFixed(2)),
+        const activation = activationRows[0] as CountRow & { total: string };
+        const activatedMerchants = Number(activation?.count ?? 0);
+        const totalMerchants = Number(activation?.total ?? 0);
+
+        return {
+          generatedAt: asOf.toISOString(),
+          dailySignups: this.buildDailySignupSeries(asOf, dailySignupsRows),
+          activationRate: {
+            windowDays: ACTIVATION_WINDOW_DAYS,
+            activatedMerchants,
+            totalMerchants,
+            percentage:
+              totalMerchants === 0
+                ? 0
+                : Number(((activatedMerchants / totalMerchants) * 100).toFixed(2)),
+          },
+          monthlyActiveMerchants: {
+            month: asOf.toISOString().slice(0, 7),
+            count: Number(monthlyActiveRows[0]?.count ?? 0),
+          },
+        } satisfies MerchantAnalyticsResponse;
       },
-      monthlyActiveMerchants: {
-        month: asOf.toISOString().slice(0, 7),
-        count: Number(monthlyActiveRows[0]?.count ?? 0),
-      },
-    };
+      { ttlSeconds: 10 * 60 },
+    );
+
+    return value;
   }
 
   private buildDailySignupSeries(
@@ -166,13 +190,11 @@ export class MerchantAnalyticsService {
   }
 
   async getTopMerchants(limit: number = 10, period: string = '30d'): Promise<TopMerchantsResponse> {
-    const cacheKey = `${limit}-${period}`;
-    const cached = this.topMerchantsCache.get(cacheKey);
-    
-    if (cached && cached.expiresAt > Date.now()) {
-      this.logger.debug(`Returning cached top merchants for ${cacheKey}`);
-      return cached.data;
-    }
+    const cacheKey = this.analyticsCacheKey({
+      merchantId: 'admin',
+      endpoint: 'top-merchants',
+      dateRange: `${limit}:${period}`,
+    });
 
     const periodDays = this.getPeriodDays(period);
     const cutoffDate = new Date();
@@ -196,28 +218,31 @@ export class MerchantAnalyticsService {
     `;
 
     try {
-      const merchants = await this.dataSource.query(query, [cutoffDate.toISOString(), limit]);
-      
-      const response: TopMerchantsResponse = {
-        merchants: merchants.map((row: any) => ({
-          businessName: row.businessName,
-          volume: parseFloat(row.volume),
-          paymentCount: row.paymentCount,
-          settlementCount: row.settlementCount,
-          country: row.country || 'Unknown',
-        })),
-        period,
-        generatedAt: new Date().toISOString(),
-      };
+      const { value, cacheHit } = await this.cache.getOrSet(
+        cacheKey,
+        async () => {
+          const merchants = await this.dataSource.query(query, [cutoffDate.toISOString(), limit]);
 
-      // Cache for 10 minutes
-      this.topMerchantsCache.set(cacheKey, {
-        data: response,
-        expiresAt: Date.now() + 10 * 60 * 1000,
-      });
+          const response: TopMerchantsResponse = {
+            merchants: merchants.map((row: any) => ({
+              businessName: row.businessName,
+              volume: parseFloat(row.volume),
+              paymentCount: row.paymentCount,
+              settlementCount: row.settlementCount,
+              country: row.country || 'Unknown',
+            })),
+            period,
+            generatedAt: new Date().toISOString(),
+          };
 
-      this.logger.debug(`Generated top merchants for ${cacheKey}: ${merchants.length} results`);
-      return response;
+          this.logger.debug(`Generated top merchants for ${limit}-${period}: ${merchants.length} results`);
+          return response;
+        },
+        { ttlSeconds: 10 * 60 },
+      );
+
+      this.logger.debug(`Returning ${cacheHit ? 'cached' : 'fresh'} top merchants for ${limit}-${period}`);
+      return value;
     } catch (error) {
       this.logger.error(`Failed to get top merchants: ${error.message}`, error.stack);
       throw error;
@@ -231,83 +256,91 @@ export class MerchantAnalyticsService {
   ): Promise<PaymentFunnelResponse> {
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
+    const cacheKey = this.analyticsCacheKey({
+      merchantId: 'admin',
+      endpoint: 'payment-funnel',
+      dateRange: `${start.toISOString()}-${end.toISOString()}:${network ?? 'all'}`,
+    });
 
-    // Build the base query with optional network filter
-    const networkFilter = network ? 'AND p.network = $3' : '';
-    const queryParams = [start.toISOString(), end.toISOString()];
-    if (network) {
-      queryParams.push(network);
-    }
+    const { value } = await this.cache.getOrSet(
+      cacheKey,
+      async () => {
+        // Build the base query with optional network filter
+        const networkFilter = network ? 'AND p.network = $3' : '';
+        const queryParams = [start.toISOString(), end.toISOString()];
+        if (network) {
+          queryParams.push(network);
+        }
 
-    const query = `
-      SELECT 
-        COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired')) AS created,
-        COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled')) AS confirmed,
-        COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled')) AS settling,
-        COUNT(*) FILTER (WHERE p.status = 'settled') AS settled,
-        COUNT(*) FILTER (WHERE p.status = 'failed') AS failed,
-        COUNT(*) FILTER (WHERE p.status = 'expired') AS expired
-      FROM payments p
-      WHERE p."createdAt" >= $1 
-        AND p."createdAt" <= $2
-        ${networkFilter}
-    `;
+        const query = `
+          SELECT 
+            COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired')) AS created,
+            COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled')) AS confirmed,
+            COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled')) AS settling,
+            COUNT(*) FILTER (WHERE p.status = 'settled') AS settled,
+            COUNT(*) FILTER (WHERE p.status = 'failed') AS failed,
+            COUNT(*) FILTER (WHERE p.status = 'expired') AS expired
+          FROM payments p
+          WHERE p."createdAt" >= $1 
+            AND p."createdAt" <= $2
+            ${networkFilter}
+        `;
 
-    try {
-      const result = await this.dataSource.query(query, queryParams);
-      const data = result[0];
+        const result = await this.dataSource.query(query, queryParams);
+        const data = result[0];
 
-      const created = parseInt(data.created);
-      const confirmed = parseInt(data.confirmed);
-      const settling = parseInt(data.settling);
-      const settled = parseInt(data.settled);
-      const failed = parseInt(data.failed);
-      const expired = parseInt(data.expired);
+        const created = parseInt(data.created);
+        const confirmed = parseInt(data.confirmed);
+        const settling = parseInt(data.settling);
+        const settled = parseInt(data.settled);
+        const failed = parseInt(data.failed);
+        const expired = parseInt(data.expired);
 
-      // Calculate stages with percentages and drop-offs
-      const stages: FunnelStage[] = [
-        {
-          stage: 'created',
-          count: created,
-          percentage: 100,
-        },
-        {
-          stage: 'confirmed',
-          count: confirmed,
-          percentage: created > 0 ? Number(((confirmed / created) * 100).toFixed(2)) : 0,
-          dropOffCount: created - confirmed,
-          dropOffPercentage: created > 0 ? Number((((created - confirmed) / created) * 100).toFixed(2)) : 0,
-        },
-        {
-          stage: 'settling',
-          count: settling,
-          percentage: created > 0 ? Number(((settling / created) * 100).toFixed(2)) : 0,
-          dropOffCount: confirmed - settling,
-          dropOffPercentage: confirmed > 0 ? Number((((confirmed - settling) / confirmed) * 100).toFixed(2)) : 0,
-        },
-        {
-          stage: 'settled',
-          count: settled,
-          percentage: created > 0 ? Number(((settled / created) * 100).toFixed(2)) : 0,
-          dropOffCount: settling - settled,
-          dropOffPercentage: settling > 0 ? Number((((settling - settled) / settling) * 100).toFixed(2)) : 0,
-        },
-      ];
+        // Calculate stages with percentages and drop-offs
+        const stages: FunnelStage[] = [
+          {
+            stage: 'created',
+            count: created,
+            percentage: 100,
+          },
+          {
+            stage: 'confirmed',
+            count: confirmed,
+            percentage: created > 0 ? Number(((confirmed / created) * 100).toFixed(2)) : 0,
+            dropOffCount: created - confirmed,
+            dropOffPercentage: created > 0 ? Number((((created - confirmed) / created) * 100).toFixed(2)) : 0,
+          },
+          {
+            stage: 'settling',
+            count: settling,
+            percentage: created > 0 ? Number(((settling / created) * 100).toFixed(2)) : 0,
+            dropOffCount: confirmed - settling,
+            dropOffPercentage: confirmed > 0 ? Number((((confirmed - settling) / confirmed) * 100).toFixed(2)) : 0,
+          },
+          {
+            stage: 'settled',
+            count: settled,
+            percentage: created > 0 ? Number(((settled / created) * 100).toFixed(2)) : 0,
+            dropOffCount: settling - settled,
+            dropOffPercentage: settling > 0 ? Number((((settling - settled) / settling) * 100).toFixed(2)) : 0,
+          },
+        ];
 
-      return {
-        stages,
-        totalCreated: created,
-        period: {
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-        },
-        network,
-        generatedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get payment funnel: ${error.message}`, error.stack);
-      throw error;
-    }
+        return {
+          stages,
+          totalCreated: created,
+          period: {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+          },
+          network,
+          generatedAt: new Date().toISOString(),
+        } satisfies PaymentFunnelResponse;
+      },
+      { ttlSeconds: 10 * 60 },
+    );
+
+    return value;
   }
 
   private getPeriodDays(period: string): number {

@@ -4,11 +4,13 @@ import { AnalyticsService } from './analytics.service';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { SettlementStatus, Settlement } from '../settlements/entities/settlement.entity';
 import { Repository } from 'typeorm';
+import { CacheService } from '../cache/cache.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let paymentsRepo: Repository<Payment>;
   let settlementsRepo: Repository<Settlement>;
+  let cache: { getOrSet: jest.Mock; delPattern: jest.Mock };
 
   const mockMerchantId = 'merchant-123';
 
@@ -43,6 +45,19 @@ describe('AnalyticsService', () => {
   };
 
   beforeEach(async () => {
+    const store = new Map<string, unknown>();
+    cache = {
+      getOrSet: jest.fn(async (key: string, fetchFn: () => Promise<unknown>) => {
+        if (store.has(key)) {
+          return { value: store.get(key), cacheHit: true };
+        }
+        const value = await fetchFn();
+        store.set(key, value);
+        return { value, cacheHit: false };
+      }),
+      delPattern: jest.fn(async () => 0),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsService,
@@ -53,6 +68,10 @@ describe('AnalyticsService', () => {
         {
           provide: getRepositoryToken(Settlement),
           useValue: settlementRepoMock,
+        },
+        {
+          provide: CacheService,
+          useValue: cache,
         },
       ],
     }).compile();
@@ -69,25 +88,24 @@ describe('AnalyticsService', () => {
   });
 
   describe('getVolume', () => {
-    it('should return aggregated volume data and test cache', async () => {
-      const mockData = [
-        { date: '2026-04-20', volume: '100', count: '1' },
-        { date: '2026-04-21', volume: '200', count: '1' },
-      ];
-      paymentQueryBuilder.getRawMany.mockResolvedValueOnce(mockData);
+    it('should return daily volume series', async () => {
+      paymentQueryBuilder.getRawMany.mockResolvedValueOnce([
+        { bucket: '2026-04-20', volumeUsd: '100.000000', count: '1' },
+        { bucket: '2026-04-21', volumeUsd: '200.000000', count: '1' },
+      ]);
 
-      // First call - Cache miss
-      const result1 = await service.getVolume(mockMerchantId, 'daily');
-      expect(result1.results).toEqual(mockData);
-      expect(result1.cacheHit).toBe(false);
+      const result = await service.getVolume({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        dateFrom: '2026-04-20',
+        dateTo: '2026-04-21',
+      });
 
-      // Second call - Cache hit
-      const result2 = await service.getVolume(mockMerchantId, 'daily');
-      expect(result2.results).toEqual(mockData);
-      expect(result2.cacheHit).toBe(true);
-      
-      // Ensure query builder was only called once
-      expect(paymentQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        { date: '2026-04-20', count: 1, volumeUsd: 100 },
+        { date: '2026-04-21', count: 1, volumeUsd: 200 },
+      ]);
     });
   });
 

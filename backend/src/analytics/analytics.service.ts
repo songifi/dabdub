@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment, PaymentNetwork, PaymentStatus } from '../payments/entities/payment.entity';
 import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
+import { CacheService } from '../cache/cache.service';
 
 type AnalyticsPeriod = 'daily' | 'monthly';
 type VolumeScope = 'merchant' | 'admin';
@@ -52,25 +53,32 @@ interface RevenueBreakdownRow {
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
-  private cache = new Map<string, { data: any; expiry: number }>();
 
   constructor(
     @InjectRepository(Payment)
     private paymentsRepo: Repository<Payment>,
     @InjectRepository(Settlement)
     private settlementsRepo: Repository<Settlement>,
+    private cache: CacheService,
   ) {}
 
-  private async getCachedData(key: string, fetchFn: () => Promise<any>, ttl = 60000) {
-    const cached = this.cache.get(key);
-    if (cached && cached.expiry > Date.now()) {
-      this.logger.debug(`Cache hit for ${key}`);
-      return { ...cached.data, cacheHit: true };
-    }
-    this.logger.debug(`Cache miss for ${key}`);
-    const data = await fetchFn();
-    this.cache.set(key, { data, expiry: Date.now() + ttl });
-    return { ...data, cacheHit: false };
+  private analyticsCacheKey(params: {
+    merchantId: string;
+    endpoint: string;
+    dateRange: string;
+  }): string {
+    return `analytics:${params.merchantId}:${params.endpoint}:${params.dateRange}`;
+  }
+
+  private async getCachedData<T extends Record<string, any>>(
+    key: string,
+    fetchFn: () => Promise<T>,
+    ttlMs = 60_000,
+  ): Promise<T & { cacheHit: boolean }> {
+    const { value, cacheHit } = await this.cache.getOrSet(key, fetchFn, {
+      ttlSeconds: Math.max(1, Math.floor(ttlMs / 1000)),
+    });
+    return { ...(value as T), cacheHit };
   }
 
   private getPeriodBounds(period: 'daily' | 'monthly'): { currentStart: Date; currentEnd: Date; prevStart: Date; prevEnd: Date } {
@@ -93,17 +101,15 @@ export class AnalyticsService {
   async getVolume(options: VolumeOptions) {
     const { merchantId, period, scope, dateFrom, dateTo } = options;
     const range = this.resolveVolumeRange(period, dateFrom, dateTo);
-    const cacheKey = [
-      'volume',
-      scope,
-      merchantId ?? 'all',
-      period,
-      range.start.toISOString(),
-      range.endExclusive.toISOString(),
-    ].join(':');
+    const cacheKey = this.analyticsCacheKey({
+      merchantId: scope === 'admin' ? 'admin' : (merchantId ?? 'unknown'),
+      endpoint: 'volume',
+      dateRange: `${period}:${range.start.toISOString()}-${range.endExclusive.toISOString()}`,
+    });
 
-    return this.getCachedValue(
-      cacheKey,
+    const ttlMs = scope === 'admin' ? 10 * 60 * 1000 : 5 * 60 * 1000;
+
+    return this.getCachedValue(cacheKey,
       async () => {
         const rows = await this.getVolumeBreakdown(
           merchantId,
@@ -113,12 +119,16 @@ export class AnalyticsService {
         );
         return this.buildVolumeSeries(period, range, rows);
       },
-      5 * 60 * 1000,
+      ttlMs,
     );
   }
 
   async getFunnel(merchantId: string, compareWith?: 'previous') {
-    const cacheKey = `funnel:${merchantId}:${compareWith ?? 'none'}`;
+    const cacheKey = this.analyticsCacheKey({
+      merchantId,
+      endpoint: 'funnel',
+      dateRange: compareWith ?? 'none',
+    });
     return this.getCachedData(cacheKey, async () => {
       const fetchCounts = async (start?: Date, end?: Date) => {
         const qb = this.paymentsRepo
@@ -164,7 +174,11 @@ export class AnalyticsService {
   }
 
   async getComparison(merchantId: string, period: AnalyticsPeriod) {
-    const cacheKey = `comparison:${merchantId}:${period}`;
+    const cacheKey = this.analyticsCacheKey({
+      merchantId,
+      endpoint: 'comparison',
+      dateRange: period,
+    });
     return this.getCachedData(cacheKey, async () => {
       const now = new Date();
       let currentStart: Date, currentEnd: Date, prevStart: Date, prevEnd: Date;
@@ -199,14 +213,12 @@ export class AnalyticsService {
   async getRevenue(options: RevenueOptions) {
     const { merchantId, period, scope, from, to } = options;
     const { current, previous } = this.resolveRevenueRanges(period, from, to);
-    const cacheKey = [
-      'revenue',
-      scope,
-      merchantId ?? 'all',
-      period,
-      current.start.toISOString(),
-      current.endExclusive.toISOString(),
-    ].join(':');
+    const cacheKey = this.analyticsCacheKey({
+      merchantId: scope === 'admin' ? 'admin' : (merchantId ?? 'unknown'),
+      endpoint: 'revenue',
+      dateRange: `${period}:${current.start.toISOString()}-${current.endExclusive.toISOString()}:${previous.start.toISOString()}-${previous.endExclusive.toISOString()}`,
+    });
+    const ttlMs = scope === 'admin' ? 10 * 60 * 1000 : 5 * 60 * 1000;
 
     return this.getCachedData(cacheKey, async () => {
       const [currentRows, currentTotal, previousTotal] = await Promise.all([
@@ -241,7 +253,7 @@ export class AnalyticsService {
         },
         breakdown: this.buildRevenueSeries(period, current, currentRows),
       };
-    });
+    }, ttlMs);
   }
 
   private async getVolumeForPeriod(
@@ -262,7 +274,11 @@ export class AnalyticsService {
   }
 
   async getNetworkBreakdown(merchantId: string, sortBy: 'volume' | 'count' = 'volume', period: 'daily' | 'monthly' = 'daily') {
-    const cacheKey = `networks:${merchantId}:${sortBy}:${period}`;
+    const cacheKey = this.analyticsCacheKey({
+      merchantId,
+      endpoint: 'networks',
+      dateRange: `${period}:${sortBy}`,
+    });
     return this.getCachedData(cacheKey, async () => {
       const dateFormat = period === 'daily' ? 'YYYY-MM-DD' : 'YYYY-MM';
 
@@ -317,16 +333,12 @@ export class AnalyticsService {
     });
   }
 
-  private async getCachedValue<T>(key: string, fetchFn: () => Promise<T>, ttl = 60000): Promise<T> {
-    const cached = this.cache.get(key);
-    if (cached && cached.expiry > Date.now()) {
-      this.logger.debug(`Cache hit for ${key}`);
-      return cached.data as T;
-    }
-    this.logger.debug(`Cache miss for ${key}`);
-    const data = await fetchFn();
-    this.cache.set(key, { data, expiry: Date.now() + ttl });
-    return data;
+  private async getCachedValue<T>(key: string, fetchFn: () => Promise<T>, ttlMs = 60_000): Promise<T> {
+    const { value, cacheHit } = await this.cache.getOrSet(key, fetchFn, {
+      ttlSeconds: Math.max(1, Math.floor(ttlMs / 1000)),
+    });
+    this.logger.debug(`${cacheHit ? 'Cache hit' : 'Cache miss'} for ${key}`);
+    return value;
   }
 
   private async getVolumeBreakdown(
@@ -723,6 +735,7 @@ export class AnalyticsService {
   }
 
   clearCache() {
-    this.cache.clear();
+    // Best-effort; used only in tests / debugging.
+    void this.cache.delPattern('analytics:*');
   }
 }
