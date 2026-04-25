@@ -8,14 +8,8 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import * as Sentry from '@sentry/nestjs';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Merchant } from '../../merchants/entities/merchant.entity';
-import type { User } from '../../users/entities/user.entity';
-import type { Admin } from '../../admin/entities/admin.entity';
-
 interface RequestWithUser {
-  user?: User | Admin;
+  user?: { id: string; email?: string; merchantId?: string; isMerchant?: boolean; isAdmin?: boolean };
   url?: string;
   method?: string;
   headers?: Record<string, unknown>;
@@ -25,11 +19,7 @@ interface RequestWithUser {
 export class SentryExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(SentryExceptionFilter.name);
 
-  constructor(
-    private readonly httpAdapterHost: HttpAdapterHost,
-    @InjectRepository(Merchant)
-    private readonly merchantRepo: Repository<Merchant>,
-  ) {}
+  constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   async catch(exception: unknown, host: ArgumentsHost): Promise<void> {
     const { httpAdapter } = this.httpAdapterHost;
@@ -69,23 +59,11 @@ export class SentryExceptionFilter implements ExceptionFilter {
           id: user.id,
         };
 
-        if ('email' in user) {
+        if (user.email) {
           userContext.email = user.email;
         }
-
-        // Enrich with merchantId if user is a merchant (only on error path)
-        if ('isMerchant' in user && user.isMerchant) {
-          try {
-            const merchant = await this.merchantRepo.findOne({
-              where: { userId: user.id },
-              select: ['id'],
-            });
-            if (merchant) {
-              userContext.merchantId = merchant.id;
-            }
-          } catch {
-            // Ignore merchant lookup failures during error reporting
-          }
+        if (user.merchantId) {
+          userContext.merchantId = user.merchantId;
         }
 
         scope.setUser(userContext);

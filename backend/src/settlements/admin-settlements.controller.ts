@@ -9,12 +9,12 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { JwtGuard } from '../auth/guards/jwt.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { SettlementsService } from './settlements.service';
 import { AdminSettlementsQueryDto } from './dto/admin-settlements-query.dto';
 
 @Controller('api/v1/admin/settlements')
-@UseGuards(JwtGuard)
+@UseGuards(JwtAuthGuard)
 export class AdminSettlementsController {
   constructor(private readonly settlementsService: SettlementsService) {}
 

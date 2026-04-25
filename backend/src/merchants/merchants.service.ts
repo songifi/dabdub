@@ -91,6 +91,12 @@ export class MerchantsService {
     return this.findOne(id);
   }
 
+  async verifyMerchant(id: string): Promise<Merchant> {
+    const merchant = await this.findOne(id);
+    merchant.status = MerchantStatus.ACTIVE;
+    return this.merchantsRepo.save(merchant);
+  }
+
   async updateMerchantFee(
     merchantId: string,
     customFeeRate: number | null,

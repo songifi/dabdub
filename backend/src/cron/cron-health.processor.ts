@@ -5,7 +5,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, MoreThan, Repository, Between } from 'typeorm';
 import { CronJobLog, CronJobStatus } from './entities/cron-job-log.entity';
 import { CronJobService } from './cron-job.service';
-import { NotificationsService } from '../notifications/notifications.service';
 
 const CRON_QUEUE = 'cron';
 
@@ -35,7 +34,6 @@ export class CronHealthProcessor {
     @InjectRepository(CronJobLog)
     private logRepo: Repository<CronJobLog>,
     private cronService: CronJobService,
-    private notificationService: NotificationService,
   ) {}
 
   @Process('cron-health-check')
@@ -55,15 +53,6 @@ export class CronHealthProcessor {
 
       if (!lastCompleted) {
         this.logger.warn(`Missed cron run: ${jobConfig.name}`);
-        // Alert admin
-        await this.notificationService.create({
-          title: 'Cron Job Missed',
-          body: `${jobConfig.name} has not completed in expected interval`,
-          type: 'CRITICAL',
-          recipientRole: 'admin',
-        }).catch(() => {});
-
-        // Could integrate Sentry here
       }
     }
   }

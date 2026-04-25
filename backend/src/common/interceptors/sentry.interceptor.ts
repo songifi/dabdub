@@ -6,11 +6,9 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import * as Sentry from '@sentry/nestjs';
-import type { User } from '../../users/entities/user.entity';
-import type { Admin } from '../../admin/entities/admin.entity';
 
 interface RequestWithUser {
-  user?: User | Admin;
+  user?: { id: string; email?: string; isMerchant?: boolean; isAdmin?: boolean };
 }
 
 @Injectable()

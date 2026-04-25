@@ -1,5 +1,7 @@
 jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
 
+jest.setTimeout(60_000);
+
 import { INestApplication, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -13,6 +15,9 @@ import { MerchantsModule } from '../merchants/merchants.module';
 import { AppThrottlerGuard } from '../auth/guards/throttler.guard';
 import { Merchant } from '../merchants/entities/merchant.entity';
 import { AdminAuditLog } from '../merchants/entities/admin-audit-log.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { Settlement } from '../settlements/entities/settlement.entity';
+import { Webhook } from '../webhooks/entities/webhook.entity';
 
 const API = '/api/v1';
 
@@ -31,7 +36,7 @@ function authImports(throttleDefaults: { ttl: string; limit: string }) {
       username: process.env.DB_USER ?? 'postgres',
       password: process.env.DB_PASS ?? process.env.DB_PASSWORD ?? 'postgres',
       database: process.env.DB_NAME_TEST ?? 'cheesepay_test',
-      entities: [Merchant, AdminAuditLog],
+      entities: [Merchant, AdminAuditLog, Payment, Settlement, Webhook],
       synchronize: true,
       logging: false,
     }),

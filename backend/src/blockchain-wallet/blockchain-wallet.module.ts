@@ -8,15 +8,12 @@ import { SorobanService } from './soroban.service';
 import { WalletController } from './wallet.controller';
 import { InternalWalletController } from './internal-wallet.controller';
 import { WalletProvisionedListener } from './listeners/wallet-provisioned.listener';
-import { NotificationModule } from '../notification/notification.module';
-import { UserEntity } from '../database/entities/user.entity';
 
 @Module({
   imports: [
     ConfigModule,
     EventEmitterModule,
-    TypeOrmModule.forFeature([BlockchainWallet, UserEntity]),
-    NotificationModule,
+    TypeOrmModule.forFeature([BlockchainWallet]),
   ],
   providers: [BlockchainWalletService, SorobanService, WalletProvisionedListener],
   controllers: [WalletController, InternalWalletController],

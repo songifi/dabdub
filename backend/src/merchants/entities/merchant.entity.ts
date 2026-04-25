@@ -23,6 +23,19 @@ export enum MerchantRole {
   SUPERADMIN = 'superadmin',
 }
 
+export enum MerchantBusinessType {
+  RETAIL = 'retail',
+  WHOLESALE = 'wholesale',
+  SERVICES = 'services',
+  OTHER = 'other',
+}
+
+export enum MerchantSettlementCurrency {
+  NGN = 'NGN',
+  USD = 'USD',
+  EUR = 'EUR',
+}
+
 @Entity('merchants')
 export class Merchant {
   @PrimaryGeneratedColumn('uuid')
