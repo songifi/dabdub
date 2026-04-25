@@ -1,3 +1,5 @@
+jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
+
 import { INestApplication, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -27,7 +29,7 @@ function authImports(throttleDefaults: { ttl: string; limit: string }) {
       host: process.env.DB_HOST ?? 'localhost',
       port: Number(process.env.DB_PORT ?? 5432),
       username: process.env.DB_USER ?? 'postgres',
-      password: process.env.DB_PASSWORD ?? 'postgres',
+      password: process.env.DB_PASS ?? process.env.DB_PASSWORD ?? 'postgres',
       database: process.env.DB_NAME_TEST ?? 'cheesepay_test',
       entities: [Merchant, AdminAuditLog],
       synchronize: true,
@@ -89,12 +91,13 @@ describe('Authentication flows (e2e)', () => {
   });
 
   afterEach(async () => {
+    if (!app) return;
     const conn = app.get(Connection);
     await truncateMerchants(conn);
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it('register → login → access protected route → 200', async () => {
@@ -187,12 +190,13 @@ describe('Authentication flows — rate limit (e2e)', () => {
   });
 
   afterEach(async () => {
+    if (!app) return;
     const conn = app.get(Connection);
     await truncateMerchants(conn);
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     delete process.env.THROTTLE_DEFAULT_TTL_MS;
     delete process.env.THROTTLE_DEFAULT_LIMIT;
   });
@@ -244,12 +248,13 @@ describe('Authentication flows — JWT expiry (e2e)', () => {
 
   afterEach(async () => {
     jest.useRealTimers();
+    if (!app) return;
     const conn = app.get(Connection);
     await truncateMerchants(conn);
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     delete process.env.JWT_EXPIRES_IN;
   });
 

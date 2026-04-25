@@ -1,16 +1,28 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { InjectConnection, InjectRepository } from '@nestjs/typeorm';
+import { Connection, DeepPartial, Repository } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupMember, GroupMemberRole } from './entities/group-member.entity';
 
 @Injectable()
-export class GroupsRepository extends Repository<Group> {
-  constructor(private dataSource: DataSource) {
-    super(Group, dataSource.createEntityManager());
+export class GroupsRepository {
+  constructor(
+    @InjectConnection() private readonly dataSource: Connection,
+    @InjectRepository(Group)
+    private readonly groups: Repository<Group>,
+  ) {}
+
+  create(entityLike?: DeepPartial<Group>): Group {
+    return this.groups.create(entityLike);
+  }
+
+  save(entity: Group): Promise<Group> {
+    return this.groups.save(entity);
   }
 
   async findByIdWithMembers(id: string): Promise<Group | null> {
-    return this.createQueryBuilder('g')
+    return this.groups
+      .createQueryBuilder('g')
       .leftJoinAndSelect('g.members', 'm')
       .where('g.id = :id', { id })
       .andWhere('g.deletedAt IS NULL')
@@ -18,7 +30,8 @@ export class GroupsRepository extends Repository<Group> {
   }
 
   async findByInviteCode(inviteCode: string): Promise<Group | null> {
-    return this.createQueryBuilder('g')
+    return this.groups
+      .createQueryBuilder('g')
       .leftJoinAndSelect('g.members', 'm')
       .where('g.inviteCode = :inviteCode', { inviteCode })
       .andWhere('g.deletedAt IS NULL')
@@ -30,7 +43,8 @@ export class GroupsRepository extends Repository<Group> {
     page: number,
     limit: number,
   ): Promise<[Group[], number]> {
-    const qb = this.createQueryBuilder('g')
+    const qb = this.groups
+      .createQueryBuilder('g')
       .leftJoin('g.members', 'm')
       .addSelect('COUNT(m.id)', 'memberCount')
       .where('g.deletedAt IS NULL')
@@ -48,9 +62,7 @@ export class GroupsRepository extends Repository<Group> {
   }
 
   async countMembers(groupId: string): Promise<number> {
-    return this.dataSource
-      .getRepository(GroupMember)
-      .count({ where: { groupId } });
+    return this.dataSource.getRepository(GroupMember).count({ where: { groupId } });
   }
 
   async isMember(groupId: string, userId: string): Promise<boolean> {
@@ -74,6 +86,6 @@ export class GroupsRepository extends Repository<Group> {
   }
 
   async softDeleteGroup(id: string): Promise<void> {
-    await this.softDelete(id);
+    await this.groups.softDelete(id);
   }
 }

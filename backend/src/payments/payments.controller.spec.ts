@@ -1,4 +1,5 @@
 jest.mock('uuid', () => ({ v4: () => 'mock-uuid' }));
+jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
 import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';

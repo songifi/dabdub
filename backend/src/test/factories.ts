@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { Connection } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Merchant, MerchantStatus } from '../merchants/entities/merchant.entity';
 import { Payment, PaymentStatus, PaymentNetwork } from '../payments/entities/payment.entity';
@@ -26,7 +26,7 @@ export function merchantFactory(overrides: Partial<Merchant> = {}): Partial<Merc
 }
 
 export async function createMerchant(
-  dataSource: DataSource,
+  dataSource: Connection,
   overrides: Partial<Merchant> = {},
 ): Promise<Merchant> {
   const repo = dataSource.getRepository(Merchant);
@@ -51,7 +51,7 @@ export function paymentFactory(overrides: Partial<Payment> = {}): Partial<Paymen
 }
 
 export async function createPayment(
-  dataSource: DataSource,
+  dataSource: Connection,
   merchantId: string,
   overrides: Partial<Payment> = {},
 ): Promise<Payment> {
@@ -75,7 +75,7 @@ export function settlementFactory(overrides: Partial<Settlement> = {}): Partial<
 }
 
 export async function createSettlement(
-  dataSource: DataSource,
+  dataSource: Connection,
   merchantId: string,
   overrides: Partial<Settlement> = {},
 ): Promise<Settlement> {

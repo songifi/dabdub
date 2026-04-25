@@ -18,6 +18,7 @@ jest.mock('typeorm', () => {
     PrimaryGeneratedColumn: noop,
     CreateDateColumn: noop,
     UpdateDateColumn: noop,
+    Index: noop,
     OneToMany: noop,
     ManyToOne: noop,
     JoinColumn: noop,
@@ -38,6 +39,7 @@ jest.mock('passport-jwt', () => ({
   ExtractJwt: { fromAuthHeaderAsBearerToken: () => () => {} },
 }));
 jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
+jest.mock('uuid', () => ({ v4: () => '00000000-0000-4000-8000-000000000001' }));
 
 import { AuthController } from '../auth/auth.controller';
 import { MerchantsController } from '../merchants/merchants.controller';

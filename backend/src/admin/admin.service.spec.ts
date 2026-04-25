@@ -1,3 +1,5 @@
+jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from './admin.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -5,6 +7,8 @@ import { Merchant, MerchantStatus } from '../merchants/entities/merchant.entity'
 import { Payment } from '../payments/entities/payment.entity';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.entity';
+import { AuditLog } from './entities/audit-log.entity';
+import { FilterService } from '../common/filter.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('AdminService', () => {
@@ -48,6 +52,14 @@ describe('AdminService', () => {
             create: jest.fn(),
             save: jest.fn(),
           },
+        },
+        {
+          provide: getRepositoryToken(AuditLog),
+          useFactory: mockRepository,
+        },
+        {
+          provide: FilterService,
+          useValue: { buildWhereConditions: jest.fn(() => ({})) },
         },
       ],
     }).compile();

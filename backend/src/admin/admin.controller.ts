@@ -9,7 +9,7 @@ import {
   Query,
   Req,
   UseGuards,
-  Header,
+  Headers,
   Res,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -158,11 +158,11 @@ export class AdminController {
   @Get('audit-log')
   @ApiOperation({ summary: 'Get paginated audit log with filtering' })
   async getAuditLogs(
+    @Res() res: Response,
     @Query() query: any,
     @Query() pagination: PaginationDto,
     @Query('export') exportType?: string,
-    @Header('Accept') accept?: string,
-    @Res() res: Response,
+    @Headers('accept') accept?: string,
   ) {
     const exportCsv = exportType === 'csv' || accept === 'text/csv';
     const result = await this.adminService.getAuditLogs(query, pagination, exportCsv);

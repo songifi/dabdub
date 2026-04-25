@@ -27,10 +27,12 @@ const mockGroup = (overrides: Partial<Group> = {}): Group => ({
   ...overrides,
 });
 
+type StellarGateMocks = Pick<StellarService, 'getServer' | 'getBalance'>;
+
 describe('GroupsService', () => {
   let service: GroupsService;
   let repo: jest.Mocked<GroupsRepository>;
-  let stellar: jest.Mocked<StellarService>;
+  let stellar: jest.Mocked<StellarGateMocks>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -62,7 +64,7 @@ describe('GroupsService', () => {
 
     service = module.get(GroupsService);
     repo = module.get(GroupsRepository);
-    stellar = module.get(StellarService);
+    stellar = module.get(StellarService) as jest.Mocked<StellarGateMocks>;
   });
 
   // ── createGroup ─────────────────────────────────────────────────────────────

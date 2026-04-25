@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CronJobService } from './cron-job.service';
 import { CronJobLog, CronJobStatus } from './entities/cron-job-log.entity';
-import { TimeoutException } from '@nestjs/common';
+import { RequestTimeoutException } from '@nestjs/common';
 
 describe('CronJobService', () => {
   let service: CronJobService;
@@ -45,20 +45,18 @@ describe('CronJobService', () => {
     }));
   });
 
-  it('should timeout after 5min', async () => {
-    jest.useFakeTimers();
-    const mockFn = jest.fn();
+  it('should timeout when job exceeds deadline', async () => {
+    const mockFn = jest.fn().mockReturnValue(new Promise(() => {}));
     mockRepo.create.mockReturnValue({ id: 'log1' });
     mockRepo.save.mockResolvedValue({} as any);
 
-    const promise = service.run('timeout-job', mockFn);
-    jest.advanceTimersByTime(5 * 60 * 1000 + 1);
-
-    await expect(promise).rejects.toThrow(TimeoutException);
+    const timeoutMs = 50;
+    await expect(service.run('timeout-job', mockFn, undefined, timeoutMs)).rejects.toThrow(
+      RequestTimeoutException,
+    );
     expect(mockRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       status: CronJobStatus.FAILED,
     }));
-    jest.useRealTimers();
   });
 
   it('should log failure', async () => {

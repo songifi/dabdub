@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { InjectConnection } from '@nestjs/typeorm';
+import { Connection } from 'typeorm';
 import { PaymentFunnelQueryDto } from './dto/payment-funnel-query.dto';
 
 const DAILY_SIGNUP_WINDOW_DAYS = 30;
@@ -73,12 +73,11 @@ export class MerchantAnalyticsService {
   private readonly logger = new Logger(MerchantAnalyticsService.name);
   private readonly topMerchantsCache = new Map<string, { data: TopMerchantsResponse; expiresAt: number }>();
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(@InjectConnection() private readonly dataSource: Connection) {}
 
   async getMetrics(asOf = new Date()): Promise<MerchantAnalyticsResponse> {
-    const [dailySignupsRows, activationRows, monthlyActiveRows] =
-      await Promise.all([
-        this.dataSource.query<SignupRow[]>(
+    const [dailySignupsRows, activationRows, monthlyActiveRows] = (await Promise.all([
+        this.dataSource.query(
           `
             SELECT
               DATE_TRUNC('day', "createdAt")::date::text AS day,
@@ -92,7 +91,7 @@ export class MerchantAnalyticsService {
           `,
           [asOf.toISOString()],
         ),
-        this.dataSource.query<CountRow[]>(
+        this.dataSource.query(
           `
             SELECT
               COUNT(*) FILTER (
@@ -109,7 +108,7 @@ export class MerchantAnalyticsService {
               AND "is_treasury" = false
           `,
         ),
-        this.dataSource.query<CountRow[]>(
+        this.dataSource.query(
           `
             SELECT COUNT(DISTINCT sessions.user_id)::text AS count
             FROM sessions
@@ -120,7 +119,7 @@ export class MerchantAnalyticsService {
           `,
           [asOf.toISOString()],
         ),
-      ]);
+      ])) as [SignupRow[], CountRow[], CountRow[]];
 
     const activation = activationRows[0] as CountRow & { total: string };
     const activatedMerchants = Number(activation?.count ?? 0);

@@ -157,4 +157,10 @@ export class StellarService implements OnModuleInit {
   getServer(): StellarSdk.Horizon.Server {
     return this.server;
   }
+
+  /** Horizon account balances (native + trustlines) for token-gate checks. */
+  async getBalance(publicKey: string): Promise<any[]> {
+    const account = await this.server.loadAccount(publicKey);
+    return account.balances as any[];
+  }
 }

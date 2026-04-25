@@ -1,22 +1,25 @@
-import { DataSource } from 'typeorm';
+jest.mock('bcrypt', () => ({ hash: async () => '', compare: async () => true }));
+
+import { Connection } from 'typeorm';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { PaymentsService } from '../payments/payments.service';
 import { Payment } from '../payments/entities/payment.entity';
 import { StellarService } from '../stellar/stellar.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { MerchantsService } from '../merchants/merchants.service';
 import { createMockStellarService } from '../stellar/stellar.service.mock';
-import { createTestDataSource, truncateAll, closeTestDataSource, TEST_ENTITIES } from './db';
+import { truncateAll, TEST_ENTITIES } from './db';
 import { createMerchant } from './factories';
 
 describe('PaymentsService (integration)', () => {
-  let dataSource: DataSource;
-  let module: TestingModule;
+  let dataSource: Connection;
+  let module: TestingModule | undefined;
   let service: PaymentsService;
 
   beforeAll(async () => {
-    dataSource = await createTestDataSource();
-
     module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
@@ -25,7 +28,7 @@ describe('PaymentsService (integration)', () => {
           host: process.env.DB_HOST ?? 'localhost',
           port: Number(process.env.DB_PORT ?? 5432),
           username: process.env.DB_USER ?? 'postgres',
-          password: process.env.DB_PASSWORD ?? 'postgres',
+          password: process.env.DB_PASS ?? process.env.DB_PASSWORD ?? 'postgres',
           database: process.env.DB_NAME_TEST ?? 'cheesepay_test',
           entities: TEST_ENTITIES,
           synchronize: true,
@@ -36,9 +39,13 @@ describe('PaymentsService (integration)', () => {
       providers: [
         PaymentsService,
         { provide: StellarService, useValue: createMockStellarService() },
+        { provide: WebhooksService, useValue: { dispatch: jest.fn() } },
+        { provide: NotificationsService, useValue: { enqueueEmail: jest.fn() } },
+        { provide: MerchantsService, useValue: { findOne: jest.fn() } },
       ],
     }).compile();
 
+    dataSource = module.get(Connection);
     service = module.get(PaymentsService);
   });
 
@@ -47,8 +54,7 @@ describe('PaymentsService (integration)', () => {
   });
 
   afterAll(async () => {
-    await module.close();
-    await closeTestDataSource(dataSource);
+    if (module) await module.close();
   });
 
   it('creates a payment and persists it', async () => {
@@ -72,7 +78,7 @@ describe('PaymentsService (integration)', () => {
 
     const result = await service.findAll(merchant.id);
     expect(result.total).toBe(2);
-    expect(result.payments).toHaveLength(2);
+    expect(result.data).toHaveLength(2);
   });
 
   it('does not return payments from another merchant', async () => {

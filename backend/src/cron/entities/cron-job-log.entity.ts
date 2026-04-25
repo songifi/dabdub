@@ -1,5 +1,5 @@
-import { Entity, Column, CreateDateColumn, PrimaryGeneratedColumn, Index } from 'typeorm';
-import { BaseEntity } from '../../../common/entities/base.entity';
+import { Entity, Column, CreateDateColumn, Index } from 'typeorm';
+import { BaseEntity } from '../../common/entities/base.entity';
 
 export enum CronJobStatus {
   STARTED = 'started',
@@ -11,9 +11,6 @@ export enum CronJobStatus {
 @Entity('cron_job_logs')
 @Index(['jobName', 'startedAt'])
 export class CronJobLog extends BaseEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
-
   @Column()
   jobName!: string;
 

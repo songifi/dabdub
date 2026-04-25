@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getDataSourceToken } from '@nestjs/typeorm';
+import { getConnectionToken } from '@nestjs/typeorm';
 import { MerchantAnalyticsService } from './merchant-analytics.service';
 
 describe('MerchantAnalyticsService', () => {
@@ -15,7 +15,7 @@ describe('MerchantAnalyticsService', () => {
       providers: [
         MerchantAnalyticsService,
         {
-          provide: getDataSourceToken(),
+          provide: getConnectionToken(),
           useValue: mockDataSource,
         },
       ],

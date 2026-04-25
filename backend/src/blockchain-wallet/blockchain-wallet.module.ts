@@ -14,6 +14,7 @@ import { UserEntity } from '../database/entities/user.entity';
 @Module({
   imports: [
     ConfigModule,
+    EventEmitterModule,
     TypeOrmModule.forFeature([BlockchainWallet, UserEntity]),
     NotificationModule,
   ],
