@@ -10,6 +10,7 @@ import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { AdminSettlementsQueryDto } from './dto/admin-settlements-query.dto';
+import { CacheService } from '../cache/cache.service';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -29,6 +30,7 @@ export class SettlementsService {
     private config: ConfigService,
     private webhooks: WebhooksService,
     private adminAlerts: AdminAlertService,
+    private cache: CacheService,
   ) {}
 
   async initiateSettlement(payment: Payment): Promise<void> {
@@ -102,6 +104,10 @@ export class SettlementsService {
       payment.status = PaymentStatus.SETTLED;
       await this.paymentsRepo.save(payment);
 
+      // Invalidate analytics caches impacted by new settled payment.
+      await this.cache.delPattern(`analytics:${settlement.merchantId}:*`);
+      await this.cache.delPattern('analytics:admin:*');
+
       await this.webhooks.dispatch(settlement.merchantId, 'payment.settled', {
         paymentId: payment.id,
         settlementId: settlement.id,
@@ -167,6 +173,11 @@ export class SettlementsService {
       if (payment) {
         payment.status = PaymentStatus.SETTLED;
         await this.paymentsRepo.save(payment);
+
+        // Invalidate analytics caches impacted by new settled payment.
+        await this.cache.delPattern(`analytics:${settlement.merchantId}:*`);
+        await this.cache.delPattern('analytics:admin:*');
+
         await this.webhooks.dispatch(settlement.merchantId, 'payment.settled', {
           paymentId: payment.id,
           settlementId: settlement.id,

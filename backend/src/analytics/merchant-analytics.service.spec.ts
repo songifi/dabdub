@@ -1,14 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { MerchantAnalyticsService } from './merchant-analytics.service';
+import { CacheService } from '../cache/cache.service';
 
 describe('MerchantAnalyticsService', () => {
   let service: MerchantAnalyticsService;
   let mockDataSource: any;
+  let cache: { getOrSet: jest.Mock };
 
   beforeEach(async () => {
     mockDataSource = {
       query: jest.fn(),
+    };
+
+    const store = new Map<string, unknown>();
+    cache = {
+      getOrSet: jest.fn(async (key: string, fetchFn: () => Promise<unknown>) => {
+        if (store.has(key)) return { value: store.get(key), cacheHit: true };
+        const value = await fetchFn();
+        store.set(key, value);
+        return { value, cacheHit: false };
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -17,6 +29,10 @@ describe('MerchantAnalyticsService', () => {
         {
           provide: getDataSourceToken(),
           useValue: mockDataSource,
+        },
+        {
+          provide: CacheService,
+          useValue: cache,
         },
       ],
     }).compile();
