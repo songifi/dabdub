@@ -5,6 +5,7 @@ import { NotificationsModule } from '../../notifications/notifications.module';
 import { CronJobLog } from './entities/cron-job-log.entity';
 import { CronJobService } from './cron-job.service';
 import { CronHealthProcessor } from './cron-health.processor';
+import { UptimeHeartbeatService } from './uptime-heartbeat.service';
 
 const CRON_QUEUE = 'cron';
 
@@ -14,7 +15,7 @@ const CRON_QUEUE = 'cron';
     NotificationsModule,
     BullModule.registerQueue({ name: CRON_QUEUE }),
   ],
-  providers: [CronJobService, CronHealthProcessor],
+  providers: [CronJobService, CronHealthProcessor, UptimeHeartbeatService],
   exports: [CronJobService],
 })
 export class CronModule {}

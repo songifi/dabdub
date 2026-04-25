@@ -13,6 +13,8 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { Merchant } from '../merchants/entities/merchant.entity';
+import { NotificationPrefsService } from '../notifications/notification-prefs.service';
+import { NotificationChannel, NotificationEventType } from '../notifications/entities/notification-preference.entity';
 
 @Injectable()
 export class StellarMonitorService implements OnModuleInit {
@@ -28,6 +30,7 @@ export class StellarMonitorService implements OnModuleInit {
     private webhooks: WebhooksService,
     private emailService: EmailService,
     private config: ConfigService,
+    private notificationPrefs: NotificationPrefsService,
     @InjectQueue(QUEUE_NAMES.stellarMonitor) private monitorQueue: Queue,
   ) {}
 
@@ -133,9 +136,14 @@ export class StellarMonitorService implements OnModuleInit {
     asset: string,
   ): Promise<void> {
     const merchant = payment.merchant;
-    if (!merchant?.email || merchant.paymentConfirmedEmailEnabled === false) {
-      return;
-    }
+    if (!merchant?.email) return;
+
+    const emailEnabled = await this.notificationPrefs.isEnabled(
+      merchant.id,
+      NotificationChannel.EMAIL,
+      NotificationEventType.PAYMENT_CONFIRMED,
+    );
+    if (!emailEnabled) return;
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
     const paymentDetailUrl = `${frontendUrl.replace(/\/$/, '')}/pay/${payment.reference}`;

@@ -111,6 +111,62 @@ jobs:
       - name: Migration rollback check
         run: pnpm migration:rollback:check
 
+  backend-sql-injection-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint security check
+        run: pnpm eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
+
+      - name: Scan for raw SQL string concatenation
+        # Fails if any production source file uses .query() with a template
+        # literal or string concatenation — the only allowed form is
+        # .query(sql, params) where sql is a plain string literal with no
+        # interpolation, or QueryBuilder calls.
+        run: |
+          echo "Scanning for forbidden raw SQL patterns..."
+
+          # Pattern 1: .query(`  — template literal passed to .query()
+          if grep -rn --include="*.ts" \
+               --exclude-dir=node_modules \
+               --exclude="*.spec.ts" \
+               --exclude="*.e2e-spec.ts" \
+               --exclude="*.integration-spec.ts" \
+               --exclude-dir=test \
+               '\.query(`' src/; then
+            echo "ERROR: Raw SQL template literals found. Use QueryBuilder with bound parameters."
+            exit 1
+          fi
+
+          # Pattern 2: .query(  followed by string + variable concatenation
+          if grep -rn --include="*.ts" \
+               --exclude-dir=node_modules \
+               --exclude="*.spec.ts" \
+               --exclude="*.e2e-spec.ts" \
+               --exclude="*.integration-spec.ts" \
+               --exclude-dir=test \
+               -P '\.query\([^)]*\+' src/; then
+            echo "ERROR: Raw SQL string concatenation found. Use QueryBuilder with bound parameters."
+            exit 1
+          fi
+
+          echo "No forbidden raw SQL patterns detected."
+
   backend-test:
     runs-on: ubuntu-latest
     services:
