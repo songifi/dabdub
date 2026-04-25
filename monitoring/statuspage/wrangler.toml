@@ -1,0 +1,21 @@
+name            = "cheesepay-status"
+main            = "worker.js"
+compatibility_date = "2024-01-01"
+account_id      = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+
+# Serve status.cheesepay.xyz
+routes = [
+  { pattern = "status.cheesepay.xyz/*", zone_name = "cheesepay.xyz" }
+]
+
+# Inline the HTML at deploy time — no external fetch needed
+[text_blobs]
+STATUS_HTML = "index.html"
+
+# Environment variables
+[vars]
+API_ORIGIN = "https://api.cheesepay.xyz"
+
+# Production environment overrides (if needed)
+[env.production]
+vars = { API_ORIGIN = "https://api.cheesepay.xyz" }

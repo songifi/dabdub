@@ -8,6 +8,8 @@ import { Payment } from '../payments/entities/payment.entity';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PartnerSignatureGuard } from './guards/partner-signature.guard';
 import { CacheModule } from '../cache/cache.module';
+import { EmailModule } from '../email/email.module';
+import { MerchantsModule } from '../merchants/merchants.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { CacheModule } from '../cache/cache.module';
     AdminAlertModule,
     WebhooksModule,
     CacheModule,
+    EmailModule,
+    MerchantsModule,
   ],
   controllers: [SettlementsController, PartnerCallbackController],
   providers: [SettlementsService, PartnerSignatureGuard],
