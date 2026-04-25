@@ -14,6 +14,7 @@ import { AnalyticsExportService, ANALYTICS_EXPORT_QUEUE } from './analytics-expo
 import { AnalyticsExport } from './entities/analytics-export.entity';
 import { AnalyticsExportProcessor } from './analytics-export.processor';
 import { EmailModule } from '../email/email.module';
+import { AnalyticsQueryCacheService } from './analytics-query-cache.service';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
   ],
   controllers: [AnalyticsController, AnalyticsExportController, AnalyticsExportDownloadController],
-  providers: [AnalyticsService, AnalyticsExportService, AnalyticsExportProcessor],
-  exports: [AnalyticsService],
+  providers: [AnalyticsService, AnalyticsQueryCacheService, AnalyticsExportService, AnalyticsExportProcessor],
+  exports: [AnalyticsService, AnalyticsQueryCacheService],
 })
 export class AnalyticsModule {}

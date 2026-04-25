@@ -6,6 +6,7 @@ import { SettlementsController, PartnerCallbackController } from './settlements.
 import { Settlement } from './entities/settlement.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { PartnerSignatureGuard } from './guards/partner-signature.guard';
 
 @Module({
@@ -13,6 +14,7 @@ import { PartnerSignatureGuard } from './guards/partner-signature.guard';
     TypeOrmModule.forFeature([Settlement, Payment]),
     AdminAlertModule,
     WebhooksModule,
+    AnalyticsModule,
   ],
   controllers: [SettlementsController, PartnerCallbackController],
   providers: [SettlementsService, PartnerSignatureGuard],

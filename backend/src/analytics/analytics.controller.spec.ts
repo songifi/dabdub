@@ -1,3 +1,7 @@
+jest.mock('../auth/guards/jwt.guard', () => ({
+  JwtAuthGuard: class JwtAuthGuard {},
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
@@ -50,7 +54,13 @@ describe('AnalyticsController', () => {
       mockAnalyticsService.getVolume.mockResolvedValue(result);
 
       expect(await controller.getVolume(mockReq, 'daily')).toBe(result);
-      expect(service.getVolume).toHaveBeenCalledWith('merchant-123', 'daily');
+      expect(service.getVolume).toHaveBeenCalledWith({
+        scope: 'merchant',
+        merchantId: 'merchant-123',
+        period: 'daily',
+        dateFrom: undefined,
+        dateTo: undefined,
+      });
     });
   });
 
@@ -97,7 +107,7 @@ describe('AnalyticsController', () => {
       mockAnalyticsService.getFunnel.mockResolvedValue(result);
 
       expect(await controller.getFunnel(mockReq)).toBe(result);
-      expect(service.getFunnel).toHaveBeenCalledWith('merchant-123');
+      expect(service.getFunnel).toHaveBeenCalledWith('merchant-123', undefined);
     });
   });
 

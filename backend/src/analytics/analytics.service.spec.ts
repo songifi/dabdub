@@ -1,14 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnalyticsService } from './analytics.service';
+import { AnalyticsQueryCacheService } from './analytics-query-cache.service';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { SettlementStatus, Settlement } from '../settlements/entities/settlement.entity';
-import { Repository } from 'typeorm';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
-  let paymentsRepo: Repository<Payment>;
-  let settlementsRepo: Repository<Settlement>;
+  let queryCache: AnalyticsQueryCacheService;
 
   const mockMerchantId = 'merchant-123';
 
@@ -46,6 +46,13 @@ describe('AnalyticsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsService,
+        AnalyticsQueryCacheService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+          },
+        },
         {
           provide: getRepositoryToken(Payment),
           useValue: paymentRepoMock,
@@ -58,8 +65,7 @@ describe('AnalyticsService', () => {
     }).compile();
 
     service = module.get<AnalyticsService>(AnalyticsService);
-    paymentsRepo = module.get<Repository<Payment>>(getRepositoryToken(Payment));
-    settlementsRepo = module.get<Repository<Settlement>>(getRepositoryToken(Settlement));
+    queryCache = module.get<AnalyticsQueryCacheService>(AnalyticsQueryCacheService);
     service.clearCache();
     jest.clearAllMocks();
   });
@@ -69,24 +75,31 @@ describe('AnalyticsService', () => {
   });
 
   describe('getVolume', () => {
-    it('should return aggregated volume data and test cache', async () => {
-      const mockData = [
-        { date: '2026-04-20', volume: '100', count: '1' },
-        { date: '2026-04-21', volume: '200', count: '1' },
-      ];
-      paymentQueryBuilder.getRawMany.mockResolvedValueOnce(mockData);
+    it('should return aggregated volume series and hit cache on repeat', async () => {
+      paymentQueryBuilder.getRawMany.mockResolvedValueOnce([
+        { bucket: '2026-04-20', count: '1', volumeUsd: '100' },
+        { bucket: '2026-04-21', count: '1', volumeUsd: '200' },
+      ]);
 
-      // First call - Cache miss
-      const result1 = await service.getVolume(mockMerchantId, 'daily');
-      expect(result1.results).toEqual(mockData);
-      expect(result1.cacheHit).toBe(false);
+      const result1 = await service.getVolume({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        dateFrom: '2026-04-20',
+        dateTo: '2026-04-21',
+      });
+      expect(Array.isArray(result1)).toBe(true);
+      expect(result1.length).toBeGreaterThan(0);
+      expect(paymentQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
 
-      // Second call - Cache hit
-      const result2 = await service.getVolume(mockMerchantId, 'daily');
-      expect(result2.results).toEqual(mockData);
-      expect(result2.cacheHit).toBe(true);
-      
-      // Ensure query builder was only called once
+      const result2 = await service.getVolume({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        dateFrom: '2026-04-20',
+        dateTo: '2026-04-21',
+      });
+      expect(result2).toEqual(result1);
       expect(paymentQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
     });
   });
@@ -102,55 +115,56 @@ describe('AnalyticsService', () => {
       paymentQueryBuilder.getRawMany.mockResolvedValueOnce(mockStats);
 
       const result = await service.getFunnel(mockMerchantId);
-      
-      expect(result.counts.settled).toBe(10);
-      expect(result.counts.total).toBe(20);
-      expect(result.percentages.conversionRate).toBe(50);
-      expect(result.percentages.abandonmentRate).toBe(25);
+
+      expect(result.cacheHit).toBe(false);
+      expect('counts' in result && result.counts.settled).toBe(10);
+      expect('counts' in result && result.counts.total).toBe(20);
+      expect('percentages' in result && result.percentages.conversionRate).toBe(50);
+      expect('percentages' in result && result.percentages.abandonmentRate).toBe(25);
     });
 
     it('should handle zero records', async () => {
       paymentQueryBuilder.getRawMany.mockResolvedValueOnce([]);
 
       const result = await service.getFunnel(mockMerchantId);
-      
-      expect(result.counts.total).toBe(0);
-      expect(result.percentages.conversionRate).toBe(0);
-      expect(result.percentages.abandonmentRate).toBe(0);
+
+      expect('counts' in result && result.counts.total).toBe(0);
+      expect('percentages' in result && result.percentages.conversionRate).toBe(0);
+      expect('percentages' in result && result.percentages.abandonmentRate).toBe(0);
     });
   });
 
   describe('getComparison', () => {
     it('should compare periods correctly including zero-previous case', async () => {
-      // Mock current period volume
       paymentQueryBuilder.getRawOne
-        .mockResolvedValueOnce({ total: '150' }) // current
-        .mockResolvedValueOnce({ total: '0' });   // previous
+        .mockResolvedValueOnce({ total: '150' })
+        .mockResolvedValueOnce({ total: '0' });
 
       const result = await service.getComparison(mockMerchantId, 'daily');
-      
+
+      expect(result.cacheHit).toBe(false);
       expect(result.currentPeriod.volume).toBe(150);
       expect(result.previousPeriod.volume).toBe(0);
-      expect(result.growth).toBe(100); // 100% growth from 0
+      expect(result.growth).toBe(100);
     });
 
     it('should handle negative growth', async () => {
       paymentQueryBuilder.getRawOne
-        .mockResolvedValueOnce({ total: '100' }) // current
-        .mockResolvedValueOnce({ total: '200' }); // previous
+        .mockResolvedValueOnce({ total: '100' })
+        .mockResolvedValueOnce({ total: '200' });
 
       const result = await service.getComparison(mockMerchantId, 'daily');
-      
+
       expect(result.growth).toBe(-50);
     });
 
     it('should handle monthly comparison', async () => {
       paymentQueryBuilder.getRawOne
-        .mockResolvedValueOnce({ total: '1000' }) // current month
-        .mockResolvedValueOnce({ total: '800' });  // previous month
+        .mockResolvedValueOnce({ total: '1000' })
+        .mockResolvedValueOnce({ total: '800' });
 
       const result = await service.getComparison(mockMerchantId, 'monthly');
-      
+
       expect(result.growth).toBe(25);
     });
   });
@@ -173,6 +187,7 @@ describe('AnalyticsService', () => {
         to: '2026-04-03',
       });
 
+      expect(result.cacheHit).toBe(false);
       expect(result.scope).toBe('merchant');
       expect(result.currentPeriod).toEqual({
         start: '2026-04-01',
@@ -271,6 +286,52 @@ describe('AnalyticsService', () => {
       expect(second.cacheHit).toBe(true);
       expect(settlementQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
       expect(settlementQueryBuilder.getRawOne).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('cache invalidation on settlement', () => {
+    it('should clear merchant and admin keys after invalidateAfterPaymentSettled', async () => {
+      settlementQueryBuilder.getRawMany.mockResolvedValue([
+        { bucket: '2026-04-01', total: '1.000000', count: '1' },
+      ]);
+      settlementQueryBuilder.getRawOne.mockResolvedValue({ total: '1.000000' });
+
+      await service.getRevenue({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-01',
+      });
+      await service.getRevenue({
+        scope: 'admin',
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-01',
+      });
+
+      await queryCache.invalidateAfterPaymentSettled(mockMerchantId);
+
+      settlementQueryBuilder.getRawMany.mockClear();
+      settlementQueryBuilder.getRawOne.mockClear();
+      settlementQueryBuilder.getRawMany.mockResolvedValue([
+        { bucket: '2026-04-01', total: '2.000000', count: '2' },
+      ]);
+      settlementQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ total: '2.000000' })
+        .mockResolvedValueOnce({ total: '0.000000' });
+
+      const after = await service.getRevenue({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-01',
+      });
+
+      expect(after.cacheHit).toBe(false);
+      expect(after.currentPeriod.totalFeeRevenueUsd).toBe('2.000000');
+      expect(settlementQueryBuilder.getRawMany).toHaveBeenCalled();
     });
   });
 });

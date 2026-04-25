@@ -10,6 +10,7 @@ import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { AdminSettlementsQueryDto } from './dto/admin-settlements-query.dto';
+import { AnalyticsQueryCacheService } from '../analytics/analytics-query-cache.service';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -29,6 +30,7 @@ export class SettlementsService {
     private config: ConfigService,
     private webhooks: WebhooksService,
     private adminAlerts: AdminAlertService,
+    private readonly analyticsQueryCache: AnalyticsQueryCacheService,
   ) {}
 
   async initiateSettlement(payment: Payment): Promise<void> {
@@ -107,6 +109,7 @@ export class SettlementsService {
         settlementId: settlement.id,
         amount: settlement.netAmountUsd,
       });
+      await this.analyticsQueryCache.invalidateAfterPaymentSettled(settlement.merchantId);
     } catch (err) {
       this.logger.error(`Settlement failed for ${settlement.id}`, err.message);
       await this.adminAlerts.raise({
@@ -172,6 +175,7 @@ export class SettlementsService {
           settlementId: settlement.id,
           amount: settlement.netAmountUsd,
         });
+        await this.analyticsQueryCache.invalidateAfterPaymentSettled(settlement.merchantId);
       }
     } else {
       settlement.status = SettlementStatus.FAILED;
@@ -188,7 +192,6 @@ export class SettlementsService {
       }
     }
   }
-}
 
   // Admin methods
   async findAllAdmin(query: AdminSettlementsQueryDto) {
@@ -307,3 +310,4 @@ export class SettlementsService {
     this.logger.log(`Large settlement ${id} approved and processed by admin`);
     return { success: true, message: 'Settlement approved and processing initiated' };
   }
+}
