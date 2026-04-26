@@ -90,7 +90,7 @@ export class StellarService implements OnModuleInit {
     txHash: string,
     expectedMemo: string,
     expectedAmountUsdc?: number,
-  ): Promise<{ verified: boolean; amount?: number; asset?: string }> {
+  ): Promise<{ verified: boolean; amount?: number; asset?: string; from?: string }> {
     try {
       const tx = await this.server.transactions().transaction(txHash).call();
 
@@ -109,7 +109,7 @@ export class StellarService implements OnModuleInit {
 
           if (isUsdc || isXlm) {
             const amount = parseFloat(op.amount);
-            return { verified: true, amount, asset: isUsdc ? 'USDC' : 'XLM' };
+            return { verified: true, amount, asset: isUsdc ? 'USDC' : 'XLM', from: op.from };
           }
         }
       }

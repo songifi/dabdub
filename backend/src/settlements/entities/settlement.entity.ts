@@ -13,6 +13,7 @@ import { Payment } from '../../payments/entities/payment.entity';
 
 export enum SettlementStatus {
   PENDING = 'pending',
+  PENDING_APPROVAL = 'pending_approval',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
@@ -59,6 +60,15 @@ export class Settlement {
 
   @Column({ nullable: true })
   failureReason: string;
+
+  @Column({ default: false })
+  requiresApproval: boolean;
+
+  @Column({ nullable: true })
+  approvedBy: string;
+
+  @Column({ nullable: true })
+  approvedAt: Date;
 
   @Column({ nullable: true })
   completedAt: Date;

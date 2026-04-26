@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { RetryConfigService } from '../retry/retry-config.service';
-import { RetryQueueService } from '../retry/retry-queue.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { EmailLog, EmailStatus } from './entities/email-log.entity';
 
-export interface EmailPayload {
+export const EMAIL_QUEUE = 'email-jobs';
+
+export interface EmailJobPayload {
+  logId: string;
   to: string;
-  subject: string;
-  body: string;
+  templateAlias: string;
+  mergeData: Record<string, unknown>;
 }
 
 @Injectable()
@@ -14,16 +19,39 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(
-    private config: ConfigService,
-    private retryConfig: RetryConfigService,
-    private retryQueue: RetryQueueService,
+    @InjectRepository(EmailLog)
+    private readonly logRepo: Repository<EmailLog>,
+    @InjectQueue(EMAIL_QUEUE)
+    private readonly emailQueue: Queue<EmailJobPayload>,
   ) {}
 
-  async send(payload: EmailPayload): Promise<void> {
-    await this.retryQueue.run('email', this.retryConfig.email, async () => {
-      // Replace with real email provider (e.g. nodemailer, SendGrid, Resend)
-      this.logger.log(`Sending email to ${payload.to}: ${payload.subject}`);
-      throw new Error('Email provider not configured');
-    });
+  async queue(
+    to: string,
+    templateAlias: string,
+    mergeData: Record<string, unknown>,
+    userId?: string,
+  ): Promise<EmailLog> {
+    const log = await this.logRepo.save(
+      this.logRepo.create({
+        to,
+        templateAlias,
+        subject: (mergeData['subject'] as string | undefined) ?? templateAlias,
+        status: EmailStatus.QUEUED,
+        userId: userId ?? null,
+      }),
+    );
+
+    await this.emailQueue.add(
+      { logId: log.id, to, templateAlias, mergeData },
+      {
+        attempts: 2,          // 1 initial attempt + 1 retry
+        backoff: { type: 'fixed', delay: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
+
+    this.logger.log(`Queued email logId=${log.id} to=${to} template=${templateAlias}`);
+    return log;
   }
 }

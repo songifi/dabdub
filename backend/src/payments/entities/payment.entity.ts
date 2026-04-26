@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
@@ -17,10 +18,18 @@ export enum PaymentStatus {
   SETTLED = 'settled',
   FAILED = 'failed',
   EXPIRED = 'expired',
+  REFUNDED = 'refunded',
 }
 
 export enum PaymentNetwork {
   STELLAR = 'stellar',
+  POLYGON = 'polygon',
+  BASE = 'base',
+  CELO = 'celo',
+  ARBITRUM = 'arbitrum',
+  OPTIMISM = 'optimism',
+  STARKNET = 'starknet',
+  STACKS = 'stacks',
 }
 
 @Entity('payments')
@@ -63,6 +72,9 @@ export class Payment {
   stellarMemo: string;
 
   @Column({ nullable: true })
+  customerWalletAddress: string;
+
+  @Column({ nullable: true })
   txHash: string;
 
   @Column({ nullable: true })
@@ -92,6 +104,18 @@ export class Payment {
   @Column({ nullable: true })
   confirmedAt: Date;
 
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
+  refundAmountUsd: number;
+
+  @Column({ nullable: true })
+  refundReason: string;
+
+  @Column({ nullable: true })
+  refundTxHash: string;
+
+  @Column({ nullable: true })
+  refundedAt: Date;
+
   @ManyToOne(() => Settlement, { nullable: true })
   @JoinColumn({ name: 'settlementId' })
   settlement: Settlement;
@@ -104,4 +128,7 @@ export class Payment {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }
