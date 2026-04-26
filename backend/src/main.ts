@@ -10,11 +10,20 @@ import { readTelemetryConfig, shutdownTelemetry, startTelemetry } from './teleme
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
 import { SentryService } from './sentry/sentry.service';
+import { getCorrelationId } from './common/correlation-id.context';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require('../package.json') as { version: string };
 
 async function bootstrap(): Promise<void> {
   startTelemetry(readTelemetryConfig());
+
+  const correlationIdFormat = winston.format((info) => {
+    const correlationId = getCorrelationId();
+    if (typeof info.correlationId === 'undefined') {
+      info.correlationId = correlationId ?? 'N/A';
+    }
+    return info;
+  });
 
   const app = await NestFactory.create(AppModule, { rawBody: true, logger: WinstonModule.createLogger({
     level: 'silly',
@@ -22,6 +31,7 @@ async function bootstrap(): Promise<void> {
       new winston.transports.Console({
         format: winston.format.combine(
           winston.format.timestamp(),
+          correlationIdFormat(),
           winston.format.json(),
         ),
       }),
@@ -29,6 +39,7 @@ async function bootstrap(): Promise<void> {
         filename: 'logs/app.log',
         format: winston.format.combine(
           winston.format.timestamp(),
+          correlationIdFormat(),
           winston.format.json(),
         ),
       }),
@@ -76,7 +87,8 @@ async function bootstrap(): Promise<void> {
         },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-correlation-id'],
+    exposedHeaders: ['X-Correlation-ID'],
   });
 
   app.setGlobalPrefix(apiPrefix, {
