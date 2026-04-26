@@ -11,6 +11,7 @@ export enum AdminAlertType {
   STELLAR_MONITOR = 'stellar_monitor',
   SETTLEMENT_FAILURE = 'settlement_failure',
   WEBHOOK_FAILURE = 'webhook_failure',
+  BACKUP_FAILURE = 'backup_failure',
 }
 
 export enum AdminAlertStatus {

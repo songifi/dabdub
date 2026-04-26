@@ -27,6 +27,7 @@ import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { SentryModule } from './sentry/sentry.module';
 import { CronModule } from './cron/cron.module';
+import { BackupModule } from './backup/backup.module';
 import { PrometheusModule } from './prometheus/prometheus.module';
 import { AuditModule } from './audit/audit.module';
 import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
@@ -86,6 +87,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     SentryModule,
     PrometheusModule,
     CronModule,
+    BackupModule,
     EmailModule,
     AdminModule,
     AmlModule,
