@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/payment_escrow",
+    "contracts/slippage_protection",
+]
+
+[workspace.dependencies]
+soroban-sdk = { version = "22.0.0" }
