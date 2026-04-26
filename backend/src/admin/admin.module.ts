@@ -20,7 +20,7 @@ import { CacheModule } from '../cache/cache.module';
     CacheModule,
   ],
   controllers: [AdminController, CronAdminController],
-  providers: [AdminService],
+  providers: [AdminService, IpAllowlistGuard],
   exports: [AdminService],
 })
 export class AdminModule {}

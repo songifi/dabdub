@@ -22,10 +22,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { IpAllowlistGuard } from '../security/ip-allowlist.guard';
 
 @ApiTags('admin')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(IpAllowlistGuard, JwtAuthGuard, RolesGuard)
 @Roles(MerchantRole.ADMIN)
 @Controller('admin')
 export class AdminController {

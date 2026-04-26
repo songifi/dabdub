@@ -87,6 +87,7 @@ import { CacheWarmupService } from './cache/cache-warmup.service';
     SentryModule,
     PrometheusModule,
     CronModule,
+    DatabaseModule,
     EmailModule,
     AdminModule,
     AmlModule,
