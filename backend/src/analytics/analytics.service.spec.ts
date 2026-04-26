@@ -290,5 +290,88 @@ describe('AnalyticsService', () => {
       expect(settlementQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
       expect(settlementQueryBuilder.getRawOne).toHaveBeenCalledTimes(2);
     });
+
+    it('should cache merchant revenue for 5 minutes', async () => {
+      settlementQueryBuilder.getRawMany.mockResolvedValueOnce([]);
+      settlementQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ total: '0.000000' })
+        .mockResolvedValueOnce({ total: '0.000000' });
+
+      await service.getRevenue({
+        scope: 'merchant',
+        merchantId: mockMerchantId,
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-01',
+      });
+
+      expect(cache.getOrSet).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        { ttlSeconds: 300 },
+      );
+    });
+
+    it('should cache admin revenue for 10 minutes', async () => {
+      settlementQueryBuilder.getRawMany.mockResolvedValueOnce([]);
+      settlementQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ total: '0.000000' })
+        .mockResolvedValueOnce({ total: '0.000000' });
+
+      await service.getRevenue({
+        scope: 'admin',
+        period: 'daily',
+        from: '2026-04-01',
+        to: '2026-04-01',
+      });
+
+      expect(cache.getOrSet).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        { ttlSeconds: 600 },
+      );
+    });
+  });
+
+  describe('analytics cache TTL', () => {
+    it('should cache funnel for 5 minutes', async () => {
+      paymentQueryBuilder.getRawMany.mockResolvedValueOnce([]);
+
+      await service.getFunnel(mockMerchantId);
+
+      expect(cache.getOrSet).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        { ttlSeconds: 300 },
+      );
+    });
+
+    it('should cache comparison for 5 minutes', async () => {
+      paymentQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ total: '10' })
+        .mockResolvedValueOnce({ total: '5' });
+
+      await service.getComparison(mockMerchantId, 'daily');
+
+      expect(cache.getOrSet).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        { ttlSeconds: 300 },
+      );
+    });
+
+    it('should cache network breakdown for 5 minutes', async () => {
+      paymentQueryBuilder.getRawMany
+        .mockResolvedValueOnce([{ network: 'stellar', count: '1', volumeUsd: '10' }])
+        .mockResolvedValueOnce([{ network: 'stellar', date: '2026-04-01', count: '1', volumeUsd: '10' }]);
+
+      await service.getNetworkBreakdown(mockMerchantId, 'volume', 'daily');
+
+      expect(cache.getOrSet).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        { ttlSeconds: 300 },
+      );
+    });
   });
 });

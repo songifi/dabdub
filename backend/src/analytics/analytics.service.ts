@@ -8,6 +8,8 @@ import { CacheService } from '../cache/cache.service';
 type AnalyticsPeriod = 'daily' | 'monthly';
 type VolumeScope = 'merchant' | 'admin';
 type RevenueScope = 'merchant' | 'admin';
+const MERCHANT_ANALYTICS_TTL_MS = 5 * 60 * 1000;
+const ADMIN_ANALYTICS_TTL_MS = 10 * 60 * 1000;
 
 interface VolumeOptions {
   merchantId?: string;
@@ -73,7 +75,7 @@ export class AnalyticsService {
   private async getCachedData<T extends Record<string, any>>(
     key: string,
     fetchFn: () => Promise<T>,
-    ttlMs = 60_000,
+    ttlMs = MERCHANT_ANALYTICS_TTL_MS,
   ): Promise<T & { cacheHit: boolean }> {
     const { value, cacheHit } = await this.cache.getOrSet(key, fetchFn, {
       ttlSeconds: Math.max(1, Math.floor(ttlMs / 1000)),
@@ -98,6 +100,10 @@ export class AnalyticsService {
     return parseFloat((((current - previous) / previous) * 100).toFixed(2));
   }
 
+  private resolveAnalyticsTtlMs(scope: RevenueScope | VolumeScope): number {
+    return scope === 'admin' ? ADMIN_ANALYTICS_TTL_MS : MERCHANT_ANALYTICS_TTL_MS;
+  }
+
   async getVolume(options: VolumeOptions) {
     const { merchantId, period, scope, dateFrom, dateTo } = options;
     const range = this.resolveVolumeRange(period, dateFrom, dateTo);
@@ -107,7 +113,7 @@ export class AnalyticsService {
       dateRange: `${period}:${range.start.toISOString()}-${range.endExclusive.toISOString()}`,
     });
 
-    const ttlMs = scope === 'admin' ? 10 * 60 * 1000 : 5 * 60 * 1000;
+    const ttlMs = this.resolveAnalyticsTtlMs(scope);
 
     return this.getCachedValue(cacheKey,
       async () => {
@@ -170,7 +176,7 @@ export class AnalyticsService {
           conversionRate: this.pctChange(current.percentages.conversionRate, previous.percentages.conversionRate),
         },
       };
-    });
+    }, MERCHANT_ANALYTICS_TTL_MS);
   }
 
   async getComparison(merchantId: string, period: AnalyticsPeriod) {
@@ -207,7 +213,7 @@ export class AnalyticsService {
         previousPeriod: { start: prevStart, end: prevEnd, volume: prevVolume },
         growth,
       };
-    });
+    }, MERCHANT_ANALYTICS_TTL_MS);
   }
 
   async getRevenue(options: RevenueOptions) {
@@ -218,7 +224,7 @@ export class AnalyticsService {
       endpoint: 'revenue',
       dateRange: `${period}:${current.start.toISOString()}-${current.endExclusive.toISOString()}:${previous.start.toISOString()}-${previous.endExclusive.toISOString()}`,
     });
-    const ttlMs = scope === 'admin' ? 10 * 60 * 1000 : 5 * 60 * 1000;
+    const ttlMs = this.resolveAnalyticsTtlMs(scope);
 
     return this.getCachedData(cacheKey, async () => {
       const [currentRows, currentTotal, previousTotal] = await Promise.all([
@@ -330,7 +336,7 @@ export class AnalyticsService {
       networks.sort((a, b) => (sortBy === 'count' ? b.count - a.count : b.volumeUsd - a.volumeUsd));
 
       return { networks, totals };
-    });
+    }, MERCHANT_ANALYTICS_TTL_MS);
   }
 
   private async getCachedValue<T>(key: string, fetchFn: () => Promise<T>, ttlMs = 60_000): Promise<T> {

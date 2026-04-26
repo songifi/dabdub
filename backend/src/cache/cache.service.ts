@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
-import { gzipSync, gunzipSync } from 'node:zlib';
+import { compress, decompress } from 'lz4js';
 
 interface CacheEntry<T> {
   value: T;
@@ -9,7 +9,7 @@ interface CacheEntry<T> {
 
 type CacheEnvelope =
   | { v: 1; encoding: 'json'; payload: string }
-  | { v: 1; encoding: 'gzip+base64'; payload: string };
+  | { v: 1; encoding: 'lz4+base64'; payload: string };
 
 @Injectable()
 export class CacheService implements OnModuleDestroy {
@@ -67,8 +67,8 @@ export class CacheService implements OnModuleDestroy {
       bytes >= this.compressThresholdBytes
         ? {
             v: 1,
-            encoding: 'gzip+base64',
-            payload: gzipSync(Buffer.from(json, 'utf8')).toString('base64'),
+            encoding: 'lz4+base64',
+            payload: Buffer.from(compress(Buffer.from(json, 'utf8'))).toString('base64'),
           }
         : { v: 1, encoding: 'json', payload: json };
     return JSON.stringify(envelope);
@@ -84,9 +84,9 @@ export class CacheService implements OnModuleDestroy {
       if (envelope.encoding === 'json') {
         return JSON.parse(envelope.payload) as T;
       }
-      if (envelope.encoding === 'gzip+base64') {
+      if (envelope.encoding === 'lz4+base64') {
         const buf = Buffer.from(envelope.payload, 'base64');
-        const json = gunzipSync(buf).toString('utf8');
+        const json = Buffer.from(decompress(buf)).toString('utf8');
         return JSON.parse(json) as T;
       }
       return undefined;

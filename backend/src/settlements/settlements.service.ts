@@ -40,6 +40,11 @@ export class SettlementsService {
     private notificationPrefs: NotificationPrefsService,
   ) {}
 
+  private async invalidateAnalyticsForMerchant(merchantId: string): Promise<void> {
+    await this.cache.delPattern(`analytics:${merchantId}:*`);
+    await this.cache.delPattern('analytics:admin:*');
+  }
+
   async initiateSettlement(payment: Payment): Promise<void> {
     const feeRate = 0.015;
     const feeUsd = payment.amountUsd * feeRate;
@@ -111,9 +116,8 @@ export class SettlementsService {
       payment.status = PaymentStatus.SETTLED;
       await this.paymentsRepo.save(payment);
 
-      // Invalidate analytics caches impacted by new settled payment.
-      await this.cache.delPattern(`analytics:${settlement.merchantId}:*`);
-      await this.cache.delPattern('analytics:admin:*');
+      // Invalidate analytics caches impacted by payment.settled.
+      await this.invalidateAnalyticsForMerchant(settlement.merchantId);
 
       await this.webhooks.dispatch(settlement.merchantId, 'payment.settled', {
         paymentId: payment.id,
@@ -203,9 +207,8 @@ export class SettlementsService {
         payment.status = PaymentStatus.SETTLED;
         await this.paymentsRepo.save(payment);
 
-        // Invalidate analytics caches impacted by new settled payment.
-        await this.cache.delPattern(`analytics:${settlement.merchantId}:*`);
-        await this.cache.delPattern('analytics:admin:*');
+        // Invalidate analytics caches impacted by payment.settled.
+        await this.invalidateAnalyticsForMerchant(settlement.merchantId);
 
         await this.webhooks.dispatch(settlement.merchantId, 'payment.settled', {
           paymentId: payment.id,
