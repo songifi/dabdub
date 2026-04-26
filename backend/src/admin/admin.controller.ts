@@ -80,6 +80,12 @@ export class AdminController {
     );
   }
 
+  @Post('cache/flush')
+  @ApiOperation({ summary: 'Flush application caches (analytics, exchange rates, fee config)' })
+  flushCache() {
+    return this.adminService.flushCache();
+  }
+
   // ── Geographic Distribution Analytics (#714) ───────────────────────────────
 
   @Get('analytics/geography')

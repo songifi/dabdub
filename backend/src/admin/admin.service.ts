@@ -15,9 +15,13 @@ import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.en
 import { AuditLog } from './entities/audit-log.entity';
 import { FilterService } from '../common/filter.service';
 import { PaginationDto, PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class AdminService {
+  private readonly globalFeeConfigCacheKey = 'fee-config:platform:global';
+  private readonly globalFeeConfigTtlSeconds = 300;
+
   constructor(
     @InjectRepository(Merchant)
     private merchantsRepo: Repository<Merchant>,
@@ -30,6 +34,7 @@ export class AdminService {
     @InjectRepository(AuditLog)
     private readonly auditLogRepo: Repository<AuditLog>,
     private readonly filterService: FilterService,
+    private readonly cache: CacheService,
   ) {}
 
   async findAllMerchants(page = 1, limit = 20) {
@@ -105,7 +110,12 @@ export class AdminService {
   // ── Fee Management ─────────────────────────────────────────────────────────
 
   async getGlobalFees(): Promise<FeeConfig[]> {
-    return this.feeConfigRepo.find({ order: { feeType: 'ASC' } });
+    const { value } = await this.cache.getOrSet<FeeConfig[]>(
+      this.globalFeeConfigCacheKey,
+      () => this.feeConfigRepo.find({ order: { feeType: 'ASC' } }),
+      { ttlSeconds: this.globalFeeConfigTtlSeconds },
+    );
+    return value;
   }
 
   async updateGlobalFee(
@@ -122,6 +132,7 @@ export class AdminService {
     const previousValue = feeConfig.baseFeeRate;
     feeConfig.baseFeeRate = newRate;
     const updated = await this.feeConfigRepo.save(feeConfig);
+    await this.cache.del(this.globalFeeConfigCacheKey);
 
     await this.recordFeeHistory({
       feeType,
@@ -134,6 +145,24 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  async flushCache(): Promise<{
+    flushed: true;
+    deletedKeys: number;
+    patterns: string[];
+    flushedAt: string;
+  }> {
+    const patterns = ['analytics:*', 'exchange-rate:*', 'exchange_rate:*', 'rates:*'];
+    const deletedByPattern = await Promise.all(patterns.map((pattern) => this.cache.delPattern(pattern)));
+    await this.cache.del(this.globalFeeConfigCacheKey);
+
+    return {
+      flushed: true,
+      deletedKeys: deletedByPattern.reduce((total, value) => total + value, 0) + 1,
+      patterns,
+      flushedAt: new Date().toISOString(),
+    };
   }
 
   async recordFeeHistory(dto: {

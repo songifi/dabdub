@@ -9,9 +9,10 @@ import { FeeConfig } from '../fee-config/entities/fee-config.entity';
 import { FeeHistory } from '../fee-config/entities/fee-history.entity';
 import { CronModule } from '../cron/cron.module';
 import { AuditLog } from './entities/audit-log.entity';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Merchant, Payment, FeeConfig, FeeHistory, AuditLog]), CronModule],
+  imports: [TypeOrmModule.forFeature([Merchant, Payment, FeeConfig, FeeHistory, AuditLog]), CronModule, CacheModule],
   controllers: [AdminController, CronAdminController],
   providers: [AdminService],
   exports: [AdminService],

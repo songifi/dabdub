@@ -1,16 +1,22 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class StellarService implements OnModuleInit {
   private readonly logger = new Logger(StellarService.name);
+  private readonly exchangeRateCacheKey = 'exchange-rate:xlm-usd';
+  private readonly exchangeRateTtlSeconds = 30;
   private server: StellarSdk.Horizon.Server;
   private keypair: StellarSdk.Keypair;
   private networkPassphrase: string;
   private usdcAsset: StellarSdk.Asset;
 
-  constructor(private config: ConfigService) {}
+  constructor(
+    private config: ConfigService,
+    private readonly cache: CacheService,
+  ) {}
 
   onModuleInit() {
     const network = this.config.get('STELLAR_NETWORK', 'TESTNET');
@@ -50,18 +56,26 @@ export class StellarService implements OnModuleInit {
   }
 
   async getXlmUsdRate(): Promise<number> {
-    try {
-      const orderbook = await this.server
-        .orderbook(StellarSdk.Asset.native(), this.usdcAsset)
-        .call();
-      const bestAsk = orderbook.asks[0];
-      if (bestAsk) return parseFloat(bestAsk.price);
+    const { value } = await this.cache.getOrSet<number>(
+      this.exchangeRateCacheKey,
+      async () => {
+        try {
+          const orderbook = await this.server
+            .orderbook(StellarSdk.Asset.native(), this.usdcAsset)
+            .call();
+          const bestAsk = orderbook.asks[0];
+          if (bestAsk) return parseFloat(bestAsk.price);
 
-      return 0.1;
-    } catch (err) {
-      this.logger.warn('Failed to fetch XLM/USD rate, using fallback');
-      return 0.1;
-    }
+          return 0.1;
+        } catch (err) {
+          this.logger.warn('Failed to fetch XLM/USD rate, using fallback');
+          return 0.1;
+        }
+      },
+      { ttlSeconds: this.exchangeRateTtlSeconds },
+    );
+
+    return value;
   }
 
   async getAccountTransactions(
