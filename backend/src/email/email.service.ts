@@ -45,7 +45,7 @@ export class EmailService {
       { logId: log.id, to, templateAlias, mergeData },
       {
         attempts: 2,          // 1 initial attempt + 1 retry
-        backoff: { type: 'fixed', delay: 30_000 },
+        backoff: { type: 'fixed', delay: 300_000 }, // 5 minutes
         removeOnComplete: true,
         removeOnFail: false,
       },
