@@ -1,4 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { QUEUE_NAMES, DEFAULT_QUEUE_JOB } from '../queues/queue.constants';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindManyOptions, Between } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -38,6 +41,8 @@ export class SettlementsService {
     private emailService: EmailService,
     private merchantsService: MerchantsService,
     private notificationPrefs: NotificationPrefsService,
+    @InjectQueue(QUEUE_NAMES.settlement)
+    private settlementQueue: Queue,
   ) {}
 
   private async invalidateAnalyticsForMerchant(merchantId: string): Promise<void> {
@@ -75,7 +80,11 @@ export class SettlementsService {
 
     // Only execute transfer if no approval required
     if (!settlement.requiresApproval) {
-      await this.executeFiatTransfer(saved, payment);
+      this.logger.debug(`Enqueuing settlement job for ${saved.id}`);
+      await this.settlementQueue.add(DEFAULT_QUEUE_JOB, {
+        settlementId: saved.id,
+        paymentId: payment.id,
+      });
     } else {
       // Alert admin about large settlement requiring approval
       await this.adminAlerts.raise({
@@ -92,7 +101,7 @@ export class SettlementsService {
     }
   }
 
-  private async executeFiatTransfer(settlement: Settlement, payment: Payment): Promise<void> {
+  async executeFiatTransfer(settlement: Settlement, payment: Payment): Promise<void> {
     const partnerUrl = this.config.get('PARTNER_API_URL');
     const partnerKey = this.config.get('PARTNER_API_KEY');
 
@@ -351,7 +360,10 @@ export class SettlementsService {
 
     // Retry the fiat transfer
     if (settlement.payments.length > 0) {
-      await this.executeFiatTransfer(settlement, settlement.payments[0]);
+      await this.settlementQueue.add(DEFAULT_QUEUE_JOB, {
+        settlementId: settlement.id,
+        paymentId: settlement.payments[0].id,
+      });
     }
 
     this.logger.log(`Settlement ${id} retry initiated by admin`);
@@ -390,7 +402,10 @@ export class SettlementsService {
 
     // Execute the fiat transfer
     if (settlement.payments.length > 0) {
-      await this.executeFiatTransfer(settlement, settlement.payments[0]);
+      await this.settlementQueue.add(DEFAULT_QUEUE_JOB, {
+        settlementId: settlement.id,
+        paymentId: settlement.payments[0].id,
+      });
     }
 
     this.logger.log(`Large settlement ${id} approved and processed by admin`);
