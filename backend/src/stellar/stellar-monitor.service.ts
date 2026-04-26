@@ -8,6 +8,7 @@ import { AdminAlertService } from '../alerts/admin-alert.service';
 import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { StellarService } from './stellar.service';
+import { SorobanMonitorService } from './soroban-monitor.service';
 import { SettlementsService } from '../settlements/settlements.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { EmailService } from '../email/email.service';
@@ -31,6 +32,7 @@ export class StellarMonitorService implements OnModuleInit {
     private emailService: EmailService,
     private config: ConfigService,
     private notificationPrefs: NotificationPrefsService,
+    private sorobanMonitor: SorobanMonitorService,
     @InjectQueue(QUEUE_NAMES.stellarMonitor) private monitorQueue: Queue,
   ) {}
 
@@ -97,6 +99,9 @@ export class StellarMonitorService implements OnModuleInit {
     }
 
     await this.expireOldPayments();
+
+    // Soroban fallback: poll USDC token contract transfer events
+    await this.sorobanMonitor.pollTransferEvents();
   }
 
   private async confirmPayment(
