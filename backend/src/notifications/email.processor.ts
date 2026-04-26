@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { Processor, Process } from "@nestjs/bull";
+import { Processor, Process, OnQueueFailed } from "@nestjs/bull";
 import { Job } from "bull";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -63,6 +63,25 @@ export class EmailProcessor {
       );
       throw error;
     }
+  }
+
+  @OnQueueFailed()
+  async handleExhausted(job: Job<EmailJobPayload>, err: Error): Promise<void> {
+    const isExhausted = job.attemptsMade >= (job.opts.attempts ?? 2);
+    if (!isExhausted) return;
+
+    this.logger.error(
+      `Email permanently failed for ${job.data.recipient} after ${job.attemptsMade} attempt(s): ${err.message}`,
+      err.stack,
+    );
+
+    await this.logEmail(
+      job.data.recipient,
+      job.data.subject,
+      job.attemptsMade,
+      'failure',
+      `EXHAUSTED: ${err.message}`,
+    );
   }
 
   private async sendEmail(payload: EmailJobPayload) {

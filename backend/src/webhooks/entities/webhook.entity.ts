@@ -6,17 +6,16 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-} from 'typeorm';
-import { Exclude } from 'class-transformer';
-import { Merchant } from '../../merchants/entities/merchant.entity';
+} from "typeorm";
+import { Merchant } from "../../merchants/entities/merchant.entity";
 
-@Entity('webhooks')
+@Entity("webhooks")
 export class Webhook {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
   @ManyToOne(() => Merchant, (merchant) => merchant.webhooks)
-  @JoinColumn({ name: 'merchantId' })
+  @JoinColumn({ name: "merchantId" })
   merchant: Merchant;
 
   @Column()
@@ -25,10 +24,9 @@ export class Webhook {
   @Column()
   url: string;
 
-  @Column({ type: 'simple-array' })
+  @Column({ type: "simple-array" })
   events: string[];
 
-  @Exclude()
   @Column({ nullable: true })
   secret: string;
 
