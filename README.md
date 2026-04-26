@@ -163,29 +163,8 @@ Cheese is a B2B2C payment settlement platform that enables businesses to accept 
 - Node.js 18+ and npm/yarn/pnpm
 - PostgreSQL 14+
 - Redis 6+ (optional, for caching)
-- Docker & Docker Compose (recommended)
 
-### Quick Start with Docker
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/cryptosettle.git
-cd cryptosettle
-
-# Copy environment variables
-cp .env.example .env
-
-# Edit .env with your configurations
-nano .env
-
-# Start all services with Docker Compose
-docker-compose up -d
-
-# Backend will be available at http://localhost:3000
-# Frontend will be available at http://localhost:3001
-```
-
-### Manual Setup
+### Setup
 
 #### Backend Setup
 
@@ -381,34 +360,3 @@ vercel --prod
 
 
 Built with ❤️ by the CheesePay team
-
-## Contract Development
-
-### Prerequisites
-
-```bash
-# Rust + wasm target
-rustup target add wasm32v1-none
-
-# Stellar CLI (v25.2.0)
-cargo install --locked stellar-cli
-```
-
-### Run tests
-
-```bash
-cargo test
-```
-
-### Build WASM
-
-```bash
-cargo wasm-build
-```
-
-### Environment
-
-```bash
-cp .env.example .env
-# fill in ADMIN_SECRET_KEY and USDC_SAC_ADDRESS
-```

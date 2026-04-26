@@ -4,6 +4,7 @@ import {
   Param,
   Patch,
   Req,
+  Body,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -34,5 +35,24 @@ export class MerchantsAdminController {
     }
 
     return this.merchantsService.verifyMerchant(id);
+  }
+
+  @Patch(':id/fee')
+  @ApiOperation({ summary: 'Set custom fee rate for a merchant' })
+  @ApiResponse({ status: 200, type: Merchant })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Admin only' })
+  @ApiResponse({ status: 404, description: 'Merchant not found' })
+  async setMerchantFee(
+    @Param('id') id: string,
+    @Body('customFeeRate') customFeeRate: number | null,
+    @Req() req: Request,
+  ): Promise<Merchant> {
+    const user = (req as Request & { user?: { isAdmin?: boolean } }).user;
+    if (!user?.isAdmin) {
+      throw new ForbiddenException('Admin only');
+    }
+
+    return this.merchantsService.updateMerchantFee(id, customFeeRate);
   }
 }

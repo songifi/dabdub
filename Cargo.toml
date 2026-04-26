@@ -1,9 +1,0 @@
-[workspace]
-resolver = "2"
-members = ["contracts/paylink", "contracts/cheese_pay"]
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"

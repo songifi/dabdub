@@ -1,0 +1,29 @@
+apiVersion: 1
+
+rules:
+  - orgId: 1
+    name: BackendLogsAlerts
+    folder: "Backend Alerts"
+    interval: 1m
+    rules:
+      - uid: "error-rate-spike"
+        title: "High Error Log Rate"
+        condition: "A"
+        data:
+          - refId: "A"
+            queryType: "range"
+            datasourceUid: "Loki"
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              refId: "A"
+              expr: 'sum(rate({job="backend-logs", level="error"}[1m])) * 60 > 10'
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Error rate spike detected (> 10/min)"
+          description: "The application is emitting more than 10 error logs per minute. Currently {{ $values.A.Value }} errors/min."
+        labels:
+          severity: "critical"

@@ -1,20 +1,16 @@
-import { Entity, Column } from 'typeorm';
-import { BaseEntity } from '../../common/entities/base.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('rate_snapshots')
-export class RateSnapshot extends BaseEntity {
-  @Column({ type: 'varchar', length: 10 })
-  base!: string;
+export class RateSnapshot {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ type: 'varchar', length: 10 })
-  quote!: string;
+  @Column()
+  pair: string;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8 })
-  rate!: string;
+  @Column('float')
+  rate: number;
 
-  @Column({ type: 'varchar', length: 50 })
-  source!: string;
-
-  @Column({ name: 'fetched_at', type: 'timestamptz' })
-  fetchedAt!: Date;
+  @CreateDateColumn()
+  createdAt: Date;
 }

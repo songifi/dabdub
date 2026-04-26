@@ -1,18 +1,10 @@
 import { Module } from '@nestjs/common';
-import { WsModule } from '../ws/ws.module';
-import { QueueAdminNotificationService } from './queue.admin-notification';
-import { QueueBoardService } from './queue.board';
-import { QueueHealthIndicator } from './queue.health';
-import { QueueRegistryService } from './queue.registry';
+import { ConfigModule } from '@nestjs/config';
+import { QueueConfigService } from '../config/queue-config.service';
 
 @Module({
-  imports: [WsModule],
-  providers: [
-    QueueAdminNotificationService,
-    QueueRegistryService,
-    QueueBoardService,
-    QueueHealthIndicator,
-  ],
-  exports: [QueueBoardService, QueueHealthIndicator, QueueRegistryService],
+  imports: [ConfigModule],
+  providers: [QueueConfigService],
+  exports: [QueueConfigService],
 })
-export class QueueModule {}
+export class QueueConfigModule {}

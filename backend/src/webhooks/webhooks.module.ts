@@ -1,21 +1,26 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
-import { WebhookSubscription } from './entities/webhook-subscription.entity';
-import { WebhookDelivery } from './entities/webhook-delivery.entity';
-import { WebhookService, WEBHOOKS_QUEUE } from './webhook.service';
-import { WebhookProcessor } from './webhook.processor';
+import { ConfigModule } from '@nestjs/config';
+import { AdminAlertModule } from '../alerts/admin-alert.module';
+import { WebhooksService } from './webhooks.service';
 import { WebhooksController } from './webhooks.controller';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { Webhook } from './entities/webhook.entity';
+import { WebhookDeliveryLog } from './entities/webhook-delivery-log.entity';
+import { WebhookDeliveryProcessor } from './webhook-delivery.processor';
+import { WebhookDeliveryService } from './webhook-delivery.service';
+import { QueueConfigService } from '../config/queue-config.service';
+import { WEBHOOK_DELIVERY_QUEUE } from '../queue/queue.constants';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([WebhookSubscription, WebhookDelivery]),
-    BullModule.registerQueue({ name: WEBHOOKS_QUEUE }),
-    NotificationsModule,
+    ConfigModule,
+    TypeOrmModule.forFeature([Webhook, WebhookDeliveryLog]),
+    BullModule.registerQueue({ name: WEBHOOK_DELIVERY_QUEUE }),
+    AdminAlertModule,
   ],
-  providers: [WebhookService, WebhookProcessor],
   controllers: [WebhooksController],
-  exports: [WebhookService],
+  providers: [WebhooksService, WebhookDeliveryProcessor, WebhookDeliveryService, QueueConfigService],
+  exports: [WebhooksService, WebhookDeliveryService],
 })
 export class WebhooksModule {}

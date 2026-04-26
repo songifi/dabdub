@@ -1,125 +1,76 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, UseGuards, Request } from '@nestjs/common';
 import {
+  ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
+  ApiOkResponse,
+  ApiUnauthorizedResponse,
+  ApiBadRequestResponse,
   ApiResponse,
-  ApiTags,
 } from '@nestjs/swagger';
-import { Request } from 'express';
-import { Public } from '../auth/decorators/public.decorator';
-import { User } from '../users/entities/user.entity';
-import { MerchantPublicProfileDto } from './dto/merchant-public-profile.dto';
-import { PosQrQueryDto } from './dto/pos-qr-query.dto';
-import { PosQrResponseDto } from './dto/pos-qr-response.dto';
-import { RegisterMerchantDto } from './dto/register-merchant.dto';
-import { UpdateMerchantDto } from './dto/update-merchant.dto';
-import { Merchant } from './entities/merchant.entity';
 import { MerchantsService } from './merchants.service';
-import { MerchantPosService } from './merchant-pos.service';
-
-type AuthenticatedRequest = Request & { user: User };
+import { UpdateMerchantDto } from './dto/create-merchant.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { NotificationPrefsService } from '../notifications/notification-prefs.service';
+import { UpdateNotificationPrefsDto, NotificationPrefsResponseDto } from '../notifications/dto/notification-prefs.dto';
 
 @ApiTags('merchants')
-@ApiBearerAuth()
-@Controller({ path: 'merchants', version: '1' })
+@ApiBearerAuth('bearer')
+@UseGuards(JwtAuthGuard)
+@Controller('merchants')
 export class MerchantsController {
   constructor(
     private readonly merchantsService: MerchantsService,
-    private readonly merchantPosService: MerchantPosService,
+    private readonly notificationPrefsService: NotificationPrefsService,
   ) {}
 
-
-  @Post('register')
-  @ApiOperation({
-    summary: 'Create a merchant profile for the authenticated user',
-  })
-  @ApiResponse({ status: 201, type: Merchant })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 409, description: 'Merchant profile already exists' })
-  register(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: RegisterMerchantDto,
-  ): Promise<Merchant> {
-    return this.merchantsService.register(req.user, dto);
+  @Get('me')
+  @ApiOperation({ summary: 'Get merchant profile' })
+  @ApiOkResponse({ description: 'Merchant profile' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  getProfile(@Request() req: { user: { merchantId: string } }) {
+    return this.merchantsService.getProfile(req.user.merchantId);
   }
 
-@Get('me')
-  @ApiOperation({
-    summary: 'Get current merchant profile (merchant accounts only)',
-  })
-  @ApiResponse({ status: 200, type: Merchant })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Merchant account required' })
-  getMe(@Req() req: AuthenticatedRequest): Promise<Merchant> {
-    return this.merchantsService.getMe(req.user);
+  @Patch('me')
+  @ApiOperation({ summary: 'Update merchant profile' })
+  @ApiOkResponse({ description: 'Updated merchant' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiBadRequestResponse({ description: 'Validation failed' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  update(@Request() req: { user: { merchantId: string } }, @Body() dto: UpdateMerchantDto) {
+    return this.merchantsService.update(req.user.merchantId, dto);
   }
 
-  @Get('me/pos-qr')
-  @ApiOperation({ 
-    summary: 'Get merchant POS QR code. Persistent if no amount/note, one-time otherwise.',
-    description: 'Persistent QR caches 24h in Redis pos:qr:{merchantId}. One-time for specific amount/note.'
-  })
-  @ApiQuery({ name: 'amount', type: Number, required: false })
-  @ApiQuery({ name: 'note', required: false })
-  @ApiResponse({ status: 200, type: PosQrResponseDto })
-  @ApiResponse({ status: 403, description: 'Merchant account required' })
-  async getPosQr(
-    @Req() req: AuthenticatedRequest,
-    @Query() query: PosQrQueryDto,
-  ): Promise<PosQrResponseDto> {
-    const merchant = await this.merchantsService.getMe(req.user);
-    if (query.amount) {
-      return this.merchantPosService.getPosQrWithAmount(merchant.id, query.amount, query.note);
-    }
-    return this.merchantPosService.getPosQr(req.user);
+  @Post('api-keys')
+  @ApiOperation({ summary: 'Generate API key' })
+  @ApiOkResponse({ description: 'New API key payload' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  generateApiKey(@Request() req: { user: { merchantId: string } }) {
+    return this.merchantsService.generateApiKey(req.user.merchantId);
   }
 
-@Patch('me')
-  @ApiOperation({ summary: 'Update current merchant profile' })
-  @ApiResponse({ status: 200, type: Merchant })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Merchant account required' })
-  async updateMe(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: UpdateMerchantDto,
-  ): Promise<Merchant> {
-    const updated = await this.merchantsService.updateMe(req.user, dto);
-    // Invalidate POS QR cache on update (username change etc.)
-    const merchant = await this.merchantsService.getMe(req.user);
-    await this.merchantPosService.regenerate(merchant.id);
-    return updated;
+  @Get('me/notification-prefs')
+  @ApiOperation({ summary: 'Get notification preferences' })
+  @ApiOkResponse({ type: NotificationPrefsResponseDto, description: 'Current notification preferences per channel and event' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  getNotificationPrefs(
+    @Request() req: { user: { merchantId: string } },
+  ): Promise<NotificationPrefsResponseDto> {
+    return this.notificationPrefsService.getPrefs(req.user.merchantId);
   }
 
-  @Post('me/pos-qr/regenerate')
-  @ApiOperation({ summary: 'Force regenerate persistent POS QR (invalidate Redis cache)' })
-  @ApiResponse({ status: 200, description: 'Cache invalidated' })
-  @ApiResponse({ status: 403, description: 'Merchant account required' })
-  async regeneratePosQr(@Req() req: AuthenticatedRequest): Promise<{ success: true }> {
-    const merchant = await this.merchantsService.getMe(req.user);
-    await this.merchantPosService.regenerate(merchant.id);
-    return { success: true };
-  }
-
-@Public()
-  @Get(':username')
-  @ApiOperation({ summary: 'Public merchant profile for pay pages' })
-  @ApiResponse({ status: 200, type: MerchantPublicProfileDto })
-  @ApiResponse({ status: 404, description: 'Merchant not found' })
-  getPublicByUsername(
-    @Param('username') username: string,
-  ): Promise<MerchantPublicProfileDto> {
-    return this.merchantsService.getPublicByUsername(username);
-  }
-
-  @Public()
-  @Get(':username/pay')
-  @ApiOperation({ summary: 'Public merchant data for QR scan landing page' })
-  @ApiResponse({ status: 200, type: MerchantPublicProfileDto })
-  @ApiResponse({ status: 404, description: 'Merchant not found' })
-  getPayPage(
-    @Param('username') username: string,
-  ): Promise<MerchantPublicProfileDto> {
-    return this.merchantsService.getPublicByUsername(username);
+  @Patch('me/notification-prefs')
+  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiOkResponse({ type: NotificationPrefsResponseDto, description: 'Updated notification preferences' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiBadRequestResponse({ description: 'Validation failed or attempted to disable in_app channel' })
+  updateNotificationPrefs(
+    @Request() req: { user: { merchantId: string } },
+    @Body() dto: UpdateNotificationPrefsDto,
+  ): Promise<NotificationPrefsResponseDto> {
+    return this.notificationPrefsService.updatePrefs(req.user.merchantId, dto);
   }
 }

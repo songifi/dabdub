@@ -62,4 +62,14 @@ export class UpdateMerchantDto {
   @IsNumber()
   @Min(0)
   threshold?: number;
+
+  @ApiPropertyOptional({
+    description: 'Custom fee rate override (e.g. 0.015 = 1.5%). Null to use global default.',
+    minimum: 0,
+    maximum: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  customFeeRate?: number;
 }

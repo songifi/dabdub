@@ -1,14 +1,30 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { stellarConfig } from '../config/stellar.config';
+import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminAlertModule } from '../alerts/admin-alert.module';
 import { StellarService } from './stellar.service';
-import { StellarAssetService } from './stellar-asset.service';
-import { StellarAdminController } from './stellar-admin.controller';
+import { StellarMonitorService } from './stellar-monitor.service';
+import { SorobanMonitorService } from './soroban-monitor.service';
+import { Payment } from '../payments/entities/payment.entity';
+import { SettlementsModule } from '../settlements/settlements.module';
+import { WebhooksModule } from '../webhooks/webhooks.module';
+import { QUEUE_NAMES } from '../queues/queue.constants';
+import { EmailModule } from '../email/email.module';
+import { MerchantsModule } from '../merchants/merchants.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
-  imports: [ConfigModule.forFeature(stellarConfig)],
-  providers: [StellarService, StellarAssetService],
-  controllers: [StellarAdminController],
-  exports: [StellarService, StellarAssetService],
+  imports: [
+    TypeOrmModule.forFeature([Payment]),
+    AdminAlertModule,
+    forwardRef(() => SettlementsModule),
+    WebhooksModule,
+    EmailModule,
+    MerchantsModule,
+    CacheModule,
+    BullModule.registerQueue({ name: QUEUE_NAMES.stellarMonitor }),
+  ],
+  providers: [StellarService, StellarMonitorService, SorobanMonitorService],
+  exports: [StellarService, StellarMonitorService, SorobanMonitorService],
 })
 export class StellarModule {}

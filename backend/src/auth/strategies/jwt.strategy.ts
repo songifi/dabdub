@@ -1,52 +1,58 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import type { ConfigType } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { jwtConfig } from '../../config/jwt.config';
-import { User } from '../../users/entities/user.entity';
-import { Admin } from '../../admin/entities/admin.entity';
-import type { JwtPayload } from '../auth.service';
-
-interface ExtendedJwtPayload extends JwtPayload {
-  isAdmin?: boolean;
-}
+import { Merchant } from '../../merchants/entities/merchant.entity';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    @Inject(jwtConfig.KEY)
-    jwt: ConfigType<typeof jwtConfig>,
-
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
-
-    @InjectRepository(Admin)
-    private readonly adminRepo: Repository<Admin>,
+    config: ConfigService,
+    @InjectRepository(Merchant)
+    private readonly merchantsRepo: Repository<Merchant>,
+    private readonly cacheService: CacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwt.accessSecret,
+      secretOrKey: config.get('JWT_SECRET', 'fallback-secret'),
     });
   }
 
-  async validate(payload: ExtendedJwtPayload): Promise<User | Admin> {
-    if (payload.isAdmin) {
-      const admin = await this.adminRepo.findOne({
-        where: { id: payload.sub },
-      });
-      if (!admin) {
-        throw new Error('Unauthorized');
-      }
-      return admin;
+  async validate(payload: any) {
+    const jti: string | undefined = payload.jti ?? payload.sub;
+
+    // Blacklist check (logout invalidation)
+    if (jti) {
+      const blacklisted = await this.cacheService.get<boolean>(`session:blacklist:${jti}`);
+      if (blacklisted) throw new UnauthorizedException('Session revoked');
     }
 
-    const user = await this.userRepo.findOne({ where: { id: payload.sub } });
-    if (!user || !user.isActive) {
-      throw new Error('Unauthorized');
+    // Cache hit
+    if (jti) {
+      const cached = await this.cacheService.get<{ merchantId: string; email: string; role: string }>(
+        `session:${jti}`,
+      );
+      if (cached) return cached;
     }
-    return user;
+
+    // DB fallback
+    const merchant = await this.merchantsRepo.findOne({ where: { id: payload.sub } });
+    if (!merchant) throw new UnauthorizedException('Merchant not found');
+
+    const result = { merchantId: merchant.id, email: merchant.email, role: merchant.role };
+
+    // Cache with remaining token TTL
+    if (jti && payload.exp) {
+      const ttlSeconds = Math.max(Math.floor(payload.exp - Date.now() / 1000), 0);
+      if (ttlSeconds > 0) {
+        await this.cacheService.set(`session:${jti}`, result, { ttlSeconds });
+      }
+    }
+
+    return result;
   }
 }

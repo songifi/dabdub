@@ -1,150 +1,238 @@
 import {
   Controller,
   Get,
-  Patch,
   Post,
-  Param,
+  Patch,
+  Delete,
   Body,
+  Param,
   Query,
   Req,
   UseGuards,
-  UseInterceptors,
+  Headers,
+  Res,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger';
+import { QueryAdminPaymentsDto } from './dto/query-admin-payments.dto';
+import { Request, Response } from 'express';
 import { AdminService } from './admin.service';
-import { ReceiptService } from '../receipt/receipt.service';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { AdminRole } from './entities/admin.entity';
-import { Request } from 'express';
-import { AuditInterceptor, Audit } from '../audit/audit.interceptor';
-import { ReferralAnalyticsService } from '../referrals/referral-analytics.service';
-import { FunnelStatsDto, TopReferrersDto, CohortComparisonDto, RewardSpendDto, UserReferralStatsDto } from '../referrals/dto/referral-analytics.dto';
-import { OffRampService } from '../offramp/offramp.service';
-import { AdminOffRampQueryDto, OffRampResponseDto } from '../offramp/dto/offramp.dto';
+import { RatesService } from '../rates/rates.service';
+import { MerchantStatus, MerchantRole } from '../merchants/entities/merchant.entity';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
-@UseGuards(RolesGuard)
-@UseInterceptors(AuditInterceptor)
-@Controller({ path: 'admin', version: '1' })
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(MerchantRole.ADMIN)
+@Controller('admin')
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly receiptService: ReceiptService,
-    private readonly referralAnalyticsService: ReferralAnalyticsService,
-    private readonly offRampService: OffRampService,
+    private readonly ratesService: RatesService,
   ) {}
 
-  @Get('users')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'List all users with pagination and filtering' })
-  async listUsers(@Query() query: any) {
-    return this.adminService.findAllUsers(query);
+  @Get('merchants')
+  @ApiOperation({ summary: 'List all merchants' })
+  findAllMerchants(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.adminService.findAllMerchants(+page, +limit);
   }
 
-  @Get('referrals/analytics')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Referral funnel stats + top referrers + reward spend' })
-  async getReferralAnalytics(): Promise<FunnelStatsDto> {
-    return this.referralAnalyticsService.getFunnelStats();
+  @Get('merchants/:id')
+  @ApiOperation({ summary: 'Get merchant details' })
+  findOneMerchant(@Param('id') id: string) {
+    return this.adminService.findOneMerchant(id);
   }
 
-  @Get('referrals/cohort')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Referred vs organic cohort comparison' })
-  async getReferralCohort(): Promise<CohortComparisonDto> {
-    return this.referralAnalyticsService.getCohortComparison();
+  @Patch('merchants/:id/status')
+  @ApiOperation({ summary: 'Update merchant status' })
+  updateStatus(@Param('id') id: string, @Body('status') status: MerchantStatus) {
+    return this.adminService.updateMerchantStatus(id, status);
   }
 
-  @Get('referrals/users/:userId')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Individual user referral performance' })
-  async getUserReferralStats(@Param('userId') userId: string): Promise<UserReferralStatsDto> {
-    return this.referralAnalyticsService.getUserReferralStats(userId);
+  @Patch('merchants/bulk/status')
+  @ApiOperation({ summary: 'Bulk update merchant status' })
+  bulkUpdateStatus(@Body('ids') ids: string[], @Body('status') status: MerchantStatus) {
+    return this.adminService.bulkUpdateMerchantStatus(ids, status);
   }
 
-  @Get('users/:id')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Get full user profile' })
-  async getUserProfile(@Param('id') id: string) {
-    return this.adminService.findUserById(id);
+  @Get('stats')
+  @ApiOperation({ summary: 'Get global stats' })
+  getStats() {
+    return this.adminService.getGlobalStats();
   }
 
-  @Patch('users/:id/freeze')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @Audit({ action: 'user.freeze', resourceType: 'user', resourceIdParam: 'id' })
-  @ApiOperation({ summary: 'Freeze user account' })
-  async freezeUser(
+  @Get('fees')
+  @ApiOperation({ summary: 'List all global fee configurations' })
+  getFees() {
+    return this.adminService.getGlobalFees();
+  }
+
+  @Patch('fees')
+  @ApiOperation({ summary: 'Update a global fee rate' })
+  updateFee(
+    @Body() dto: { feeType: string; newRate: string; reason?: string },
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.adminService.updateGlobalFee(
+      dto.feeType as any,
+      dto.newRate,
+      req.user.id,
+      dto.reason,
+    );
+  }
+
+  // ── Cache Management ──────────────────────────────────────────────────────
+
+  @Post('cache/rates/refresh')
+  @ApiOperation({ summary: 'Force-refresh the XLM/USD exchange rate cache' })
+  async refreshRateCache() {
+    const rate = await this.ratesService.fetchAndCache();
+    return { rate };
+  }
+
+  // ── Geographic Distribution Analytics (#714) ───────────────────────────────
+
+  @Get('analytics/geography')
+  @ApiOperation({ summary: 'Get geographic distribution of merchants and payments' })
+  getGeographicDistribution(@Query('sortBy') sortBy = 'volume') {
+    return this.adminService.getGeographicDistribution(sortBy);
+  }
+
+  // ── Admin User Management with 2FA (#707) ──────────────────────────────────
+
+  @Post('users')
+  @ApiOperation({ summary: 'Create a new admin user (SUPERADMIN only)' })
+  createAdmin(
+    @Body() dto: { email: string; password: string; businessName: string },
+    @Req() req: Request & { user: { id: string; role: MerchantRole } },
+  ) {
+    return this.adminService.createAdmin(
+      dto.email,
+      dto.password,
+      dto.businessName,
+      req.user.role,
+    );
+  }
+
+  @Delete('users/:id')
+  @ApiOperation({ summary: 'Delete an admin user (SUPERADMIN only)' })
+  deleteAdmin(
     @Param('id') id: string,
-    @Body('reason') reason: string,
-    @Req() req: any,
+    @Req() req: Request & { user: { id: string; role: MerchantRole } },
   ) {
-    const adminId = req.user.id;
-    return this.adminService.freezeUser(id, reason, adminId);
+    return this.adminService.deleteAdmin(id, req.user.role);
   }
 
-  @Patch('users/:id/unfreeze')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @Audit({ action: 'user.unfreeze', resourceType: 'user', resourceIdParam: 'id' })
-  @ApiOperation({ summary: 'Unfreeze user account' })
-  async unfreezeUser(@Param('id') id: string, @Req() req: any) {
-    const adminId = req.user.id;
-    return this.adminService.unfreezeUser(id, adminId);
+  @Post('users/:id/2fa/setup')
+  @ApiOperation({ summary: 'Generate a TOTP secret for an admin user' })
+  setupAdminTotp(@Param('id') id: string) {
+    return this.adminService.setupAdminTotp(id);
   }
 
-  // getStats() moved to dedicated /admin/analytics/dashboard endpoint
-
-
-  @Get('transactions')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'List all transactions globally' })
-  async listTransactions(@Query() query: any) {
-    return this.adminService.findAllTransactions(query);
-  }
-
-  @Post('broadcast')
-  @Roles(AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Broadcast a message to users' })
-  async broadcast(
-    @Body() dto: { title: string; body: string; segment: string },
+  @Post('users/:id/2fa/verify')
+  @ApiOperation({ summary: 'Verify a TOTP token and enable 2FA for an admin user' })
+  verifyAdminTotp(
+    @Param('id') id: string,
+    @Body('token') token: string,
   ) {
-    return this.adminService.broadcast(dto);
+    return this.adminService.verifyAdminTotp(id, token);
   }
 
-  @Get('transactions/:id/receipt')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Generate receipt for any transaction (admin)' })
-  async getTransactionReceipt(@Param('id') id: string) {
-    return this.receiptService.generateTransactionReceiptAdmin(id);
+  @Patch('users/:id/allowed-ips')
+  @ApiOperation({ summary: 'Update the IP allowlist for an admin user' })
+  updateAdminAllowedIps(
+    @Param('id') id: string,
+    @Body('ips') ips: string[],
+  ) {
+    return this.adminService.updateAdminAllowedIps(id, ips);
   }
 
-  // ── Off-Ramp Admin ──────────────────────────────────────────────────────────
+  // ── Sandbox Environment Management (#708) ──────────────────────────────────
 
-  @Get('offramps')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'List all off-ramp orders with optional filters' })
-  async listOffRamps(@Query() query: AdminOffRampQueryDto) {
-    return this.offRampService.adminList(query);
+  @Patch('merchants/:id/sandbox')
+  @ApiOperation({ summary: 'Enable or disable sandbox mode for a merchant' })
+  toggleSandboxMode(
+    @Param('id') id: string,
+    @Body('enabled') enabled: boolean,
+  ) {
+    return this.adminService.toggleSandboxMode(id, enabled);
   }
 
-  @Get('offramps/:id')
-  @Roles(AdminRole.ADMIN, AdminRole.SUPERADMIN)
-  @ApiOperation({ summary: 'Get a single off-ramp order by ID' })
-  async getOffRamp(@Param('id') id: string): Promise<OffRampResponseDto> {
-    return this.offRampService.adminGetById(id);
+  @Post('merchants/:id/sandbox/reset')
+  @ApiOperation({ summary: 'Delete all sandbox payment data for a merchant' })
+  resetSandboxData(@Param('id') id: string) {
+    return this.adminService.resetSandboxData(id);
   }
 
-  @Post('offramps/:id/refund')
-  @Roles(AdminRole.SUPERADMIN)
-  @Audit({ action: 'offramp.refund', resourceType: 'off_ramp', resourceIdParam: 'id' })
-  @ApiOperation({ summary: 'Manually trigger USDC refund for a failed off-ramp order' })
-  async refundOffRamp(@Param('id') id: string): Promise<OffRampResponseDto> {
-    return this.offRampService.adminRefund(id);
+  // ── Audit Log Viewer ───────────────────────────────────────────────────────
+
+  @Get('audit-log')
+  @ApiOperation({ summary: 'Get paginated audit log with filtering' })
+  async getAuditLogs(
+    @Query() query: any,
+    @Query() pagination: PaginationDto,
+    @Res() res: Response,
+    @Query('export') exportType?: string,
+    @Headers('accept') accept?: string,
+  ) {
+    const exportCsv = exportType === 'csv' || accept === 'text/csv';
+    const result = await this.adminService.getAuditLogs(query, pagination, exportCsv);
+    if (exportCsv) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
+      res.send(result);
+    } else {
+      res.json(result);
+    }
+  }
+
+  // ── Platform-wide Payment Oversight ──────────────────────────────────────
+
+  @Get('payments')
+  @ApiOperation({ summary: 'Get all payments across all merchants (paginated, filterable)' })
+  getAdminPayments(@Query() query: QueryAdminPaymentsDto) {
+    return this.adminService.getAdminPayments({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      merchantId: query.merchantId,
+      status: query.status,
+      network: query.network,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      minAmount: query.minAmount,
+    });
+  }
+
+  @Get('payments/:id')
+  @ApiOperation({ summary: 'Get full payment detail by ID' })
+  @ApiParam({ name: 'id', description: 'Payment ID' })
+  getAdminPaymentById(@Param('id') id: string) {
+    return this.adminService.getAdminPaymentById(id);
+  }
+
+  // ── Generic Soft/Hard Delete and Restore ───────────────────────────────────
+
+  @Post(':entity/:id/restore')
+  @ApiOperation({ summary: 'Restore a soft-deleted record' })
+  restoreRecord(
+    @Param('entity') entity: string,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.restoreRecord(entity, id);
+  }
+
+  @Delete(':entity/:id')
+  @ApiOperation({ summary: 'Soft or hard delete a record' })
+  deleteRecord(
+    @Param('entity') entity: string,
+    @Param('id') id: string,
+    @Query('hard') hard: string,
+    @Req() req: Request & { user: { id: string; role: MerchantRole } },
+  ) {
+    const isHard = hard === 'true';
+    return this.adminService.deleteRecord(entity, id, isHard, req.user.role);
   }
 }

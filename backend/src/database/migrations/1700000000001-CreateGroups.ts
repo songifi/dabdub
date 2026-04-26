@@ -2,10 +2,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateGroups1700000000001 implements MigrationInterface {
   name = 'CreateGroups1700000000001';
-  public transaction = false;
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query("SET lock_timeout = '5s'");
     await queryRunner.query(`
       CREATE TABLE "groups" (
         "id"                UUID NOT NULL DEFAULT uuid_generate_v4(),
@@ -27,11 +25,11 @@ export class CreateGroups1700000000001 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX CONCURRENTLY "IDX_GROUP_NAME" ON "groups" ("name")
+      CREATE INDEX "IDX_GROUP_NAME" ON "groups" ("name")
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX CONCURRENTLY "IDX_GROUP_INVITE_CODE"
+      CREATE UNIQUE INDEX "IDX_GROUP_INVITE_CODE"
         ON "groups" ("inviteCode")
         WHERE "inviteCode" IS NOT NULL
     `);
@@ -54,7 +52,7 @@ export class CreateGroups1700000000001 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE UNIQUE INDEX CONCURRENTLY "IDX_GROUP_MEMBER_UNIQUE"
+      CREATE UNIQUE INDEX "IDX_GROUP_MEMBER_UNIQUE"
         ON "group_members" ("groupId", "userId")
     `);
   }

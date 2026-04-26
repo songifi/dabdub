@@ -1,278 +1,132 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { APP_INTERCEPTOR } from '@nestjs/core';
-import { ConfigType } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AppConfigModule, appConfig, redisConfig } from './config';
-import { EmailModule } from './email/email.module';
-import { RatesModule } from './rates/rates.module';
-import { DatabaseModule } from './database/database.module';
-import { HealthModule } from './health/health.module';
-import { SorobanModule } from './soroban/soroban.module';
-import { AuthModule } from './auth/auth.module';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { StellarModule } from './stellar/stellar.module';
-import { UploadModule } from './uploads/upload.module';
-import { WsModule } from './ws/ws.module';
-import { OnRampModule } from './onramp/onramp.module';
-import { QueueModule } from './queue/queue.module';
-import { NotificationsModule } from './notifications/notifications.module';
-import { AnnouncementsModule } from './announcements/announcements.module';
-import { LoggingModule } from './logging/logging.module';
-import { CorrelationIdMiddleware } from './logging/correlation-id.middleware';
-import { HttpLoggingInterceptor } from './logging/http-logging.interceptor';
-import { ResponseInterceptor } from './common/interceptors/response.interceptor';
-import { WebhooksModule } from './webhooks/webhooks.module';
-import { RbacModule } from './rbac/rbac.module';
-import { MerchantsModule } from './merchants/merchants.module';
-import { UsersModule } from './users/users.module';
-import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
-import { PayLinkModule } from './paylink/paylink.module';
-import { ReceiveModule } from './receive/receive.module';
-import { VirtualAccountModule } from './virtual-account/virtual-account.module';
-import { VirtualCardsModule } from './virtual-cards/virtual-cards.module';
-import { AuditModule } from './audit/audit.module';
-import { AppConfigModule as RuntimeConfigModule } from './app-config/app-config.module';
-import { MaintenanceModeMiddleware } from './app-config/middleware/maintenance-mode.middleware';
 import { AdminModule } from './admin/admin.module';
-import { EarningsModule } from './earnings/earnings.module';
-import { SmsModule } from './sms/sms.module';
-import { PinModule } from './pin/pin.module';
-import { TransfersModule } from './transfers/transfers.module';
-import { WithdrawalsModule } from './withdrawals/withdrawals.module';
-import { PasskeyModule } from './passkey/passkey.module';
-import { SecurityModule } from './security/security.module';
-import { SandboxModule } from './sandbox/sandbox.module';
-import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
-import { MaintenanceModule } from './maintenance/maintenance.module';
-import { MaintenanceWindowMiddleware } from './maintenance/middleware/maintenance-window.middleware';
-
-// TODO: Enable Sentry when @sentry/nestjs module is compatible
-// import { SentryModule } from '@nestjs/nestjs';
+import { AdminAlertModule } from './alerts/admin-alert.module';
+import { AmlModule } from './aml/aml.module';
+import { AuthModule } from './auth/auth.module';
+import { HealthModule } from './health/health.module';
+import { MerchantAnalyticsModule } from './analytics/merchant-analytics.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { MerchantsModule } from './merchants/merchants.module';
 import { GroupsModule } from './groups/groups.module';
-import { TransactionsModule } from './transactions/transactions.module';
-import { PushModule } from './push/push.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentsModule } from './payments/payments.module';
+import { QueueModule } from './queues/queue.module';
+import { SettlementsModule } from './settlements/settlements.module';
+import { StellarModule } from './stellar/stellar.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
-import { KycModule } from './kyc/kyc.module';
-import { ReportsModule } from './reports/reports.module';
-import { WalletsModule } from './wallets/wallets.module';
-import { BlockchainTransactionsModule } from './blockchain-transactions/blockchain-transactions.module';
-import { ApiVersionModule } from './api-version/api-version.module';
-import { OffRampModule } from './offramp/offramp.module';
-import { OtpModule } from './otp/otp.module';
-import { DeprecationHeadersInterceptor } from './api-version/deprecation-headers.interceptor';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { AppThrottlerGuard } from './auth/guards/throttler.guard';
+import { EmailModule } from './email/email.module';
+import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { SentryModule } from './sentry/sentry.module';
 import { CronModule } from './cron/cron.module';
-import { ActivityModule } from './activity/activity.module';
-import { BalanceModule } from './balance/balance.module';
-import { SentryModule as SentryUserContextModule } from './sentry/sentry.module';
-import { SentryUserMiddleware } from './sentry/sentry-user.middleware';
-import { PwaModule } from './pwa/pwa.module';
-import { SecurityHeadersMiddleware } from './security/security-headers.middleware';
-import { ComplianceModule } from './compliance/compliance.module';
-import { DisputesModule } from './disputes/disputes.module';
-import { UsernameModule } from './username/username.module';
-import { SplitsModule } from './splits/splits.module';
-import { FeedbackModule } from './feedback/feedback.module';
-import { DeepLinkModule } from './deeplink/deeplink.module';
-import { FlutterwaveModule } from './flutterwave/flutterwave.module';
-import { FeatureFlagModule } from './feature-flags/feature-flag.module';
-import { PayoutsModule } from './payouts/payouts.module';
+import { PrometheusModule } from './prometheus/prometheus.module';
+import { AuditModule } from './audit/audit.module';
+import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
+
+import { MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { CacheWarmupService } from './cache/cache-warmup.service';
 
 @Module({
   imports: [
-    // 1. Config — global, validates all env vars at startup with abortEarly: false.
-    AppConfigModule,
-
-    // 1a. Schedule — enables @Cron decorators for background jobs.
+    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-
-    // 1b. Logging — Winston + Nest bridge.
-    LoggingModule,
-
-    // 2. Database — owns the TypeORM root connection; see database.module.ts.
-    DatabaseModule,
-
-    // 4. Bull — async Redis connection via typed RedisConfig.
-    BullModule.forRootAsync({
-      inject: [redisConfig.KEY],
-      useFactory: (redis: ConfigType<typeof redisConfig>) => ({
-        redis: {
-          host: redis.host,
-          port: redis.port,
-          password: redis.password,
-        },
-      }),
-    }),
-
-    // 5. Throttler — rate limiting via typed AppConfig.
     ThrottlerModule.forRootAsync({
-      inject: [appConfig.KEY],
-      useFactory: (app: ConfigType<typeof appConfig>) => ({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
         throttlers: [
           {
-            ttl: app.throttleTtl * 1000,
-            limit: app.throttleLimit,
+            name: 'default',
+            ttl: Number(config.get('THROTTLE_DEFAULT_TTL_MS', 60000)),
+            limit: Number(config.get('THROTTLE_DEFAULT_LIMIT', 100)),
+          },
+          {
+            name: 'authenticated',
+            ttl: Number(config.get('THROTTLE_AUTHENTICATED_TTL_MS', 60000)),
+            limit: Number(config.get('THROTTLE_AUTHENTICATED_LIMIT', 1000)),
           },
         ],
       }),
     }),
-
-    QueueModule,
-
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        redis: {
+          host: config.get('REDIS_HOST', 'localhost'),
+          port: config.get<number>('REDIS_PORT', 6379),
+          password: config.get<string | undefined>('REDIS_PASSWORD'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get('DB_HOST', 'localhost'),
+        port: config.get<number>('DB_PORT', 5432),
+        username: config.get('DB_USER', 'postgres'),
+        password: config.get('DB_PASSWORD'),
+        database: config.get('DB_NAME', 'cheesepay'),
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        synchronize: false,
+        logging: config.get('NODE_ENV') === 'development',
+      }),
+      inject: [ConfigService],
+    }),
     HealthModule,
-    OnRampModule,
-    ApiVersionModule,
-    SorobanModule,
+    SentryModule,
+    PrometheusModule,
     CronModule,
-
-    StellarModule,
-
-    // 5. Auth — register/login/refresh/logout + global JWT guard.
-    // 6. Email — async transactional delivery via ZeptoMail + BullMQ.
     EmailModule,
-
-    // 7. Rates — USDC/NGN live rates with Redis cache + BullMQ polling.
-    RatesModule,
-
-    StellarModule,
-
-    // 5. Auth — register/login/refresh/logout + global JWT guard.
-    // 8. Auth — register/login/refresh/logout + global JWT guard.
+    AdminModule,
+    AmlModule,
+    AnalyticsModule,
+    MerchantAnalyticsModule,
+    AdminAlertModule,
     AuthModule,
-
-    // File uploads — presign + confirm via Cloudflare R2.
-    UploadModule,
-
-    // WebSockets — Socket.io real-time gateway.
-    WsModule,
-
-    // Notifications — entity + API + realtime delivery.
-    NotificationsModule,
-    AnnouncementsModule,
-
-    // Webhooks — subscriptions + signed deliveries + retries.
-    WebhooksModule,
-
-    // RBAC — roles + permissions for admin routes.
-    RbacModule,
-
     MerchantsModule,
-    UsersModule,
-    PinModule,
-    TransfersModule,
-    WithdrawalsModule,
-    SecurityModule,
-    SandboxModule,
-    FeatureFlagsModule,
-    MaintenanceModule,
     GroupsModule,
-    BankAccountsModule,
-    VirtualAccountModule,
-    VirtualCardsModule,
-    PayLinkModule,
-    ReceiveModule,
-
-    AuditModule,
-
-    // Runtime feature flags + maintenance mode.
-    RuntimeConfigModule,
-
-    AdminModule, // Includes AnalyticsModule
-
-    // SMS — OTP + transaction alerts via Termii + BullMQ.
-    SmsModule,
-    OtpModule,
-
-    // Push — Firebase Cloud Messaging device token management.
-    PushModule,
-    PwaModule,
-
-    // Earnings — yield dashboard, APY display, projections.
-    EarningsModule,
-
-    WithdrawalsModule,
-
-    // Transactions — activity history with cursor-based pagination.
-    // Passkey/WebAuthn authentication.
-    PasskeyModule,
-
-    // Blockchain transactions — on-chain audit trail.
-    BlockchainTransactionsModule,
-
-    // Transactions — activity history with cursor-based pagination.
-    TransactionsModule,
-
-    // Waitlist — viral pre-launch signups with referral points.
+    NotificationsModule,
+    PaymentsModule,
+    StellarModule,
+    SettlementsModule,
+    WebhooksModule,
     WaitlistModule,
-
-    // KYC — document submission and admin review for tier upgrades.
-    KycModule,
-
-    // Reports — async CSV data exports via BullMQ + R2.
-    ReportsModule,
-
-    // Off-Ramp — USDC to NGN conversion and bank transfer.
-    OffRampModule,
-    // Activity — chronological feed with cursor pagination, summary, and breakdown.
-    ActivityModule,
-    // Balance — unified balance aggregation with caching.
-    BalanceModule,
-    // Sentry user context module
-    SentryUserContextModule,
-    ComplianceModule,
-
-    // Wallets — Stellar keypair provisioning + balance sync.
-    WalletsModule,
-
-    // Disputes — transaction chargeback and reversal requests.
-    DisputesModule,
-    UsernameModule,
-
-
-    // Splits — split payment requests among multiple users.
-    SplitsModule,
-    FeedbackModule,
-
-    // Deep linking — universal links, AASA, asset links, QR web fallbacks.
-    DeepLinkModule,
-
-    // Flutterwave — virtual accounts, transfers, balance.
-    FlutterwaveModule,
-
-    // User-level feature flags (rollouts, A/B) — Redis-cached evaluation.
-    FeatureFlagModule,
-
-    PayoutsModule,
-
+    QueueModule,
+    AuditModule,
   ],
-
   providers: [
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useClass: AppThrottlerGuard,
     },
     {
       provide: APP_INTERCEPTOR,
-      useClass: ResponseInterceptor,
+      useClass: HttpMetricsInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
-      useClass: DeprecationHeadersInterceptor,
+      useClass: SentryInterceptor,
     },
     {
-      provide: APP_INTERCEPTOR,
-      useClass: HttpLoggingInterceptor,
+      provide: APP_FILTER,
+      useClass: SentryExceptionFilter,
     },
+    CacheWarmupService,
   ],
 })
 export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
+  configure(consumer: MiddlewareConsumer) {
     consumer.apply(CorrelationIdMiddleware).forRoutes('*');
-    consumer.apply(MaintenanceModeMiddleware).forRoutes('*');
-    consumer.apply(MaintenanceWindowMiddleware).forRoutes('*');
-    consumer.apply(SentryUserMiddleware).forRoutes('*');
-    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
   }
 }

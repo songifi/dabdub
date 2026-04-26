@@ -1,24 +1,12 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
-import { Admin, AdminRole } from '../../admin/entities/admin.entity';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { User, UserRole } from '../../users/entities/user.entity';
 
-/**
- * Requires an authenticated Admin JWT with {@link AdminRole.SUPERADMIN}.
- */
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<{ user?: Admin }>();
-    const user = req.user;
-    if (!user || typeof user !== 'object' || !('role' in user)) {
-      throw new ForbiddenException();
-    }
-    if ((user as Admin).role !== AdminRole.SUPERADMIN) {
-      throw new ForbiddenException();
+    const user = context.switchToHttp().getRequest<{ user: User }>().user;
+    if (user?.role !== UserRole.SUPERADMIN) {
+      throw new ForbiddenException('SuperAdmin access required');
     }
     return true;
   }

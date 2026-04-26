@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { getQueueToken } from '@nestjs/bull';
 import { EmailService, EMAIL_QUEUE, EmailJobPayload } from './email.service';
 import { EmailProcessor } from './email.processor';
-import { ZeptoMailService } from './zepto-mail.service';
+import { NodemailerService } from './nodemailer.service';
 import { EmailLog, EmailStatus } from './entities/email-log.entity';
 import { Job } from 'bull';
 
@@ -32,22 +32,15 @@ const mockQueue = {
   add: jest.fn().mockResolvedValue({ id: 'job-1' }),
 };
 
-const mockZepto = {
-  send: jest.fn(),
-};
+const mockMailer = { send: jest.fn() };
 
 function makeJob(
   overrides: Partial<{ attemptsMade: number; opts: { attempts: number } }> = {},
 ): Job<EmailJobPayload> {
   return {
-    data: {
-      logId: 'log-1',
-      to: 'user@example.com',
-      templateAlias: 'welcome',
-      mergeData: {},
-    },
+    data: { logId: 'log-1', to: 'user@example.com', templateAlias: 'welcome', mergeData: {} },
     attemptsMade: 0,
-    opts: { attempts: 3 },
+    opts: { attempts: 2 },
     ...overrides,
   } as unknown as Job<EmailJobPayload>;
 }
@@ -67,24 +60,15 @@ describe('EmailService', () => {
     service = module.get(EmailService);
   });
 
-  it('queue() creates log with QUEUED status and enqueues job', async () => {
-    const log = await service.queue(
-      'user@example.com',
-      'welcome',
-      { name: 'Alice' },
-      'user-1',
-    );
+  it('queue() creates log with QUEUED status and enqueues job with attempts=2', async () => {
+    const log = await service.queue('user@example.com', 'welcome', { name: 'Alice' }, 'user-1');
 
     expect(mockRepo.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: EmailStatus.QUEUED,
-        to: 'user@example.com',
-      }),
+      expect.objectContaining({ status: EmailStatus.QUEUED, to: 'user@example.com' }),
     );
-    expect(mockRepo.save).toHaveBeenCalled();
     expect(mockQueue.add).toHaveBeenCalledWith(
       expect.objectContaining({ logId: 'log-1', templateAlias: 'welcome' }),
-      expect.objectContaining({ attempts: 3 }),
+      expect.objectContaining({ attempts: 2 }),
     );
     expect(log.status).toBe(EmailStatus.QUEUED);
   });
@@ -99,60 +83,42 @@ describe('EmailProcessor', () => {
       providers: [
         EmailProcessor,
         { provide: getRepositoryToken(EmailLog), useValue: mockRepo },
-        { provide: ZeptoMailService, useValue: mockZepto },
-        { provide: EmailService, useValue: { getBackoffDelay: jest.fn() } },
+        { provide: NodemailerService, useValue: mockMailer },
       ],
     }).compile();
     processor = module.get(EmailProcessor);
   });
 
   it('successful send → updates log to SENT with messageId', async () => {
-    mockZepto.send.mockResolvedValue({ messageId: 'msg-abc' });
+    mockMailer.send.mockResolvedValue({ messageId: 'msg-abc' });
 
     await processor.handleSend(makeJob());
 
-    expect(mockZepto.send).toHaveBeenCalledWith(
-      'user@example.com',
-      'welcome',
-      {},
-    );
+    expect(mockMailer.send).toHaveBeenCalledWith('user@example.com', 'welcome', {});
     expect(mockRepo.update).toHaveBeenCalledWith(
       'log-1',
-      expect.objectContaining({
-        status: EmailStatus.SENT,
-        providerMessageId: 'msg-abc',
-      }),
+      expect.objectContaining({ status: EmailStatus.SENT, providerMessageId: 'msg-abc' }),
     );
   });
 
-  it('ZeptoMail error → throws so Bull retries', async () => {
-    mockZepto.send.mockRejectedValue(
-      new Error('ZeptoMail 500: Internal Server Error'),
-    );
+  it('send error → throws so Bull retries', async () => {
+    mockMailer.send.mockRejectedValue(new Error('SMTP connection refused'));
 
-    await expect(processor.handleSend(makeJob())).rejects.toThrow(
-      'ZeptoMail 500',
-    );
+    await expect(processor.handleSend(makeJob())).rejects.toThrow('SMTP connection refused');
   });
 
-  it('3 retries exhausted → handleFailed sets status=FAILED', async () => {
-    const job = makeJob({ attemptsMade: 3, opts: { attempts: 3 } });
-    const err = new Error('ZeptoMail 500: Internal Server Error');
-
-    await processor.handleFailed(job, err);
+  it('2nd failure (exhausted) → handleFailed sets status=FAILED', async () => {
+    const job = makeJob({ attemptsMade: 2, opts: { attempts: 2 } });
+    await processor.handleFailed(job, new Error('SMTP timeout'));
 
     expect(mockRepo.update).toHaveBeenCalledWith(
       'log-1',
-      expect.objectContaining({
-        status: EmailStatus.FAILED,
-        errorMessage: 'ZeptoMail 500: Internal Server Error',
-      }),
+      expect.objectContaining({ status: EmailStatus.FAILED, errorMessage: 'SMTP timeout' }),
     );
   });
 
-  it('non-exhausted failure → does NOT set status=FAILED', async () => {
-    const job = makeJob({ attemptsMade: 1, opts: { attempts: 3 } });
-
+  it('1st failure (not exhausted) → handleFailed does NOT set status=FAILED', async () => {
+    const job = makeJob({ attemptsMade: 1, opts: { attempts: 2 } });
     await processor.handleFailed(job, new Error('timeout'));
 
     expect(mockRepo.update).not.toHaveBeenCalledWith(

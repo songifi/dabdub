@@ -1,10 +1,9 @@
-import { Module, Global } from '@nestjs/common';
-import { RedisModule } from './redis.module';
+import { Module } from '@nestjs/common';
 import { CacheService } from './cache.service';
+import { PrometheusModule } from '../prometheus/prometheus.module';
 
-@Global()
 @Module({
-  imports: [RedisModule],
+  imports: [PrometheusModule],
   providers: [CacheService],
   exports: [CacheService],
 })

@@ -14,9 +14,6 @@ export interface EmailJobPayload {
   mergeData: Record<string, unknown>;
 }
 
-// Retry delays: 30s, 2min, 10min
-const BACKOFF_DELAYS = [30_000, 120_000, 600_000];
-
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -38,7 +35,7 @@ export class EmailService {
       this.logRepo.create({
         to,
         templateAlias,
-        subject: templateAlias,
+        subject: (mergeData['subject'] as string | undefined) ?? templateAlias,
         status: EmailStatus.QUEUED,
         userId: userId ?? null,
       }),
@@ -47,22 +44,14 @@ export class EmailService {
     await this.emailQueue.add(
       { logId: log.id, to, templateAlias, mergeData },
       {
-        attempts: 3,
-        backoff: { type: 'custom' },
+        attempts: 2,          // 1 initial attempt + 1 retry
+        backoff: { type: 'fixed', delay: 30_000 },
         removeOnComplete: true,
         removeOnFail: false,
       },
     );
 
-    this.logger.log(
-      `Queued email logId=${log.id} to=${to} template=${templateAlias}`,
-    );
+    this.logger.log(`Queued email logId=${log.id} to=${to} template=${templateAlias}`);
     return log;
-  }
-
-  getBackoffDelay(attemptsMade: number): number {
-    return (
-      BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
-    );
   }
 }

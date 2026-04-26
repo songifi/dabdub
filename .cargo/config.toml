@@ -1,2 +1,0 @@
-[alias]
-wasm-build = "build --target wasm32v1-none --release"

@@ -1,173 +1,164 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger, VersioningType } from '@nestjs/common';
+import { NestFactory, Reflector, HttpAdapterHost } from '@nestjs/core';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import helmet from 'helmet';
+import { ClassSerializerInterceptor, ValidationPipe, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import * as Sentry from '@sentry/nestjs';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { AppModule } from './app.module';
-import type { AppConfig } from './config';
-import { QueueBoardService } from './queue/queue.board';
-import { createBullBoardBasicAuth } from './queue/queue.basic-auth';
-import { BULL_BOARD_PATH } from './queue/queue.constants';
-import {
-  API_VERSION_POLICY,
-  DOCUMENTED_API_VERSIONS,
-} from './api-version/api-version.policy';
-import { filterOpenApiPathsForVersion } from './api-version/filter-openapi-for-version';
-import { isAllowedCorsOrigin } from './security/cors.util';
+import { readTelemetryConfig, shutdownTelemetry, startTelemetry } from './telemetry/telemetry';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
+import { SentryService } from './sentry/sentry.service';
+import { getCorrelationId } from './common/correlation-id.context';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require('../package.json') as { version: string };
 
-// PII fields to scrub from Sentry events
-const PII_FIELDS = ['email', 'phone', 'passwordHash', 'pinHash', 'encryptedSecretKey'];
-
-function scrubPII(obj: unknown): unknown {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-
-  if (typeof obj === 'string') {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(scrubPII);
-  }
-
-  if (typeof obj === 'object') {
-    const scrubbed: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (PII_FIELDS.some((field) => key.toLowerCase().includes(field.toLowerCase()))) {
-        scrubbed[key] = '[Filtered]';
-      } else {
-        scrubbed[key] = scrubPII(value);
-      }
-    }
-    return scrubbed;
-  }
-
-  return obj;
-}
-
 async function bootstrap(): Promise<void> {
-  const logger = new Logger('Bootstrap');
+  startTelemetry(readTelemetryConfig());
 
-  // Initialize Sentry before app bootstrap
-  const sentryDsn = process.env.SENTRY_DSN;
-  if (sentryDsn) {
-    Sentry.init({
-      dsn: sentryDsn,
-      environment: process.env.NODE_ENV || 'development',
-      release: version,
-      tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-      profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-      integrations: [nodeProfilingIntegration()],
-      beforeSend(event) {
-        // Scrub PII from all captured events
-        if (event.request) {
-          event.request = scrubPII(event.request) as typeof event.request;
-        }
-        if (event.user) {
-          event.user = scrubPII(event.user) as typeof event.user;
-        }
-        if (event.extra) {
-          event.extra = scrubPII(event.extra) as typeof event.extra;
-        }
-        if (event.contexts) {
-          event.contexts = scrubPII(event.contexts) as typeof event.contexts;
-        }
-        return event;
-      },
-    });
-    logger.log('Sentry initialized');
-  } else {
-    logger.warn('Sentry disabled: SENTRY_DSN not set');
-  }
-
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+  const correlationIdFormat = winston.format((info) => {
+    const correlationId = getCorrelationId();
+    if (typeof info.correlationId === 'undefined') {
+      info.correlationId = correlationId ?? 'N/A';
+    }
+    return info;
   });
-  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
+  const app = await NestFactory.create(AppModule, { rawBody: true, logger: WinstonModule.createLogger({
+    level: 'silly',
+    transports: [
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          correlationIdFormat(),
+          winston.format.json(),
+        ),
+      }),
+      new winston.transports.File({
+        filename: 'logs/app.log',
+        format: winston.format.combine(
+          winston.format.timestamp(),
+          correlationIdFormat(),
+          winston.format.json(),
+        ),
+      }),
+    ],
+  }) });
+
+  // Security headers — helmet must be applied before routes are registered
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // allow Swagger UI
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'validator.swagger.io'],
+          connectSrc: ["'self'"],
+        },
+      },
+      hsts: { maxAge: 31536000, includeSubDomains: true },
+    }),
+  );
+
+  // Initialize Sentry before other middleware so it can capture bootstrap errors
+  const sentryService = app.get(SentryService);
+  sentryService.init();
 
   const config = app.get(ConfigService);
-  const port = config.get<AppConfig['port']>('app.port')!;
-  const apiPrefix = config.get<AppConfig['apiPrefix']>('app.apiPrefix')!;
+  const port = parseInt(String(config.get('PORT', 3000)), 10);
+  const apiPrefix = String(config.get('API_PREFIX', 'api/v1'));
+
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+    : [];
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (
-        isAllowedCorsOrigin(
-          origin,
-          config.get<AppConfig['frontendUrl']>('app.frontendUrl')!,
-        )
-      ) {
-        callback(null, true);
-        return;
-      }
-
-      callback(
-        new Error(`Origin ${origin ?? 'unknown'} is not allowed by CORS`),
-        false,
-      );
-    },
+    origin: isDevelopment
+      ? true
+      : (origin, callback) => {
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error(`CORS: origin '${origin}' not allowed`));
+          }
+        },
     credentials: true,
-  });
-  app.setGlobalPrefix(apiPrefix);
-  app.enableVersioning({
-    type: VersioningType.URI,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-correlation-id'],
+    exposedHeaders: ['X-Correlation-ID'],
   });
 
-  const queueBoard = app.get(QueueBoardService);
-  const credentials = queueBoard.getCredentials();
-  app.use(
-    BULL_BOARD_PATH,
-    createBullBoardBasicAuth(credentials.username, credentials.password),
-    queueBoard.getRouter(),
-  );
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: [
+      { path: 'health', method: RequestMethod.ALL },
+      { path: 'health/ready', method: RequestMethod.ALL },
+      { path: 'docs', method: RequestMethod.ALL },
+      { path: 'docs/(.*)', method: RequestMethod.ALL },
+      { path: 'docs-json', method: RequestMethod.GET },
+    ],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost), config));
+  app.useGlobalInterceptors(new LoggingInterceptor(), new ClassSerializerInterceptor(app.get(Reflector)));
 
-  if (process.env.NODE_ENV !== 'production') {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('CheesePay API')
-      .setDescription(
-        'CheesePay HTTP API. Per-version specs under /docs/v{n}; default /docs matches the current major version from API_VERSION_POLICY.',
-      )
-      .setVersion(version)
-      .addBearerAuth()
-      .build();
-    const fullDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('CheesePay API')
+    .setDescription(
+      'Crypto-to-Fiat settlement platform. Use **Authorize** for JWT Bearer and/or **X-API-Key** for API key auth. ' +
+        `HTTP API routes are under \`/${apiPrefix}\`; Swagger UI is at \`/docs\`.`,
+    )
+    .setVersion(version)
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT from POST /auth/login or /auth/register',
+      },
+      'bearer',
+    )
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'Merchant API key (when using API key auth instead of Bearer)',
+      },
+      'api-key',
+    )
+    .build();
 
-    const currentMajor = API_VERSION_POLICY.current.replace(/^v/, '');
-    for (const apiVersion of DOCUMENTED_API_VERSIONS) {
-      const document = filterOpenApiPathsForVersion(fullDocument, apiVersion);
-      SwaggerModule.setup(
-        `${apiPrefix}/docs/v${apiVersion}`,
-        app,
-        document,
-      );
-      logger.log(
-        `Swagger v${apiVersion} at http://localhost:${port}/${apiPrefix}/docs/v${apiVersion}`,
-      );
-    }
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document, {
+    customSiteTitle: 'CheesePay API',
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: 'list',
+      filter: true,
+      tryItOutEnabled: true,
+      displayRequestDuration: true,
+    },
+  });
 
-    const defaultDoc = filterOpenApiPathsForVersion(fullDocument, currentMajor);
-    SwaggerModule.setup(`${apiPrefix}/docs`, app, defaultDoc);
-    logger.log(
-      `Swagger (default = v${currentMajor}) at http://localhost:${port}/${apiPrefix}/docs`,
-    );
-  }
+  process.once('SIGTERM', () => {
+    void shutdownTelemetry();
+  });
+  process.once('SIGINT', () => {
+    void shutdownTelemetry();
+  });
 
   await app.listen(port);
-  logger.log(`Application running on http://localhost:${port}/${apiPrefix}`);
 }
 
 void bootstrap();

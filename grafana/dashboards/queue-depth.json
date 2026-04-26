@@ -1,0 +1,107 @@
+{
+  "title": "Queue Depths and Processing Rate",
+  "uid": "cheesepay-queue-depth",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Queue Depth by Queue",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "cheesepay_queue_depth",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } }
+      },
+      "alert": {
+        "name": "Queue Depth Too High",
+        "conditions": [
+          {
+            "evaluator": { "type": "gt", "params": [1000] },
+            "query": { "params": ["A", "5m", "now"] },
+            "reducer": { "type": "max" },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "frequency": "1m",
+        "handler": 1,
+        "message": "Queue depth exceeded 1000 messages"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Processing Rate (msg/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(cheesepay_queue_processed_total[1m])) by (queue)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "msgps" } }
+    },
+    {
+      "id": 3,
+      "title": "Current Queue Depths",
+      "type": "bargauge",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "cheesepay_queue_depth",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Failed Jobs (1h)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum(increase(cheesepay_queue_failed_total[1h])) by (queue)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

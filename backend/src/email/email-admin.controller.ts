@@ -1,30 +1,24 @@
-import {
-  Body,
-  Controller,
-  Post,
-  ForbiddenException,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Post, ForbiddenException, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
-import { ZeptoMailService, ZeptoSendResult } from './zepto-mail.service';
+import { NodemailerService, MailSendResult } from './nodemailer.service';
 import { TestEmailDto } from './dto/test-email.dto';
 
 @ApiTags('admin/email')
 @ApiBearerAuth()
 @Controller({ path: 'admin/email', version: '1' })
 export class EmailAdminController {
-  constructor(private readonly zeptoMail: ZeptoMailService) {}
+  constructor(private readonly mailer: NodemailerService) {}
 
   @Post('test')
   @ApiOperation({ summary: 'Send a test email immediately (admin only)' })
   async testSend(
     @Body() dto: TestEmailDto,
     @Req() req: Request,
-  ): Promise<ZeptoSendResult> {
+  ): Promise<MailSendResult> {
     const user = (req as any).user as { isAdmin?: boolean } | undefined;
     if (!user?.isAdmin) throw new ForbiddenException('Admin only');
 
-    return this.zeptoMail.send(dto.to, dto.templateAlias, dto.mergeData ?? {});
+    return this.mailer.send(dto.to, dto.templateAlias, dto.mergeData ?? {});
   }
 }
