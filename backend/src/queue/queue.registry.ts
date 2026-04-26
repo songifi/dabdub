@@ -6,8 +6,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { Queue, QueueEvents, Worker, type Job, type JobsOptions } from 'bullmq';
-import { redisConfig } from '../config/redis.config';
-import type { RedisConfig } from '../config/redis.config';
+import { redisConfig, queueConfig } from '../config';
+import type { RedisConfig, QueueConfig } from '../config';
 import {
   QUEUE_DEFAULT_JOB_OPTIONS,
   QUEUE_NAMES,
@@ -35,6 +35,8 @@ export class QueueRegistryService
   constructor(
     @Inject(redisConfig.KEY)
     redis: RedisConfig,
+    @Inject(queueConfig.KEY)
+    config: QueueConfig,
     private readonly adminNotification: QueueAdminNotificationService,
   ) {
     this.connection = {
@@ -48,11 +50,17 @@ export class QueueRegistryService
         connection: this.connection,
         defaultJobOptions: QUEUE_DEFAULT_JOB_OPTIONS,
       });
+      const concurrency =
+        queueName === ('settlement-jobs' as QueueName)
+          ? config.settlementConcurrency
+          : 1;
+
       const worker = new Worker(
         queueName,
         async (job) => this.process(queueName, job),
         {
           connection: this.connection,
+          concurrency,
         },
       );
       const queueEvents = new QueueEvents(queueName, {

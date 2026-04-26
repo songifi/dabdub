@@ -92,7 +92,7 @@ export class WithdrawalsService {
 
   async computeFee(grossAmount: string): Promise<{ fee: string; netAmount: string }> {
     const config = await this.feeConfigRepo.findOne({
-      where{ feeType: FeeType.WITHDRAWAL, isActive: true },
+      where: { feeType: FeeType.WITHDRAWAL, isActive: true },
     });
 
     const gross = parseFloat(grossAmount);

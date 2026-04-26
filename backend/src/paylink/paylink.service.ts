@@ -25,6 +25,7 @@ import { ListPayLinksQueryDto } from './dto/list-pay-links-query.dto';
 import { PayLinkPublicDto } from './dto/pay-link-public.dto';
 import { PayLink, PayLinkStatus } from './entities/pay-link.entity';
 import { BalanceService } from '../balance/balance.service';
+import { SettlementProcessingService } from '../settlement/settlement-processing.service';
 
 const DEFAULT_EXPIRES_HOURS = 72;
 const PAYLINK_TOKEN_SIZE = 10;
@@ -63,6 +64,7 @@ export class PayLinkService {
     private readonly emailService: EmailService,
     private readonly notificationService: NotificationService,
     private readonly balanceService: BalanceService,
+    private readonly settlementService: SettlementProcessingService,
   ) {}
 
   async countActiveReceiveLinks(creatorUserId: string): Promise<number> {
@@ -195,7 +197,7 @@ export class PayLinkService {
     await this.transactionRepo.save(
       this.transactionRepo.create({
         userId: payer.id,
-        type: TransactionType.TRANSFER,
+        type: TransactionType.PAYLINK_SENT,
         amount: Number(payLink.amount),
         currency: 'USDC',
         status: TransactionStatus.COMPLETED,
@@ -207,7 +209,7 @@ export class PayLinkService {
     await this.transactionRepo.save(
       this.transactionRepo.create({
         userId: creator.id,
-        type: TransactionType.TRANSFER,
+        type: TransactionType.PAYLINK_RECEIVED,
         amount: Number(payLink.amount),
         currency: 'USDC',
         status: TransactionStatus.COMPLETED,
@@ -251,6 +253,15 @@ export class PayLinkService {
       },
       creator.id,
     );
+
+    // Enqueue settlement job asynchronously
+    if (!payLink.sandbox) {
+      void this.settlementService.enqueueSettlement(
+        payLink.creatorUserId,
+        Number(payLink.amount),
+        tokenId,
+      );
+    }
 
     return saved;
   }

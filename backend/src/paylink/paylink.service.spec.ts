@@ -1,38 +1,42 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { PayLinkService } from './paylink.service';
 import { PayLinkStatus } from './entities/pay-link.entity';
 
 describe('PayLinkService (sandbox)', () => {
-  const payLinkRepo = {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    createQueryBuilder: jest.fn(),
-  };
-
-  const userRepo = { findOne: jest.fn() };
-  const merchantRepo = { findOne: jest.fn() };
-  const transactionRepo = { create: jest.fn(), save: jest.fn() };
-  const sorobanService = {
-    createPayLink: jest.fn(),
-    payPayLink: jest.fn(),
-    cancelPayLink: jest.fn(),
-  };
-  const gateway = { emitToUser: jest.fn() };
-  const emailService = { queue: jest.fn() };
-  const notificationService = { create: jest.fn() };
-  const balanceService = { invalidateCache: jest.fn() };
+  let payLinkRepo: any;
+  let userRepo: any;
+  let merchantRepo: any;
+  let transactionRepo: any;
+  let sorobanService: any;
+  let gateway: any;
+  let emailService: any;
+  let notificationService: any;
+  let balanceService: any;
+  let settlementService: any;
+  let service: PayLinkService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    payLinkRepo = {
+      findOne: jest.fn(),
+      create: jest.fn().mockImplementation((x: any) => x),
+      save: jest.fn().mockImplementation(async (x: any) => x),
+      createQueryBuilder: jest.fn(),
+    };
 
-    payLinkRepo.create.mockImplementation((x: any) => x);
-    payLinkRepo.save.mockImplementation(async (x: any) => x);
-    payLinkRepo.findOne.mockResolvedValue(null);
-  });
+    userRepo = { findOne: jest.fn() };
+    merchantRepo = { findOne: jest.fn() };
+    transactionRepo = { create: jest.fn(), save: jest.fn() };
+    sorobanService = {
+      createPayLink: jest.fn(),
+      payPayLink: jest.fn(),
+      cancelPayLink: jest.fn(),
+    };
+    gateway = { emitToUser: jest.fn() };
+    emailService = { queue: jest.fn() };
+    notificationService = { create: jest.fn() };
+    balanceService = { invalidateCache: jest.fn() };
+    settlementService = { enqueueSettlement: jest.fn() };
 
-  it('sandbox create does not call Soroban and stores sandbox=true', async () => {
-    const service = new PayLinkService(
+    service = new PayLinkService(
       payLinkRepo as any,
       userRepo as any,
       merchantRepo as any,
@@ -42,8 +46,11 @@ describe('PayLinkService (sandbox)', () => {
       emailService as any,
       notificationService as any,
       balanceService as any,
+      settlementService as any,
     );
+  });
 
+  it('sandbox create does not call Soroban and stores sandbox=true', async () => {
     const creator = { id: 'u1', username: 'merchant' } as any;
     const result = await service.create(
       creator,
