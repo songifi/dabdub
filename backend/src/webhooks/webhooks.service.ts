@@ -2,10 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
-import axios from 'axios';
-import { AdminAlertService } from '../alerts/admin-alert.service';
-import { AdminAlertType } from '../alerts/admin-alert.entity';
 import { Webhook } from './entities/webhook.entity';
+import { WebhookDeliveryService } from './webhook-delivery.service';
 
 @Injectable()
 export class WebhooksService {
@@ -14,7 +12,7 @@ export class WebhooksService {
   constructor(
     @InjectRepository(Webhook)
     private webhooksRepo: Repository<Webhook>,
-    private adminAlerts: AdminAlertService,
+    private deliveryService: WebhookDeliveryService,
   ) {}
 
   async dispatch(merchantId: string, event: string, payload: Record<string, any>): Promise<void> {
@@ -22,45 +20,17 @@ export class WebhooksService {
       where: { merchantId, isActive: true },
     });
 
-    const matchingWebhooks = webhooks.filter(
+    const matching = webhooks.filter(
       (w) => w.events.includes(event) || w.events.includes('*'),
     );
 
     const body = JSON.stringify({ event, data: payload, timestamp: new Date().toISOString() });
 
-    for (const webhook of matchingWebhooks) {
-      const signature = this.sign(body, webhook.secret);
-      try {
-        await axios.post(webhook.url, body, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CheesePay-Signature': signature,
-            'X-CheesePay-Event': event,
-          },
-          timeout: 10000,
-        });
+    await Promise.all(
+      matching.map((webhook) => this.deliveryService.enqueueDelivery(webhook, event, body)),
+    );
 
-        webhook.lastDeliveredAt = new Date();
-        webhook.failureCount = 0;
-        await this.webhooksRepo.save(webhook);
-      } catch (err) {
-        this.logger.warn(`Webhook delivery failed to ${webhook.url}: ${err.message}`);
-        await this.adminAlerts.raise({
-          type: AdminAlertType.WEBHOOK_FAILURE,
-          dedupeKey: `webhook:${webhook.id}`,
-          message: `Webhook delivery failed to ${webhook.url}: ${err.message}`,
-          metadata: {
-            merchantId,
-            event,
-            webhookId: webhook.id,
-          },
-          thresholdValue: webhook.failureCount + 1,
-        });
-        webhook.failureCount += 1;
-        if (webhook.failureCount >= 10) webhook.isActive = false;
-        await this.webhooksRepo.save(webhook);
-      }
-    }
+    this.logger.log(`Enqueued ${matching.length} webhook job(s) for event=${event} merchantId=${merchantId}`);
   }
 
   async create(merchantId: string, url: string, events: string[], secret?: string) {
@@ -80,9 +50,5 @@ export class WebhooksService {
   async remove(id: string, merchantId: string) {
     const webhook = await this.webhooksRepo.findOne({ where: { id, merchantId } });
     if (webhook) await this.webhooksRepo.remove(webhook);
-  }
-
-  private sign(body: string, secret: string): string {
-    return crypto.createHmac('sha256', secret).update(body).digest('hex');
   }
 }
