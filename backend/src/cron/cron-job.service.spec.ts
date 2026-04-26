@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CronJobService } from './cron-job.service';
 import { CronJobLog, CronJobStatus } from './entities/cron-job-log.entity';
-import { TimeoutException } from '@nestjs/common';
+import { RequestTimeoutException } from '@nestjs/common';
 
 describe('CronJobService', () => {
   let service: CronJobService;
@@ -54,7 +54,7 @@ describe('CronJobService', () => {
     const promise = service.run('timeout-job', mockFn);
     jest.advanceTimersByTime(5 * 60 * 1000 + 1);
 
-    await expect(promise).rejects.toThrow(TimeoutException);
+    await expect(promise).rejects.toThrow(RequestTimeoutException);
     expect(mockRepo.save).toHaveBeenCalledWith(expect.objectContaining({
       status: CronJobStatus.FAILED,
     }));

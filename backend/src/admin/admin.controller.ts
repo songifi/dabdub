@@ -16,6 +16,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam } from '@nestjs/swagger'
 import { QueryAdminPaymentsDto } from './dto/query-admin-payments.dto';
 import { Request, Response } from 'express';
 import { AdminService } from './admin.service';
+import { RatesService } from '../rates/rates.service';
 import { MerchantStatus, MerchantRole } from '../merchants/entities/merchant.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -28,7 +29,10 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 @Roles(MerchantRole.ADMIN)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly ratesService: RatesService,
+  ) {}
 
   @Get('merchants')
   @ApiOperation({ summary: 'List all merchants' })
@@ -78,6 +82,15 @@ export class AdminController {
       req.user.id,
       dto.reason,
     );
+  }
+
+  // ── Cache Management ──────────────────────────────────────────────────────
+
+  @Post('cache/rates/refresh')
+  @ApiOperation({ summary: 'Force-refresh the XLM/USD exchange rate cache' })
+  async refreshRateCache() {
+    const rate = await this.ratesService.fetchAndCache();
+    return { rate };
   }
 
   // ── Geographic Distribution Analytics (#714) ───────────────────────────────

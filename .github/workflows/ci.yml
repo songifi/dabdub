@@ -137,6 +137,28 @@ jobs:
       - name: Migration rollback check
         run: pnpm migration:rollback:check
 
+  backend-migration-uncommitted:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for uncommitted migration files
+        run: pnpm migration:uncommitted:check
+
   backend-sql-injection-check:
     runs-on: ubuntu-latest
     defaults:
