@@ -393,3 +393,4 @@ export class SettlementsService {
     this.logger.log(`Large settlement ${id} approved and processed by admin`);
     return { success: true, message: 'Settlement approved and processing initiated' };
   }
+}

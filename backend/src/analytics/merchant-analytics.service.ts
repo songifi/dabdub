@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CacheService } from '../cache/cache.service';
+import { Payment } from '../payments/entities/payment.entity';
+import { Merchant } from '../merchants/entities/merchant.entity';
 
 const DAILY_SIGNUP_WINDOW_DAYS = 30;
 const ACTIVATION_WINDOW_DAYS = 7;
@@ -74,6 +78,8 @@ export class MerchantAnalyticsService {
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
+    @InjectRepository(Payment) private readonly paymentsRepo: Repository<Payment>,
+    @InjectRepository(Merchant) private readonly merchantsRepo: Repository<Merchant>,
     private readonly cache: CacheService,
   ) {}
 
@@ -98,45 +104,27 @@ export class MerchantAnalyticsService {
         const [dailySignupsRows, activationRows, monthlyActiveRows] =
           await Promise.all([
             this.dataSource.query<SignupRow[]>(
-              `
-                SELECT
-                  DATE_TRUNC('day', "createdAt")::date::text AS day,
-                  COUNT(*)::text AS count
-                FROM users
-                WHERE "is_admin" = false
-                  AND "is_treasury" = false
-                  AND "createdAt" >= ($1::timestamptz - INTERVAL '${DAILY_SIGNUP_WINDOW_DAYS - 1} days')
-                GROUP BY 1
-                ORDER BY 1 ASC
-              `,
-              [asOf.toISOString()],
+              `SELECT DATE_TRUNC('day', "createdAt")::date::text AS day, COUNT(*)::text AS count
+               FROM users
+               WHERE "is_admin" = false AND "is_treasury" = false
+                 AND "createdAt" >= ($1::timestamptz - ($2 * INTERVAL '1 day'))
+               GROUP BY 1 ORDER BY 1 ASC`,
+              [asOf.toISOString(), DAILY_SIGNUP_WINDOW_DAYS - 1],
             ),
             this.dataSource.query<CountRow[]>(
-              `
-                SELECT
-                  COUNT(*) FILTER (
-                    WHERE EXISTS (
-                      SELECT 1
-                      FROM sessions
-                      WHERE sessions.user_id = users.id
-                        AND sessions."createdAt" <= users."createdAt" + INTERVAL '${ACTIVATION_WINDOW_DAYS} days'
-                    )
-                  )::text AS count,
-                  COUNT(*)::text AS total
-                FROM users
-                WHERE "is_admin" = false
-                  AND "is_treasury" = false
-              `,
+              `SELECT COUNT(*) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM sessions
+                 WHERE sessions.user_id = users.id
+                   AND sessions."createdAt" <= users."createdAt" + ($1 * INTERVAL '1 day')
+               ))::text AS count, COUNT(*)::text AS total
+               FROM users WHERE "is_admin" = false AND "is_treasury" = false`,
+              [ACTIVATION_WINDOW_DAYS],
             ),
             this.dataSource.query<CountRow[]>(
-              `
-                SELECT COUNT(DISTINCT sessions.user_id)::text AS count
-                FROM sessions
-                INNER JOIN users ON users.id = sessions.user_id
-                WHERE users."is_admin" = false
-                  AND users."is_treasury" = false
-                  AND DATE_TRUNC('month', sessions.last_seen_at) = DATE_TRUNC('month', $1::timestamptz)
-              `,
+              `SELECT COUNT(DISTINCT sessions.user_id)::text AS count
+               FROM sessions INNER JOIN users ON users.id = sessions.user_id
+               WHERE users."is_admin" = false AND users."is_treasury" = false
+                 AND DATE_TRUNC('month', sessions.last_seen_at) = DATE_TRUNC('month', $1::timestamptz)`,
               [asOf.toISOString()],
             ),
           ]);
@@ -200,28 +188,26 @@ export class MerchantAnalyticsService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - periodDays);
 
-    const query = `
-      SELECT 
-        m."businessName",
-        COALESCE(SUM(p."amountUsd"), 0)::decimal AS volume,
-        COUNT(p.id)::int AS "paymentCount",
-        COUNT(DISTINCT p."settlementId") FILTER (WHERE p."settlementId" IS NOT NULL)::int AS "settlementCount",
-        m.country
-      FROM merchants m
-      LEFT JOIN payments p ON m.id = p."merchantId" 
-        AND p."createdAt" >= $1
-        AND p.status IN ('confirmed', 'settling', 'settled')
-      WHERE m.status = 'active'
-      GROUP BY m.id, m."businessName", m.country
-      ORDER BY volume DESC, "paymentCount" DESC
-      LIMIT $2
-    `;
-
     try {
       const { value, cacheHit } = await this.cache.getOrSet(
         cacheKey,
         async () => {
-          const merchants = await this.dataSource.query(query, [cutoffDate.toISOString(), limit]);
+          const merchants = await this.dataSource.query(
+            `SELECT m."businessName",
+               COALESCE(SUM(p."amountUsd"), 0)::decimal AS volume,
+               COUNT(p.id)::int AS "paymentCount",
+               COUNT(DISTINCT p."settlementId") FILTER (WHERE p."settlementId" IS NOT NULL)::int AS "settlementCount",
+               m.country
+             FROM merchants m
+             LEFT JOIN payments p ON m.id = p."merchantId"
+               AND p."createdAt" >= $1
+               AND p.status IN ('confirmed', 'settling', 'settled')
+             WHERE m.status = 'active'
+             GROUP BY m.id, m."businessName", m.country
+             ORDER BY volume DESC, "paymentCount" DESC
+             LIMIT $2`,
+            [cutoffDate.toISOString(), limit],
+          );
 
           const response: TopMerchantsResponse = {
             merchants: merchants.map((row: any) => ({
@@ -265,29 +251,21 @@ export class MerchantAnalyticsService {
     const { value } = await this.cache.getOrSet(
       cacheKey,
       async () => {
-        // Build the base query with optional network filter
-        const networkFilter = network ? 'AND p.network = $3' : '';
-        const queryParams = [start.toISOString(), end.toISOString()];
+        const rawQb = this.paymentsRepo.createQueryBuilder('p')
+          .select(`COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired'))`, 'created')
+          .addSelect(`COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled'))`, 'confirmed')
+          .addSelect(`COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled'))`, 'settling')
+          .addSelect(`COUNT(*) FILTER (WHERE p.status = 'settled')`, 'settled')
+          .addSelect(`COUNT(*) FILTER (WHERE p.status = 'failed')`, 'failed')
+          .addSelect(`COUNT(*) FILTER (WHERE p.status = 'expired')`, 'expired')
+          .where('p."createdAt" >= :start', { start: start.toISOString() })
+          .andWhere('p."createdAt" <= :end', { end: end.toISOString() });
+
         if (network) {
-          queryParams.push(network);
+          rawQb.andWhere('p.network = :network', { network });
         }
 
-        const query = `
-          SELECT 
-            COUNT(*) FILTER (WHERE p.status IN ('pending', 'confirmed', 'settling', 'settled', 'failed', 'expired')) AS created,
-            COUNT(*) FILTER (WHERE p.status IN ('confirmed', 'settling', 'settled')) AS confirmed,
-            COUNT(*) FILTER (WHERE p.status IN ('settling', 'settled')) AS settling,
-            COUNT(*) FILTER (WHERE p.status = 'settled') AS settled,
-            COUNT(*) FILTER (WHERE p.status = 'failed') AS failed,
-            COUNT(*) FILTER (WHERE p.status = 'expired') AS expired
-          FROM payments p
-          WHERE p."createdAt" >= $1 
-            AND p."createdAt" <= $2
-            ${networkFilter}
-        `;
-
-        const result = await this.dataSource.query(query, queryParams);
-        const data = result[0];
+        const data = await rawQb.getRawOne();
 
         const created = parseInt(data.created);
         const confirmed = parseInt(data.confirmed);
