@@ -19,7 +19,6 @@ const mockWallet = (): BlockchainWallet => ({
   stakedBalance: '0',
   lastSyncedAt: null,
   createdAt: new Date(),
-  user: null,
 });
 
 describe('BlockchainWalletService', () => {

@@ -3,11 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  Index,
-  OneToOne,
-  JoinColumn,
 } from 'typeorm';
-import { UserEntity } from '../../database/entities/user.entity';
 
 @Entity('blockchain_wallets')
 export class BlockchainWallet {
@@ -40,8 +36,4 @@ export class BlockchainWallet {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
-
-  @OneToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
-  user: UserEntity;
 }
