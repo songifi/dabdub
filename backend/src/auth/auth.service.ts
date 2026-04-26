@@ -1,18 +1,12 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-} from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import * as bcrypt from "bcrypt";
-import {
-  Merchant,
-  MerchantStatus,
-} from "../merchants/entities/merchant.entity";
-import { RegisterDto } from "./dto/register.dto";
-import { LoginDto } from "./dto/login.dto";
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { Merchant, MerchantStatus } from '../merchants/entities/merchant.entity';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import type { AuthTokenResponseDto } from './dto/auth-token-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -22,11 +16,9 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto) {
-    const existing = await this.merchantsRepo.findOne({
-      where: { email: dto.email },
-    });
-    if (existing) throw new ConflictException("Email already registered");
+  async register(dto: RegisterDto): Promise<AuthTokenResponseDto> {
+    const existing = await this.merchantsRepo.findOne({ where: { email: dto.email } });
+    if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
@@ -40,30 +32,35 @@ export class AuthService {
     });
 
     const saved = await this.merchantsRepo.save(merchant);
-    const token = this.signToken(saved.id, saved.email);
+    const token = this.signToken(saved.id, saved.email, saved.role);
 
-    return { accessToken: token, merchant: this.sanitize(saved) };
+    return { accessToken: token, merchant: saved };
   }
 
-  async login(dto: LoginDto) {
-    const merchant = await this.merchantsRepo.findOne({
-      where: { email: dto.email },
-    });
-    if (!merchant) throw new UnauthorizedException("Invalid credentials");
+  async login(dto: LoginDto): Promise<AuthTokenResponseDto> {
+    const merchant = await this.merchantsRepo.findOne({ where: { email: dto.email } });
+    if (!merchant) throw new UnauthorizedException('Invalid credentials');
 
     const valid = await bcrypt.compare(dto.password, merchant.passwordHash);
-    if (!valid) throw new UnauthorizedException("Invalid credentials");
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    const token = this.signToken(merchant.id, merchant.email);
-    return { accessToken: token, merchant: this.sanitize(merchant) };
+    const token = this.signToken(merchant.id, merchant.email, merchant.role);
+    return { accessToken: token, merchant };
   }
 
-  private signToken(sub: string, email: string): string {
-    return this.jwtService.sign({ sub, email });
+  async findMerchantByApiKey(rawKey: string): Promise<Merchant | null> {
+    const merchants = await this.merchantsRepo.find({
+      where: { apiKeyHash: Not(IsNull()) },
+    });
+    for (const m of merchants) {
+      if (m.apiKeyHash && (await bcrypt.compare(rawKey, m.apiKeyHash))) {
+        return m;
+      }
+    }
+    return null;
   }
 
-  private sanitize(merchant: Merchant) {
-    const { passwordHash: _, apiKeyHash: __, ...rest } = merchant; // eslint-disable-line @typescript-eslint/no-unused-vars
-    return rest;
+  private signToken(sub: string, email: string, role?: string): string {
+    return this.jwtService.sign({ sub, email, role });
   }
 }

@@ -4,60 +4,65 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   JoinColumn,
-} from "typeorm";
-import { Merchant } from "../../merchants/entities/merchant.entity";
-import { Settlement } from "../../settlements/entities/settlement.entity";
+} from 'typeorm';
+import { Merchant } from '../../merchants/entities/merchant.entity';
+import { Settlement } from '../../settlements/entities/settlement.entity';
 
 export enum PaymentStatus {
-  PENDING = "pending",
-  CONFIRMED = "confirmed",
-  SETTLING = "settling",
-  SETTLED = "settled",
-  FAILED = "failed",
-  EXPIRED = "expired",
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  SETTLING = 'settling',
+  SETTLED = 'settled',
+  FAILED = 'failed',
+  EXPIRED = 'expired',
+  REFUNDED = 'refunded',
 }
 
 export enum PaymentNetwork {
-  STELLAR = "stellar",
+  STELLAR = 'stellar',
+  POLYGON = 'polygon',
+  BASE = 'base',
+  CELO = 'celo',
+  ARBITRUM = 'arbitrum',
+  OPTIMISM = 'optimism',
+  STARKNET = 'starknet',
+  STACKS = 'stacks',
 }
 
-@Entity("payments")
+@Entity('payments')
 export class Payment {
-  @PrimaryGeneratedColumn("uuid")
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ unique: true })
   reference: string;
 
   @ManyToOne(() => Merchant, (merchant) => merchant.payments)
-  @JoinColumn({ name: "merchantId" })
+  @JoinColumn({ name: 'merchantId' })
   merchant: Merchant;
 
   @Column()
   merchantId: string;
 
-  @Column({ type: "decimal", precision: 18, scale: 6 })
+  @Column({ type: 'decimal', precision: 18, scale: 6 })
   amountUsd: number;
 
-  @Column({ type: "decimal", precision: 18, scale: 7, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 7, nullable: true })
   amountXlm: number;
 
-  @Column({ type: "decimal", precision: 18, scale: 6, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
   amountUsdc: number;
 
   @Column({ nullable: true })
   currency: string;
 
-  @Column({
-    type: "enum",
-    enum: PaymentNetwork,
-    default: PaymentNetwork.STELLAR,
-  })
+  @Column({ type: 'enum', enum: PaymentNetwork, default: PaymentNetwork.STELLAR })
   network: PaymentNetwork;
 
-  @Column({ type: "enum", enum: PaymentStatus, default: PaymentStatus.PENDING })
+  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 
   @Column({ nullable: true })
@@ -65,6 +70,9 @@ export class Payment {
 
   @Column({ nullable: true })
   stellarMemo: string;
+
+  @Column({ nullable: true })
+  customerWalletAddress: string;
 
   @Column({ nullable: true })
   txHash: string;
@@ -75,16 +83,16 @@ export class Payment {
   @Column({ nullable: true })
   customerEmail: string;
 
-  @Column({ type: "jsonb", nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 
   @Column({ nullable: true })
   qrCode: string;
 
-  @Column({ type: "decimal", precision: 18, scale: 6, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
   feeUsd: number;
 
-  @Column({ type: "decimal", precision: 18, scale: 6, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
   settlementAmountFiat: number;
 
   @Column({ nullable: true })
@@ -96,8 +104,20 @@ export class Payment {
   @Column({ nullable: true })
   confirmedAt: Date;
 
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
+  refundAmountUsd: number;
+
+  @Column({ nullable: true })
+  refundReason: string;
+
+  @Column({ nullable: true })
+  refundTxHash: string;
+
+  @Column({ nullable: true })
+  refundedAt: Date;
+
   @ManyToOne(() => Settlement, { nullable: true })
-  @JoinColumn({ name: "settlementId" })
+  @JoinColumn({ name: 'settlementId' })
   settlement: Settlement;
 
   @Column({ nullable: true })
@@ -108,4 +128,7 @@ export class Payment {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }

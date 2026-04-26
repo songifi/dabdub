@@ -1,0 +1,15 @@
+<p>Hi {{merchantName}},</p>
+<p>A payment has been confirmed on Stellar and is being processed for settlement.</p>
+<div class="detail-box">
+  <table>
+    <tr><td>Reference</td><td>{{reference}}</td></tr>
+    <tr><td>USD Amount</td><td>${{amountUsd}}</td></tr>
+    <tr><td>Asset Amount</td><td>{{assetAmount}} {{asset}}</td></tr>
+    <tr><td>Network</td><td>Stellar</td></tr>
+    <tr><td>Transaction Hash</td><td>{{txHash}}</td></tr>
+    <tr><td>Confirmed At</td><td>{{confirmedAt}}</td></tr>
+  </table>
+</div>
+<p><a href="{{txUrl}}">View transaction on Stellar Explorer</a></p>
+<p><a href="{{paymentDetailUrl}}">View payment details</a></p>
+<p>We will notify you once the fiat settlement has been completed.</p>
