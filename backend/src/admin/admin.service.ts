@@ -462,6 +462,18 @@ export class AdminService {
     return { data, total, page: query.page, limit: query.limit, pages: Math.ceil(total / query.limit) };
   }
 
+  async flushCache(): Promise<{ flushed: true; deletedKeys: number; patterns: string[]; flushedAt: string }> {
+    const patterns = ['analytics:*', 'exchange-rate:*', 'exchange_rate:*', 'rates:*'];
+    const deletedByPattern = await Promise.all(patterns.map((p) => this.cache.delPattern(p)));
+    await this.cache.del(this.platformFeeCacheKey);
+    return {
+      flushed: true,
+      deletedKeys: deletedByPattern.reduce((total, n) => total + n, 0) + 1,
+      patterns,
+      flushedAt: new Date().toISOString(),
+    };
+  }
+
   async getAdminPaymentById(id: string) {
     const payment = await this.paymentsRepo.findOne({
       where: { id },
