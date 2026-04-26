@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
+import { MetricsService } from '../prometheus/metrics.service';
 import Redis from 'ioredis';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
@@ -35,11 +36,17 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   /** Namespace prefix: "{env}:cache:" */
   readonly ns: string;
 
-  constructor(redis?: Redis, subscriber?: Redis) {
+  constructor(@Optional() private readonly metrics?: MetricsService, redis?: Redis, subscriber?: Redis) {
     const env = process.env.NODE_ENV ?? 'development';
     this.ns = `${env}:cache:`;
     this.redis = redis ?? buildRedisClient();
     this.subscriber = subscriber ?? buildRedisClient();
+  }
+
+  private recordLookup(key: string, result: 'hit' | 'miss'): void {
+    if (!this.metrics) return;
+    const pattern = key.replace(/[0-9a-f-]{8,}/gi, '*');
+    this.metrics.cacheRequestsTotal.inc({ key_pattern: pattern, result });
   }
 
   async onModuleInit(): Promise<void> {
@@ -94,8 +101,13 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
 
   async get<T>(key: string): Promise<T | undefined> {
     const raw = await this.redis.get(this.k(key));
-    if (!raw) return undefined;
-    return this.decode<T>(raw);
+    if (!raw) {
+      this.recordLookup(key, 'miss');
+      return undefined;
+    }
+    const value = this.decode<T>(raw);
+    this.recordLookup(key, value === undefined ? 'miss' : 'hit');
+    return value;
   }
 
   async set<T>(key: string, value: T, options?: { ttlSeconds?: number }): Promise<void> {
