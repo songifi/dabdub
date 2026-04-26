@@ -9,6 +9,7 @@ import { SettlementsModule } from '../settlements/settlements.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { QUEUE_NAMES } from '../queues/queue.constants';
 import { EmailModule } from '../email/email.module';
+import { MerchantsModule } from '../merchants/merchants.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { EmailModule } from '../email/email.module';
     forwardRef(() => SettlementsModule),
     WebhooksModule,
     EmailModule,
+    MerchantsModule,
     BullModule.registerQueue({ name: QUEUE_NAMES.stellarMonitor }),
   ],
   providers: [StellarService, StellarMonitorService],

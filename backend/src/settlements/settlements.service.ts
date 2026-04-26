@@ -11,6 +11,10 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { AdminSettlementsQueryDto } from './dto/admin-settlements-query.dto';
 import { CacheService } from '../cache/cache.service';
+import { EmailService } from '../email/email.service';
+import { MerchantsService } from '../merchants/merchants.service';
+import { NotificationPrefsService } from '../notifications/notification-prefs.service';
+import { NotificationChannel, NotificationEventType } from '../notifications/entities/notification-preference.entity';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -31,6 +35,9 @@ export class SettlementsService {
     private webhooks: WebhooksService,
     private adminAlerts: AdminAlertService,
     private cache: CacheService,
+    private emailService: EmailService,
+    private merchantsService: MerchantsService,
+    private notificationPrefs: NotificationPrefsService,
   ) {}
 
   async initiateSettlement(payment: Payment): Promise<void> {
@@ -113,6 +120,17 @@ export class SettlementsService {
         settlementId: settlement.id,
         amount: settlement.netAmountUsd,
       });
+
+      await this.sendSettlementEmail(
+        settlement.merchantId,
+        NotificationEventType.PAYMENT_SETTLED,
+        'settlement-completed',
+        {
+          settlementId: settlement.id,
+          netAmountUsd: Number(settlement.netAmountUsd).toFixed(2),
+          paymentId: payment.id,
+        },
+      );
     } catch (err) {
       this.logger.error(`Settlement failed for ${settlement.id}`, err.message);
       await this.adminAlerts.raise({
@@ -137,6 +155,17 @@ export class SettlementsService {
         paymentId: payment.id,
         reason: err.message,
       });
+
+      await this.sendSettlementEmail(
+        settlement.merchantId,
+        NotificationEventType.SETTLEMENT_FAILED,
+        'payment-failed',
+        {
+          settlementId: settlement.id,
+          paymentId: payment.id,
+          reason: err.message,
+        },
+      );
     }
   }
 
@@ -183,6 +212,17 @@ export class SettlementsService {
           settlementId: settlement.id,
           amount: settlement.netAmountUsd,
         });
+
+        await this.sendSettlementEmail(
+          settlement.merchantId,
+          NotificationEventType.PAYMENT_SETTLED,
+          'settlement-completed',
+          {
+            settlementId: settlement.id,
+            netAmountUsd: Number(settlement.netAmountUsd).toFixed(2),
+            paymentId: payment.id,
+          },
+        );
       }
     } else {
       settlement.status = SettlementStatus.FAILED;
@@ -196,10 +236,45 @@ export class SettlementsService {
           paymentId: payment.id,
           reason: settlement.failureReason,
         });
+
+        await this.sendSettlementEmail(
+          settlement.merchantId,
+          NotificationEventType.SETTLEMENT_FAILED,
+          'payment-failed',
+          {
+            settlementId: settlement.id,
+            paymentId: payment.id,
+            reason: settlement.failureReason,
+          },
+        );
       }
     }
   }
-}
+
+  /**
+   * Sends an email for a settlement event only if the merchant has that
+   * channel+event combination enabled in their notification preferences.
+   */
+  private async sendSettlementEmail(
+    merchantId: string,
+    eventType: NotificationEventType,
+    templateAlias: string,
+    mergeData: Record<string, unknown>,
+  ): Promise<void> {
+    const emailEnabled = await this.notificationPrefs.isEnabled(
+      merchantId,
+      NotificationChannel.EMAIL,
+      eventType,
+    );
+    if (!emailEnabled) return;
+
+    try {
+      const merchant = await this.merchantsService.findOne(merchantId);
+      await this.emailService.queue(merchant.email, templateAlias, mergeData, merchantId);
+    } catch (err) {
+      this.logger.warn(`Failed to send settlement email for merchant ${merchantId}: ${err.message}`);
+    }
+  }
 
   // Admin methods
   async findAllAdmin(query: AdminSettlementsQueryDto) {
