@@ -15,9 +15,13 @@ import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.en
 import { AuditLog } from './entities/audit-log.entity';
 import { FilterService } from '../common/filter.service';
 import { PaginationDto, PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class AdminService {
+  private readonly platformFeeCacheKey = 'fee-config:platform:global';
+  private readonly platformFeeTtlSeconds = 300;
+
   constructor(
     @InjectRepository(Merchant)
     private merchantsRepo: Repository<Merchant>,
@@ -30,6 +34,7 @@ export class AdminService {
     @InjectRepository(AuditLog)
     private readonly auditLogRepo: Repository<AuditLog>,
     private readonly filterService: FilterService,
+    private readonly cache: CacheService,
   ) {}
 
   async findAllMerchants(page = 1, limit = 20) {
@@ -105,7 +110,12 @@ export class AdminService {
   // ── Fee Management ─────────────────────────────────────────────────────────
 
   async getGlobalFees(): Promise<FeeConfig[]> {
-    return this.feeConfigRepo.find({ order: { feeType: 'ASC' } });
+    const { value } = await this.cache.getOrSet(
+      this.platformFeeCacheKey,
+      () => this.feeConfigRepo.find({ order: { feeType: 'ASC' } }),
+      { ttlSeconds: this.platformFeeTtlSeconds },
+    );
+    return value;
   }
 
   async updateGlobalFee(
@@ -122,6 +132,7 @@ export class AdminService {
     const previousValue = feeConfig.baseFeeRate;
     feeConfig.baseFeeRate = newRate;
     const updated = await this.feeConfigRepo.save(feeConfig);
+    await this.cache.del(this.platformFeeCacheKey);
 
     await this.recordFeeHistory({
       feeType,

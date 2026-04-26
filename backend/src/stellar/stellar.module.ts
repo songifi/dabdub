@@ -11,6 +11,7 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
 import { QUEUE_NAMES } from '../queues/queue.constants';
 import { EmailModule } from '../email/email.module';
 import { MerchantsModule } from '../merchants/merchants.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { MerchantsModule } from '../merchants/merchants.module';
     WebhooksModule,
     EmailModule,
     MerchantsModule,
+    CacheModule,
     BullModule.registerQueue({ name: QUEUE_NAMES.stellarMonitor }),
   ],
   providers: [StellarService, StellarMonitorService, SorobanMonitorService],

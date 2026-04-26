@@ -33,6 +33,7 @@ import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
 
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { CacheWarmupService } from './cache/cache-warmup.service';
 
 @Module({
   imports: [
@@ -121,6 +122,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
       provide: APP_FILTER,
       useClass: SentryExceptionFilter,
     },
+    CacheWarmupService,
   ],
 })
 export class AppModule implements NestModule {
