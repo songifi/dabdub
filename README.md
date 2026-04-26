@@ -360,3 +360,11 @@ vercel --prod
 
 
 Built with ❤️ by the CheesePay team
+
+## 💰 Bounty Contribution
+
+- **Task:** [Soroban] Token contract event hooks for NestJS monitoring
+- **Reward:** $41
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+
