@@ -1,4 +1,4 @@
-import { Injectable, Logger, TimeoutException } from '@nestjs/common';
+import { Injectable, Logger, RequestTimeoutException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CronJobLog, CronJobStatus } from './entities/cron-job-log.entity';
@@ -26,7 +26,7 @@ export class CronJobService {
       const result = await Promise.race([
         fn(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new TimeoutException(`Cron job ${jobName} exceeded 5min`)), 5 * 60 * 1000),
+          setTimeout(() => reject(new RequestTimeoutException(`Cron job ${jobName} exceeded 5min`)), 5 * 60 * 1000),
         ),
       ]);
 

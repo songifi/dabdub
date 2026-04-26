@@ -7,15 +7,29 @@ import { Merchant, MerchantStatus } from './entities/merchant.entity';
 import { AdminAuditLog } from './entities/admin-audit-log.entity';
 import { UpdateMerchantDto } from './dto/create-merchant.dto';
 import { BulkMerchantActionDto, BulkActionResponseDto, BulkActionResultDto } from './dto/bulk-merchant-action.dto';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class MerchantsService {
+  private readonly activeMerchantCountCacheKey = 'merchant:active:count';
+  private readonly activeMerchantCountTtlSeconds = 300;
+
   constructor(
     @InjectRepository(Merchant)
     private merchantsRepo: Repository<Merchant>,
     @InjectRepository(AdminAuditLog)
     private auditRepo: Repository<AdminAuditLog>,
+    private readonly cache: CacheService,
   ) {}
+
+  async getActiveMerchantCount(): Promise<number> {
+    const { value } = await this.cache.getOrSet<number>(
+      this.activeMerchantCountCacheKey,
+      () => this.merchantsRepo.count({ where: { status: MerchantStatus.ACTIVE } }),
+      { ttlSeconds: this.activeMerchantCountTtlSeconds },
+    );
+    return value;
+  }
 
   async findOne(id: string): Promise<Merchant> {
     const merchant = await this.merchantsRepo.findOne({ where: { id } });
@@ -26,7 +40,9 @@ export class MerchantsService {
   async update(id: string, dto: UpdateMerchantDto): Promise<Merchant> {
     const merchant = await this.findOne(id);
     Object.assign(merchant, dto);
-    return this.merchantsRepo.save(merchant);
+    const updated = await this.merchantsRepo.save(merchant);
+    await this.cache.del(this.activeMerchantCountCacheKey);
+    return updated;
   }
 
   async bulkUpdateStatus(
@@ -48,6 +64,7 @@ export class MerchantsService {
         const oldStatus = merchant.status;
         merchant.status = status;
         await this.merchantsRepo.save(merchant);
+        await this.cache.del(this.activeMerchantCountCacheKey);
 
         await this.auditRepo.save({
           adminId,
@@ -101,6 +118,8 @@ export class MerchantsService {
     }
 
     merchant.customFeeRate = customFeeRate != null ? String(customFeeRate) : null;
-    return this.merchantsRepo.save(merchant);
+    const updated = await this.merchantsRepo.save(merchant);
+    await this.cache.del(this.activeMerchantCountCacheKey);
+    return updated;
   }
 }

@@ -9,10 +9,14 @@ import { FeeConfig } from '../fee-config/entities/fee-config.entity';
 import { FeeHistory } from '../fee-config/entities/fee-history.entity';
 import { CronModule } from '../cron/cron.module';
 import { AuditLog } from './entities/audit-log.entity';
-import { IpAllowlistGuard } from '../security/ip-allowlist.guard';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Merchant, Payment, FeeConfig, FeeHistory, AuditLog]), CronModule],
+  imports: [
+    TypeOrmModule.forFeature([Merchant, Payment, FeeConfig, FeeHistory, AuditLog]),
+    CronModule,
+    RatesModule,
+    CacheModule,
+  ],
   controllers: [AdminController, CronAdminController],
   providers: [AdminService, IpAllowlistGuard],
   exports: [AdminService],

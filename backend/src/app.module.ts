@@ -33,7 +33,7 @@ import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
 
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
-import { DatabaseModule } from './database/database.module';
+import { CacheWarmupService } from './cache/cache-warmup.service';
 
 @Module({
   imports: [
@@ -70,30 +70,17 @@ import { DatabaseModule } from './database/database.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => {
-        const poolMax = config.get<number>('DB_POOL_MAX', 20);
-        const poolMin = config.get<number>('DB_POOL_MIN', 2);
-        const acquireTimeoutMillis = config.get<number>('DB_ACQUIRE_TIMEOUT_MS', 10000);
-        const idleTimeoutMillis = config.get<number>('DB_IDLE_TIMEOUT_MS', 60000);
-
-        return {
-          type: 'postgres',
-          host: config.get('DB_HOST', 'localhost'),
-          port: config.get<number>('DB_PORT', 5432),
-          username: config.get('DB_USER', 'postgres'),
-          password: config.get('DB_PASSWORD'),
-          database: config.get('DB_NAME', 'cheesepay'),
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: config.get('NODE_ENV') !== 'production',
-          logging: config.get('NODE_ENV') === 'development',
-          extra: {
-            min: poolMin,
-            max: poolMax,
-            acquireTimeoutMillis,
-            idleTimeoutMillis,
-          },
-        };
-      },
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get('DB_HOST', 'localhost'),
+        port: config.get<number>('DB_PORT', 5432),
+        username: config.get('DB_USER', 'postgres'),
+        password: config.get('DB_PASSWORD'),
+        database: config.get('DB_NAME', 'cheesepay'),
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        synchronize: false,
+        logging: config.get('NODE_ENV') === 'development',
+      }),
       inject: [ConfigService],
     }),
     HealthModule,
@@ -136,6 +123,7 @@ import { DatabaseModule } from './database/database.module';
       provide: APP_FILTER,
       useClass: SentryExceptionFilter,
     },
+    CacheWarmupService,
   ],
 })
 export class AppModule implements NestModule {

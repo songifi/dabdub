@@ -18,11 +18,13 @@
     "test:cov": "jest --coverage",
     "test:integration": "jest --testRegex=\"\\.integration-spec\\.ts$\"",
     "test:e2e": "jest --testPathPattern=e2e-spec",
-    "migration:generate": "typeorm migration:generate",
-    "migration:run": "typeorm migration:run",
-    "migration:revert": "typeorm migration:revert",
+    "migration:generate": "ts-node --transpile-only node_modules/.bin/typeorm migration:generate -f ormconfig",
+    "migration:run": "ts-node --transpile-only node_modules/.bin/typeorm migration:run -f ormconfig",
+    "migration:revert": "ts-node --transpile-only node_modules/.bin/typeorm migration:revert -f ormconfig",
+    "migration:show": "ts-node --transpile-only node_modules/.bin/typeorm migration:show -f ormconfig",
     "migration:check": "ts-node --transpile-only scripts/migration-check.ts",
-    "migration:rollback:check": "ts-node --transpile-only scripts/migration-rollback-check.ts"
+    "migration:rollback:check": "ts-node --transpile-only scripts/migration-rollback-check.ts",
+    "migration:uncommitted:check": "ts-node --transpile-only scripts/migration-uncommitted-check.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
