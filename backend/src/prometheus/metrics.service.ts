@@ -10,6 +10,7 @@ export class MetricsService {
 
   readonly httpRequestsTotal: Counter<string>;
   readonly httpRequestDurationMs: Histogram<string>;
+  readonly cacheRequestsTotal: Counter<string>;
 
   constructor() {
     this.paymentCreatedTotal = new Counter({
@@ -49,6 +50,12 @@ export class MetricsService {
       labelNames: ['method', 'route', 'status'],
       buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
     });
+
+    this.cacheRequestsTotal = new Counter({
+      name: 'cache_requests_total',
+      help: 'Total cache lookups by key pattern and result',
+      labelNames: ['key_pattern', 'result'],
+    });
   }
 
   incrementPaymentCreated(type: string): void {
@@ -76,6 +83,10 @@ export class MetricsService {
     const labels = { method, route, status: String(status) };
     this.httpRequestsTotal.inc(labels);
     this.httpRequestDurationMs.observe(labels, durationMs);
+  }
+
+  recordCacheLookup(keyPattern: string, result: 'hit' | 'miss'): void {
+    this.cacheRequestsTotal.inc({ key_pattern: keyPattern, result });
   }
 }
 

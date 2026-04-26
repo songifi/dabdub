@@ -109,5 +109,19 @@ describe('MetricsService', () => {
       );
     });
   });
+
+  describe('recordCacheLookup', () => {
+    it('should increment cache_requests_total for hit result', () => {
+      const spy = jest.spyOn(service.cacheRequestsTotal, 'inc');
+      service.recordCacheLookup('exchange-rate', 'hit');
+      expect(spy).toHaveBeenCalledWith({ key_pattern: 'exchange-rate', result: 'hit' });
+    });
+
+    it('should increment cache_requests_total for miss result', () => {
+      const spy = jest.spyOn(service.cacheRequestsTotal, 'inc');
+      service.recordCacheLookup('exchange-rate', 'miss');
+      expect(spy).toHaveBeenCalledWith({ key_pattern: 'exchange-rate', result: 'miss' });
+    });
+  });
 });
 
