@@ -5,6 +5,7 @@ import { Repository } from "typeorm";
 import { InjectRepository } from "@nestjs/typeorm";
 import axios from "axios";
 import * as crypto from "crypto";
+import { ConfigService } from "@nestjs/config";
 import { QueueConfigService } from "../config/queue-config.service";
 import {
   WEBHOOK_DELIVERY_JOB,
@@ -12,6 +13,8 @@ import {
 } from "../queue/queue.constants";
 import { Webhook } from "./entities/webhook.entity";
 import { WebhookDeliveryLog } from "./entities/webhook-delivery-log.entity";
+import { Merchant } from "../merchants/entities/merchant.entity";
+import { WebhookFailureAlertService } from "./webhook-failure-alert.service";
 
 interface WebhookDeliveryJobData {
   webhookId: string;
@@ -33,9 +36,13 @@ export class WebhookDeliveryProcessor {
     private readonly webhookRepo: Repository<Webhook>,
     @InjectRepository(WebhookDeliveryLog)
     private readonly deliveryLogRepo: Repository<WebhookDeliveryLog>,
+    @InjectRepository(Merchant)
+    private readonly merchantRepo: Repository<Merchant>,
     @InjectQueue(WEBHOOK_DELIVERY_QUEUE)
     private readonly webhookQueue: Queue,
     private readonly queueConfig: QueueConfigService,
+    private readonly config: ConfigService,
+    private readonly failureAlertService: WebhookFailureAlertService,
   ) {}
 
   @Process(WEBHOOK_DELIVERY_JOB)
@@ -74,7 +81,7 @@ export class WebhookDeliveryProcessor {
         errorMessage,
         nextDelay,
       );
-      await this.markWebhookFailure(data.webhookId);
+      await this.markWebhookFailure(data.webhookId, errorMessage);
 
       if (retryIndex + 1 < retrySchedule.length) {
         await this.webhookQueue.add(
@@ -134,7 +141,7 @@ export class WebhookDeliveryProcessor {
     await this.webhookRepo.save(webhook);
   }
 
-  private async markWebhookFailure(webhookId: string) {
+  private async markWebhookFailure(webhookId: string, lastError: string) {
     const webhook = await this.webhookRepo.findOne({
       where: { id: webhookId },
     });
@@ -145,5 +152,14 @@ export class WebhookDeliveryProcessor {
       webhook.isActive = false;
     }
     await this.webhookRepo.save(webhook);
+
+    const merchant = await this.merchantRepo.findOne({
+      where: { id: webhook.merchantId },
+      select: ['email'],
+    });
+    if (merchant?.email) {
+      const settingsUrl = `${this.config.get('FRONTEND_URL', '')}/dashboard/settings/webhooks`;
+      await this.failureAlertService.notifyIfNeeded(webhook, merchant.email, lastError, settingsUrl);
+    }
   }
 }

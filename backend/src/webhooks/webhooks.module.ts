@@ -9,18 +9,22 @@ import { Webhook } from './entities/webhook.entity';
 import { WebhookDeliveryLog } from './entities/webhook-delivery-log.entity';
 import { WebhookDeliveryProcessor } from './webhook-delivery.processor';
 import { WebhookDeliveryService } from './webhook-delivery.service';
+import { WebhookFailureAlertService } from './webhook-failure-alert.service';
 import { QueueConfigService } from '../config/queue-config.service';
 import { WEBHOOK_DELIVERY_QUEUE } from '../queue/queue.constants';
+import { Merchant } from '../merchants/entities/merchant.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([Webhook, WebhookDeliveryLog]),
+    TypeOrmModule.forFeature([Webhook, WebhookDeliveryLog, Merchant]),
     BullModule.registerQueue({ name: WEBHOOK_DELIVERY_QUEUE }),
     AdminAlertModule,
+    NotificationsModule,
   ],
   controllers: [WebhooksController],
-  providers: [WebhooksService, WebhookDeliveryProcessor, WebhookDeliveryService, QueueConfigService],
+  providers: [WebhooksService, WebhookDeliveryProcessor, WebhookDeliveryService, WebhookFailureAlertService, QueueConfigService],
   exports: [WebhooksService, WebhookDeliveryService],
 })
 export class WebhooksModule {}
