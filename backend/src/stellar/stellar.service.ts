@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as StellarSdk from '@stellar/stellar-sdk';
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as StellarSdk from "@stellar/stellar-sdk";
 
 @Injectable()
 export class StellarService implements OnModuleInit {
@@ -13,36 +13,38 @@ export class StellarService implements OnModuleInit {
   constructor(private config: ConfigService) {}
 
   onModuleInit() {
-    const network = this.config.get('STELLAR_NETWORK', 'TESTNET');
+    const network = this.config.get("STELLAR_NETWORK", "TESTNET");
     const horizonUrl = this.config.get(
-      'STELLAR_HORIZON_URL',
-      network === 'PUBLIC'
-        ? 'https://horizon.stellar.org'
-        : 'https://horizon-testnet.stellar.org',
+      "STELLAR_HORIZON_URL",
+      network === "PUBLIC"
+        ? "https://horizon.stellar.org"
+        : "https://horizon-testnet.stellar.org",
     );
 
     this.server = new StellarSdk.Horizon.Server(horizonUrl);
     this.networkPassphrase =
-      network === 'PUBLIC'
+      network === "PUBLIC"
         ? StellarSdk.Networks.PUBLIC
         : StellarSdk.Networks.TESTNET;
 
-    const secret = this.config.get('STELLAR_ACCOUNT_SECRET');
+    const secret = this.config.get("STELLAR_ACCOUNT_SECRET");
     if (secret) {
       this.keypair = StellarSdk.Keypair.fromSecret(secret);
     }
 
     const usdcIssuer = this.config.get(
-      'STELLAR_USDC_ISSUER',
-      'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+      "STELLAR_USDC_ISSUER",
+      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
     );
-    this.usdcAsset = new StellarSdk.Asset('USDC', usdcIssuer);
+    this.usdcAsset = new StellarSdk.Asset("USDC", usdcIssuer);
 
     this.logger.log(`Stellar initialized on ${network}`);
   }
 
   getDepositAddress(): string {
-    return this.keypair?.publicKey() ?? this.config.get('STELLAR_ACCOUNT_PUBLIC', '');
+    return (
+      this.keypair?.publicKey() ?? this.config.get("STELLAR_ACCOUNT_PUBLIC", "")
+    );
   }
 
   generateMemo(): string {
@@ -59,7 +61,7 @@ export class StellarService implements OnModuleInit {
 
       return 0.1;
     } catch (err) {
-      this.logger.warn('Failed to fetch XLM/USD rate, using fallback');
+      this.logger.warn("Failed to fetch XLM/USD rate, using fallback");
       return 0.1;
     }
   }
@@ -71,7 +73,7 @@ export class StellarService implements OnModuleInit {
     const builder = this.server
       .transactions()
       .forAccount(accountId)
-      .order('asc')
+      .order("asc")
       .limit(200);
 
     if (cursor) builder.cursor(cursor);
@@ -90,7 +92,7 @@ export class StellarService implements OnModuleInit {
     txHash: string,
     expectedMemo: string,
     expectedAmountUsdc?: number,
-  ): Promise<{ verified: boolean; amount?: number; asset?: string; from?: string }> {
+  ): Promise<{ verified: boolean; amount?: number; asset?: string }> {
     try {
       const tx = await this.server.transactions().transaction(txHash).call();
 
@@ -99,17 +101,22 @@ export class StellarService implements OnModuleInit {
         return { verified: false };
       }
 
+      // Note: expectedAmountUsdc is optional and not currently validated
+      if (expectedAmountUsdc !== undefined) {
+        // Future: add amount validation if needed
+      }
+
       const ops = await tx.operations();
       for (const op of ops.records as any[]) {
-        if (op.type === 'payment') {
+        if (op.type === "payment") {
           const isUsdc =
-            op.asset_code === 'USDC' &&
+            op.asset_code === "USDC" &&
             op.asset_issuer === this.usdcAsset.getIssuer();
-          const isXlm = op.asset_type === 'native';
+          const isXlm = op.asset_type === "native";
 
           if (isUsdc || isXlm) {
             const amount = parseFloat(op.amount);
-            return { verified: true, amount, asset: isUsdc ? 'USDC' : 'XLM', from: op.from };
+            return { verified: true, amount, asset: isUsdc ? "USDC" : "XLM" };
           }
         }
       }
