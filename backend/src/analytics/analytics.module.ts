@@ -15,16 +15,20 @@ import { AnalyticsExportService, ANALYTICS_EXPORT_QUEUE } from './analytics-expo
 import { AnalyticsExport } from './entities/analytics-export.entity';
 import { AnalyticsExportProcessor } from './analytics-export.processor';
 import { EmailModule } from '../email/email.module';
+import { DailyPaymentVolume } from './entities/daily-payment-volume.view';
+import { AnalyticsRefreshService } from './analytics-refresh.service';
+import { CronModule } from '../cron/cron.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, Settlement, Merchant, AnalyticsExport]),
+    TypeOrmModule.forFeature([Payment, Settlement, Merchant, AnalyticsExport, DailyPaymentVolume]),
     BullModule.registerQueue({ name: ANALYTICS_EXPORT_QUEUE }),
     EmailModule,
     CacheModule,
+    CronModule,
   ],
   controllers: [AnalyticsController, AnalyticsExportController, AnalyticsExportDownloadController],
-  providers: [AnalyticsService, AnalyticsExportService, AnalyticsExportProcessor],
+  providers: [AnalyticsService, AnalyticsExportService, AnalyticsExportProcessor, AnalyticsRefreshService],
   exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

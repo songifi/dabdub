@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Payment, PaymentNetwork, PaymentStatus } from '../payments/entities/payment.entity';
 import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
 import { CacheService } from '../cache/cache.service';
+import { DailyPaymentVolume } from './entities/daily-payment-volume.view';
 
 type AnalyticsPeriod = 'daily' | 'monthly';
 type VolumeScope = 'merchant' | 'admin';
@@ -59,6 +60,8 @@ export class AnalyticsService {
     private paymentsRepo: Repository<Payment>,
     @InjectRepository(Settlement)
     private settlementsRepo: Repository<Settlement>,
+    @InjectRepository(DailyPaymentVolume)
+    private dailyVolumeRepo: Repository<DailyPaymentVolume>,
     private cache: CacheService,
   ) {}
 
@@ -347,24 +350,34 @@ export class AnalyticsService {
     start: Date,
     end: Date,
   ): Promise<VolumeBreakdownRow[]> {
-    const bucketExpression =
-      period === 'daily'
-        ? `DATE_TRUNC('day', payment."createdAt")`
-        : `DATE_TRUNC('month', payment."createdAt")`;
-    const labelFormat = period === 'daily' ? 'YYYY-MM-DD' : 'YYYY-MM';
+    // Daily queries read from the materialized view for sub-200ms performance.
+    if (period === 'daily') {
+      const qb = this.dailyVolumeRepo
+        .createQueryBuilder('mv')
+        .select("TO_CHAR(mv.day, 'YYYY-MM-DD')", 'bucket')
+        .addSelect('SUM(mv.paymentCount)', 'count')
+        .addSelect('COALESCE(SUM(mv.volumeUsd), 0)::numeric(18,6)::text', 'volumeUsd')
+        .where('mv.day >= :start', { start })
+        .andWhere('mv.day < :end', { end });
+      if (merchantId) {
+        qb.andWhere('mv.merchantId = :merchantId', { merchantId });
+      }
+      return qb.groupBy('mv.day').orderBy('mv.day', 'ASC').getRawMany();
+    }
+
+    // Monthly queries still hit the payments table directly.
+    const bucketExpression = `DATE_TRUNC('month', payment."createdAt")`;
     const query = this.paymentsRepo
       .createQueryBuilder('payment')
-      .select(`TO_CHAR(${bucketExpression}, '${labelFormat}')`, 'bucket')
+      .select(`TO_CHAR(${bucketExpression}, 'YYYY-MM')`, 'bucket')
       .addSelect('COUNT(*)', 'count')
       .addSelect('COALESCE(SUM(payment."amountUsd"), 0)::numeric(18,6)::text', 'volumeUsd')
       .where('payment.status = :status', { status: PaymentStatus.SETTLED })
       .andWhere('payment."createdAt" >= :start', { start })
       .andWhere('payment."createdAt" < :end', { end });
-
     if (merchantId) {
       query.andWhere('payment."merchantId" = :merchantId', { merchantId });
     }
-
     return query
       .groupBy(bucketExpression)
       .orderBy(bucketExpression, 'ASC')

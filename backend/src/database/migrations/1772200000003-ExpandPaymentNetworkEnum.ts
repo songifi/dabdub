@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ExpandPaymentNetworkEnum1772200000001 implements MigrationInterface {
-  name = 'ExpandPaymentNetworkEnum1772200000001';
+export class ExpandPaymentNetworkEnum1772200000003 implements MigrationInterface {
+  name = 'ExpandPaymentNetworkEnum1772200000003';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
