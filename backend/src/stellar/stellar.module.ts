@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminAlertModule } from '../alerts/admin-alert.module';
 import { StellarService } from './stellar.service';
 import { StellarMonitorService } from './stellar-monitor.service';
+import { SorobanMonitorService } from './soroban-monitor.service';
 import { Payment } from '../payments/entities/payment.entity';
 import { SettlementsModule } from '../settlements/settlements.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
@@ -21,7 +22,7 @@ import { MerchantsModule } from '../merchants/merchants.module';
     MerchantsModule,
     BullModule.registerQueue({ name: QUEUE_NAMES.stellarMonitor }),
   ],
-  providers: [StellarService, StellarMonitorService],
-  exports: [StellarService, StellarMonitorService],
+  providers: [StellarService, StellarMonitorService, SorobanMonitorService],
+  exports: [StellarService, StellarMonitorService, SorobanMonitorService],
 })
 export class StellarModule {}
