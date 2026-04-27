@@ -1,3 +1,15 @@
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
+import { RateLimitService } from './rate-limit.service';
+import { ApiKeyRateLimitGuard } from './guards/api-key-rate-limit.guard';
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -26,7 +38,7 @@ import { CacheModule } from '../cache/cache.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
-  exports: [AuthService, JwtAuthGuard],
+  providers: [RateLimitService, ApiKeyRateLimitGuard, RateLimitService, ApiKeyRateLimitGuard, AuthService, JwtStrategy, JwtAuthGuard],
+  exports: [RateLimitService, ApiKeyRateLimitGuard, RateLimitService, ApiKeyRateLimitGuard, AuthService, JwtAuthGuard],
 })
 export class AuthModule {}
