@@ -8,6 +8,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { readTelemetryConfig, shutdownTelemetry, startTelemetry } from './telemetry/telemetry';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { VersioningInterceptor } from './common/interceptors/versioning.interceptor';
+import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
 import { SentryService } from './sentry/sentry.service';
 import { getCorrelationId } from './common/correlation-id.context';
@@ -110,7 +112,12 @@ async function bootstrap(): Promise<void> {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost), config));
-  app.useGlobalInterceptors(new LoggingInterceptor(), new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalInterceptors(
+    new VersioningInterceptor(),
+    new DeprecationInterceptor(app.get(Reflector)),
+    new LoggingInterceptor(),
+    new ClassSerializerInterceptor(app.get(Reflector)),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('CheesePay API')
