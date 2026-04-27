@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::{PaymentEscrowContract, PaymentEscrowContractClient, PaymentStatus};
+use merchant_registry::{MerchantRegistryContract, MerchantRegistryContractClient};
 use soroban_sdk::{
     testutils::Address as _, testutils::Ledger, token, Address, BytesN, Env, String,
 };
@@ -27,7 +28,7 @@ fn setup_env() -> (
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin);
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL));
+    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None));
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -569,4 +570,122 @@ fn test_resolve_dispute_already_resolved() {
     );
     client.resolve_dispute(&admin, &payment_id, &merchant);
     client.resolve_dispute(&admin, &payment_id, &merchant);
+}
+
+// ---------------------------------------------------------------------------
+// Merchant registry integration: deposit gating
+// ---------------------------------------------------------------------------
+
+fn setup_with_registry() -> (
+    Env,
+    PaymentEscrowContractClient<'static>,
+    MerchantRegistryContractClient<'static>,
+    Address, // admin
+    Address, // customer
+    Address, // merchant
+    Address, // usdc
+) {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_sequence_number(10);
+
+    let admin = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let merchant = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let asset_contract = env.register_stellar_asset_contract_v2(token_admin);
+    let usdc = asset_contract.address();
+
+    // Deploy registry and register the merchant.
+    let registry_id = env.register(MerchantRegistryContract, (&admin,));
+    let registry = MerchantRegistryContractClient::new(&env, &registry_id);
+    registry.register_merchant(&admin, &merchant, &String::from_str(&env, "Test Merchant"));
+
+    // Deploy escrow wired to registry.
+    let escrow_id = env.register(
+        PaymentEscrowContract,
+        (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone())),
+    );
+    let escrow = PaymentEscrowContractClient::new(&env, &escrow_id);
+
+    // Mint tokens for customer.
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
+    token_admin_client.mint(&customer, &1_000_000_000i128);
+
+    (env, escrow, registry, admin, customer, merchant, usdc)
+}
+
+#[test]
+fn test_deposit_allowed_for_active_merchant() {
+    let (env, escrow, _registry, _admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 42);
+
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &100_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+
+    let payment = escrow.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Pending);
+    assert_eq!(payment.amount, 100_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Merchant is suspended or not registered")]
+fn test_deposit_blocked_for_suspended_merchant() {
+    let (env, escrow, registry, admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 43);
+
+    // Suspend the merchant first.
+    registry.suspend_merchant(&admin, &merchant);
+
+    // Deposit must panic.
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &100_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+}
+
+#[test]
+fn test_deposit_allowed_after_reactivation() {
+    let (env, escrow, registry, admin, customer, merchant, _usdc) = setup_with_registry();
+
+    // Suspend then reactivate.
+    registry.suspend_merchant(&admin, &merchant);
+    registry.reactivate_merchant(&admin, &merchant);
+
+    let payment_id = make_id(&env, 44);
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &100_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+
+    let payment = escrow.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Pending);
+}
+
+#[test]
+#[should_panic(expected = "Merchant is suspended or not registered")]
+fn test_deposit_blocked_for_unregistered_merchant() {
+    let (env, escrow, _registry, _admin, customer, _merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 45);
+    let unknown_merchant = Address::generate(&env);
+
+    // Unknown merchant not in registry -> blocked.
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &unknown_merchant,
+        &100_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
 }
