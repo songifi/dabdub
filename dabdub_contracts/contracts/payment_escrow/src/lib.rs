@@ -3,8 +3,16 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, String,
+    contract, contractclient, contractimpl, contracttype, token, Address, BytesN,
+    Env, String,
 };
+
+/// Thin client interface for the MerchantRegistry contract.
+#[contractclient(name = "MerchantRegistryClient")]
+#[allow(dead_code)]
+trait MerchantRegistry {
+    fn is_merchant_active(env: Env, merchant: Address) -> bool;
+}
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -35,10 +43,11 @@ pub enum DataKey {
     Admin,
     UsdcToken,
     DefaultTtlLedgers,
+    RegistryContract,
     Payment(BytesN<32>),
 }
 
-#[contractevent(topics = ["ESCROW", "deposit"])]
+#[contracttype]
 struct DepositEvent {
     payment_id: BytesN<32>,
     customer: Address,
@@ -47,35 +56,35 @@ struct DepositEvent {
     expiry: u32,
 }
 
-#[contractevent(topics = ["ESCROW", "release"])]
+#[contracttype]
 struct ReleaseEvent {
     payment_id: BytesN<32>,
     merchant: Address,
     amount: i128,
 }
 
-#[contractevent(topics = ["ESCROW", "partial_release"])]
+#[contracttype]
 struct PartialReleaseEvent {
     payment_id: BytesN<32>,
     merchant: Address,
     amount: i128,
 }
 
-#[contractevent(topics = ["ESCROW", "expiry"])]
+#[contracttype]
 struct ExpiryEvent {
     payment_id: BytesN<32>,
     customer: Address,
     amount: i128,
 }
 
-#[contractevent(topics = ["ESCROW", "dispute_opened"])]
+#[contracttype]
 struct DisputeOpenedEvent {
     payment_id: BytesN<32>,
     opened_by: Address,
     reason: String,
 }
 
-#[contractevent(topics = ["ESCROW", "dispute_resolved"])]
+#[contracttype]
 struct DisputeResolvedEvent {
     payment_id: BytesN<32>,
     winner: Address,
@@ -90,7 +99,13 @@ pub struct PaymentEscrowContract;
 
 #[contractimpl]
 impl PaymentEscrowContract {
-    pub fn __constructor(env: Env, admin: Address, usdc_token: Address, default_ttl_ledgers: u32) {
+    pub fn __constructor(
+        env: Env,
+        admin: Address,
+        usdc_token: Address,
+        default_ttl_ledgers: u32,
+        registry: Option<Address>,
+    ) {
         if default_ttl_ledgers == 0 {
             panic!("Default TTL must be > 0");
         }
@@ -102,6 +117,32 @@ impl PaymentEscrowContract {
         env.storage()
             .instance()
             .set(&DataKey::DefaultTtlLedgers, &default_ttl_ledgers);
+        if let Some(reg) = registry {
+            env.storage()
+                .instance()
+                .set(&DataKey::RegistryContract, &reg);
+        }
+    }
+
+    /// Update (or remove) the merchant registry address.  Admin-only.
+    pub fn set_registry(env: Env, caller: Address, registry: Option<Address>) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        match registry {
+            Some(reg) => env
+                .storage()
+                .instance()
+                .set(&DataKey::RegistryContract, &reg),
+            None => env
+                .storage()
+                .instance()
+                .remove(&DataKey::RegistryContract),
+        }
+    }
+
+    /// Return the registry contract address if one is configured.
+    pub fn get_registry(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::RegistryContract)
     }
 
     pub fn deposit(
@@ -127,6 +168,18 @@ impl PaymentEscrowContract {
         let key = DataKey::Payment(payment_id.clone());
         if env.storage().persistent().has(&key) {
             panic!("Payment ID already exists");
+        }
+
+        // If a registry contract is configured, verify the merchant is active.
+        if let Some(registry_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::RegistryContract)
+        {
+            let registry_client = MerchantRegistryClient::new(&env, &registry_addr);
+            if !registry_client.is_merchant_active(&merchant) {
+                panic!("Merchant is suspended or not registered");
+            }
         }
 
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
@@ -160,14 +213,16 @@ impl PaymentEscrowContract {
 
         env.storage().persistent().set(&key, &payment);
 
-        DepositEvent {
-            payment_id: payment_id.clone(),
-            customer,
-            merchant,
-            amount,
-            expiry,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "deposit"),
+            DepositEvent {
+                payment_id: payment_id.clone(),
+                customer,
+                merchant,
+                amount,
+                expiry,
+            },
+        );
 
         payment_id
     }
@@ -191,12 +246,14 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
-        ReleaseEvent {
-            payment_id,
-            merchant: payment.merchant,
-            amount: remaining,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "release"),
+            ReleaseEvent {
+                payment_id,
+                merchant: payment.merchant,
+                amount: remaining,
+            },
+        );
     }
 
     pub fn release_partial(env: Env, caller: Address, payment_id: BytesN<32>, amount: i128) {
@@ -227,12 +284,14 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
-        PartialReleaseEvent {
-            payment_id,
-            merchant: payment.merchant,
-            amount,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "partial_release"),
+            PartialReleaseEvent {
+                payment_id,
+                merchant: payment.merchant,
+                amount,
+            },
+        );
     }
 
     pub fn expire(env: Env, payment_id: BytesN<32>) {
@@ -255,12 +314,14 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
-        ExpiryEvent {
-            payment_id,
-            customer: payment.customer,
-            amount: remaining,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "expiry"),
+            ExpiryEvent {
+                payment_id,
+                customer: payment.customer,
+                amount: remaining,
+            },
+        );
     }
 
     pub fn dispute(env: Env, caller: Address, payment_id: BytesN<32>, reason: String) {
@@ -286,12 +347,14 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
-        DisputeOpenedEvent {
-            payment_id,
-            opened_by: caller,
-            reason,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "dispute_opened"),
+            DisputeOpenedEvent {
+                payment_id,
+                opened_by: caller,
+                reason,
+            },
+        );
     }
 
     pub fn resolve_dispute(env: Env, caller: Address, payment_id: BytesN<32>, winner: Address) {
@@ -322,12 +385,14 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
-        DisputeResolvedEvent {
-            payment_id,
-            winner,
-            amount: remaining,
-        }
-        .publish(&env);
+        env.events().publish(
+            ("ESCROW", "dispute_resolved"),
+            DisputeResolvedEvent {
+                payment_id,
+                winner,
+                amount: remaining,
+            },
+        );
     }
 
     pub fn get_payment(env: Env, payment_id: BytesN<32>) -> PaymentEscrow {

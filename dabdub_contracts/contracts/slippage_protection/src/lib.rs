@@ -2,7 +2,7 @@
 
 mod test;
 
-use soroban_sdk::{contract, contractevent, contractimpl, contracttype, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Env};
 
 const DEFAULT_MAX_SLIPPAGE_BPS: u32 = 100; // 1%
 
@@ -13,7 +13,7 @@ pub enum DataKey {
     MaxSlippageBps,
 }
 
-#[contractevent(topics = ["SLIPPAGE", "exceeded"])]
+#[contracttype]
 struct SlippageExceededEvent {
     expected: i128,
     actual: i128,
@@ -59,12 +59,14 @@ impl SlippageProtectionContract {
             .expect("div by zero") as u32;
 
         if deviation_bps > max_bps {
-            SlippageExceededEvent {
-                expected,
-                actual,
-                max_bps,
-            }
-            .publish(&env);
+            env.events().publish(
+                ("SLIPPAGE", "exceeded"),
+                SlippageExceededEvent {
+                    expected,
+                    actual,
+                    max_bps,
+                },
+            );
             panic!("SlippageExceeded");
         }
     }
