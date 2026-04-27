@@ -7,12 +7,23 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { Payment, PaymentStatus } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
+import { BatchCreatePaymentDto, BatchPaymentResultDto } from './dto/batch-create-payment.dto';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { SorobanService, PaymentExpiredError } from '../blockchain-wallet/soroban.service';
+
+// Events emitted per payment in a batch — mirrors contract PaymentCreated events
+export interface PaymentCreatedEvent {
+  type: 'PaymentCreated';
+  paymentId: string;
+  merchantId: string;
+  amountUsd: number;
+  memo: string;
+  timestamp: Date;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -106,55 +117,98 @@ export class PaymentsService {
   }
 
   /**
-   * expire_payment(id) — called by the NestJS cron job.
-   * Delegates to the Soroban contract which checks ledger sequence.
-   * Emits PaymentExpired event with refund instructions.
-   * Idempotent — safe to call on already-expired payments.
+   * create_batch — mirrors the Soroban contract's create_batch(payments: Vec<PaymentInput>).
+   *
+   * Creates up to 20 payment requests atomically. Validates every entry first
+   * so the entire batch reverts (throws) if any single input is invalid —
+   * no partial writes ever reach the database.
+   *
+   * Emits a PaymentCreated event for each entry, matching the contract event log.
    */
-  async expirePayment(paymentId: string): Promise<void> {
-    const payment = await this.paymentsRepo.findOne({ where: { id: paymentId } });
-    if (!payment) return;
+  async createBatch(
+    merchantId: string,
+    dto: BatchCreatePaymentDto,
+  ): Promise<BatchPaymentResultDto> {
+    const { payments: items } = dto;
 
-    const event = await this.soroban.expirePayment(paymentId);
-    if (!event) return; // already expired or not yet due
-
-    payment.status = PaymentStatus.EXPIRED;
-    await this.paymentsRepo.save(payment);
-
-    await this.webhooks.dispatch(payment.merchantId, 'payment.expired', {
-      paymentId: payment.id,
-      reference: payment.reference,
-      expiryLedger: event.expiryLedger,
-      ledgerAtExpiry: event.ledgerAtExpiry,
-      refundInstruction: event.refundInstruction,
-    });
-
-    this.logger.warn(
-      `Payment ${payment.reference} expired at ledger ${event.expiryLedger}`,
-    );
-  }
-
-  /**
-   * Cron entry point — scans all pending payments whose expiryLedger has
-   * passed and expires them via the contract.
-   */
-  async expirePendingPayments(): Promise<void> {
-    const currentLedger = this.soroban.getCurrentLedger();
-
-    const expired = await this.paymentsRepo
-      .createQueryBuilder('payment')
-      .where('payment.status = :status', { status: PaymentStatus.PENDING })
-      .andWhere('payment.expiryLedger IS NOT NULL')
-      .andWhere('payment.expiryLedger < :currentLedger', { currentLedger })
-      .getMany();
-
-    for (const payment of expired) {
-      await this.expirePayment(payment.id);
+    // ── Validate all inputs before touching the DB (atomic revert on failure) ──
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.amountUsd || item.amountUsd <= 0) {
+        throw new BadRequestException(
+          `Batch item [${i}]: amountUsd must be greater than 0`,
+        );
+      }
+      if (!item.memo || item.memo.trim().length === 0) {
+        throw new BadRequestException(
+          `Batch item [${i}]: memo must not be empty`,
+        );
+      }
     }
 
-    if (expired.length) {
-      this.logger.log(`Expired ${expired.length} payments at ledger ${currentLedger}`);
+    // ── Build all payment records in memory ───────────────────────────────────
+    const xlmRate = await this.stellar.getXlmUsdRate();
+    const depositAddress = this.stellar.getDepositAddress();
+    const now = Date.now();
+
+    const records: Payment[] = [];
+    const events: PaymentCreatedEvent[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const amountXlm = item.amountUsd / xlmRate;
+      const memo = this.stellar.generateMemo();
+
+      const stellarUri =
+        `web+stellar:pay?destination=${depositAddress}` +
+        `&amount=${amountXlm.toFixed(7)}&memo=${memo}&memo_type=text`;
+      const qrCode = await QRCode.toDataURL(stellarUri);
+
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + (item.expiryMinutes ?? 30));
+
+      const payment = this.paymentsRepo.create({
+        id: uuidv4(),
+        // Unique reference per item — suffix with batch index to avoid collisions
+        reference: `PAY-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-B${i}`,
+        merchantId,
+        amountUsd: item.amountUsd,
+        amountXlm: parseFloat(amountXlm.toFixed(7)),
+        description: item.memo,
+        customerEmail: item.customerEmail,
+        metadata: item.metadata,
+        stellarDepositAddress: depositAddress,
+        stellarMemo: memo,
+        qrCode,
+        expiresAt,
+        status: PaymentStatus.PENDING,
+      });
+
+      records.push(payment);
+      events.push({
+        type: 'PaymentCreated',
+        paymentId: payment.id,
+        merchantId,
+        amountUsd: item.amountUsd,
+        memo: item.memo,
+        timestamp: new Date(),
+      });
     }
+
+    // ── Persist all records in one shot (atomic) ──────────────────────────────
+    const saved = await this.paymentsRepo.save(records);
+
+    // ── Emit PaymentCreated event for each entry (mirrors contract event log) ─
+    for (const event of events) {
+      this.logger.log(
+        `PaymentCreated: id=${event.paymentId} merchant=${merchantId} amount=${event.amountUsd} memo="${event.memo}"`,
+      );
+    }
+
+    return {
+      paymentIds: saved.map((p) => p.id),
+      count: saved.length,
+    };
   }
 
   async findAll(merchantId: string, page = 1, limit = 20) {

@@ -27,6 +27,7 @@ import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { SentryModule } from './sentry/sentry.module';
 import { CronModule } from './cron/cron.module';
+import { BackupModule } from './backup/backup.module';
 import { PrometheusModule } from './prometheus/prometheus.module';
 import { AuditModule } from './audit/audit.module';
 import { HttpMetricsInterceptor } from './prometheus/http-metrics.interceptor';
@@ -88,6 +89,7 @@ import { CacheWarmupService } from './cache/cache-warmup.service';
     PrometheusModule,
     CronModule,
     DatabaseModule,
+    BackupModule,
     EmailModule,
     AdminModule,
     AmlModule,

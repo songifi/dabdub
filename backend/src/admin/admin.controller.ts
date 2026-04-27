@@ -242,4 +242,56 @@ export class AdminController {
     const isHard = hard === 'true';
     return this.adminService.deleteRecord(entity, id, isHard, req.user.role);
   }
+
+  // ── PCI-DSS Compliance Reports (#704) ─────────────────────────────────────
+
+  @Get('reports/compliance')
+  @ApiOperation({ summary: 'Generate PCI-DSS compliance report' })
+  async getComplianceReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('type') type: string = 'full',
+    @Query('format') format: string = 'json',
+    @Res() res: Response,
+  ) {
+    const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const toDate = to ? new Date(to) : new Date();
+
+    let data: any;
+    switch (type) {
+      case 'access-control':
+        data = await this.adminService.getAccessControlReport(fromDate, toDate);
+        break;
+      case 'failed-auth':
+        data = await this.adminService.getFailedAuthReport(fromDate, toDate);
+        break;
+      case 'data-retention':
+        data = await this.adminService.getDataRetentionReport(fromDate, toDate);
+        break;
+      case 'settlements':
+        data = await this.adminService.getSettlementReconciliationReport(fromDate, toDate);
+        break;
+      default:
+        data = await this.adminService.getFullComplianceReport(fromDate, toDate);
+    }
+
+    if (format === 'pdf') {
+      const PDFDocument = require('pdfkit');
+      const doc = new PDFDocument({ margin: 50 });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="compliance-report-${type}-${fromDate.toISOString().split('T')[0]}.pdf"`);
+      doc.pipe(res);
+      doc.fontSize(20).text('PCI-DSS Compliance Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`Report Type: ${type}`);
+      doc.text(`Generated: ${new Date().toISOString()}`);
+      doc.text(`Period: ${fromDate.toISOString()} — ${toDate.toISOString()}`);
+      doc.moveDown();
+      doc.fontSize(10).text(JSON.stringify(data, null, 2), { lineGap: 2 });
+      doc.end();
+      return;
+    }
+
+    return res.json({ status: 'success', data });
+  }
 }

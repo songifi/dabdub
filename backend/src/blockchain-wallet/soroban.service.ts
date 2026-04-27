@@ -1,54 +1,43 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+export interface ContractPausedEvent {
+  type: 'ContractPaused';
+  admin: string;
+  timestamp: Date;
+}
+
+export interface ContractUnpausedEvent {
+  type: 'ContractUnpaused';
+  admin: string;
+  timestamp: Date;
+}
+
+export type ContractEvent = ContractPausedEvent | ContractUnpausedEvent;
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
 /**
- * Thrown when confirm() is called on a payment whose expiry_ledger has passed.
- * Maps to HTTP 410 Gone — the payment window is permanently closed.
+ * Thrown when a state-changing operation is attempted while the contract
+ * is paused. Maps to HTTP 403 if surfaced through a controller.
  */
-export class PaymentExpiredError extends Error {
-  readonly paymentId: string;
-  readonly expiryLedger: number;
-  readonly currentLedger: number;
-
-  constructor(paymentId: string, expiryLedger: number, currentLedger: number) {
-    super(
-      `PaymentExpired: payment ${paymentId} expired at ledger ${expiryLedger} ` +
-      `(current ledger: ${currentLedger})`,
-    );
-    this.name = 'PaymentExpiredError';
-    this.paymentId = paymentId;
-    this.expiryLedger = expiryLedger;
-    this.currentLedger = currentLedger;
+export class ContractPausedError extends ForbiddenException {
+  constructor() {
+    super('ContractPaused: all state-changing operations are currently halted');
   }
 }
 
-// ── Events ────────────────────────────────────────────────────────────────────
-
-export interface PaymentExpiredEvent {
-  type: 'PaymentExpired';
-  paymentId: string;
-  expiryLedger: number;
-  ledgerAtExpiry: number;
-  refundInstruction: {
-    /** Return funds to this address if a deposit was already received */
-    returnToAddress: string | null;
-    amountUsdc: string;
-  };
-  timestamp: Date;
-}
-
-// ── Payment record stored in contract persistent storage ──────────────────────
-
-export interface ContractPayment {
-  id: string;
-  merchantAddress: string;
-  amountUsdc: string;
-  /** Ledger sequence number after which this payment cannot be confirmed */
-  expiryLedger: number;
-  status: 'pending' | 'confirmed' | 'expired' | 'refunded';
-  customerAddress: string | null;
+/**
+ * Thrown when a reentrant call is detected.
+ * Maps to HTTP 409 if surfaced through a controller.
+ */
+export class ReentrantCallError extends Error {
+  constructor() {
+    super('ReentrantCall: escrow operation already in progress');
+    this.name = 'ReentrantCallError';
+  }
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -56,195 +45,159 @@ export interface ContractPayment {
 /**
  * SorobanService wraps the CheesePay Soroban smart contract.
  *
- * ## Ledger-based payment expiry
- * Each payment stores an `expiry_ledger: u32`. confirm() checks
- * `env.ledger().sequence() > expiry_ledger` and reverts with
- * PaymentExpiredError if the window has passed — regardless of NestJS state.
- * This makes expiry deterministic and tamper-proof: wall-clock drift,
- * NestJS delays, or a stuck cron cannot resurrect an expired payment.
+ * ## Global pause switch
+ * An admin can call pause() to instantly halt all deposits, releases, and
+ * refunds during a security incident. View functions (getBalance,
+ * getStakeBalance) remain callable while paused so monitoring is unaffected.
  *
- * expire_payment(id) is provided for the NestJS cron to call explicitly,
- * emitting a PaymentExpired event with refund instructions.
+ * The `paused` flag mirrors a persistent storage key in the real Soroban
+ * contract. pause() / unpause() emit ContractPaused / ContractUnpaused events
+ * that can be forwarded to an audit log or alert system.
  *
- * ## Ledger sequence approximation
- * Stellar closes ~1 ledger every 5 seconds. The default expiry window is
- * 360 ledgers ≈ 30 minutes. Callers can override via expiryLedgers param.
+ * ## Reentrancy guard
+ * A mutex-style `locked` flag prevents cross-contract reentrant calls from
+ * exploiting the escrow release flow (separate concern, both guards coexist).
  */
 @Injectable()
 export class SorobanService {
   private readonly logger = new Logger(SorobanService.name);
 
-  /** Approximate ledgers per minute on Stellar (1 ledger ≈ 5 s) */
-  static readonly LEDGERS_PER_MINUTE = 12;
-  /** Default expiry window: 30 minutes = 360 ledgers */
-  static readonly DEFAULT_EXPIRY_LEDGERS = 360;
+  // Persistent storage flag — true while contract is paused by admin.
+  // In the real Soroban contract this is a DataKey::Paused storage entry.
+  private paused = false;
 
-  // In-memory contract storage — mirrors Soroban persistent storage.
-  // In production this is the actual on-chain contract state.
-  private readonly payments = new Map<string, ContractPayment>();
-  private readonly eventLog: PaymentExpiredEvent[] = [];
+  // Reentrancy mutex — true while any escrow-mutating operation is running.
+  // In a real Soroban contract this would be a temporary storage key.
+  private locked = false;
 
-  // Simulated current ledger sequence — injected in tests for determinism.
-  private _currentLedger = 1000;
+  // In-memory event log (replace with persistent audit log / event bus in prod).
+  private readonly eventLog: ContractEvent[] = [];
 
   constructor(private readonly configService: ConfigService) {}
 
-  // ── Ledger helpers ────────────────────────────────────────────────────────
+  // ── Admin: pause / unpause ────────────────────────────────────────────────
 
   /**
-   * Returns the current ledger sequence.
-   * Mirrors env.ledger().sequence() in the Soroban contract.
-   * Overridable in tests via setCurrentLedger().
+   * Halts all state-changing contract operations immediately.
+   * Idempotent — no duplicate events on repeated calls.
+   * Emits ContractPaused event.
    */
-  getCurrentLedger(): number {
-    return this._currentLedger;
-  }
-
-  /** Test helper — simulates ledger advancement without real network calls. */
-  setCurrentLedger(sequence: number): void {
-    this._currentLedger = sequence;
-  }
-
-  /** Advance the simulated ledger by n (test helper). */
-  advanceLedger(n: number): void {
-    this._currentLedger += n;
-  }
-
-  // ── Contract: create payment with expiry_ledger ───────────────────────────
-
-  /**
-   * Store a new payment in contract persistent storage.
-   * expiry_ledger = current_ledger + expiryLedgers (default 360 ≈ 30 min).
-   */
-  createPayment(
-    id: string,
-    merchantAddress: string,
-    amountUsdc: string,
-    expiryLedgers = SorobanService.DEFAULT_EXPIRY_LEDGERS,
-  ): ContractPayment {
-    const expiryLedger = this.getCurrentLedger() + expiryLedgers;
-
-    const payment: ContractPayment = {
-      id,
-      merchantAddress,
-      amountUsdc,
-      expiryLedger,
-      status: 'pending',
-      customerAddress: null,
-    };
-
-    this.payments.set(id, payment);
-    this.logger.log(
-      `Payment ${id} created — expires at ledger ${expiryLedger} ` +
-      `(current: ${this.getCurrentLedger()})`,
-    );
-    return payment;
-  }
-
-  // ── Contract: confirm() — reverts if expired ──────────────────────────────
-
-  /**
-   * Confirm a payment. Reverts with PaymentExpiredError if the current ledger
-   * sequence has passed expiry_ledger — mirrors the Soroban contract check:
-   *
-   *   if env.ledger().sequence() > expiry_ledger {
-   *     return Err(ContractError::PaymentExpired)
-   *   }
-   */
-  async confirm(paymentId: string, customerAddress: string): Promise<void> {
-    const payment = this.requirePayment(paymentId);
-
-    // ── Expiry check — must happen before any state mutation ─────────────────
-    const currentLedger = this.getCurrentLedger();
-    if (currentLedger > payment.expiryLedger) {
-      throw new PaymentExpiredError(paymentId, payment.expiryLedger, currentLedger);
+  pause(adminId: string): void {
+    if (this.paused) {
+      this.logger.warn(`pause() called by ${adminId} but contract is already paused`);
+      return;
     }
 
-    if (payment.status !== 'pending') {
-      throw new Error(`Payment ${paymentId} is not pending (status: ${payment.status})`);
-    }
+    this.paused = true;
 
-    payment.status = 'confirmed';
-    payment.customerAddress = customerAddress;
-    this.logger.log(
-      `Payment ${paymentId} confirmed by ${customerAddress} at ledger ${currentLedger}`,
-    );
-  }
-
-  // ── Contract: expire_payment() — called by NestJS cron ───────────────────
-
-  /**
-   * Explicitly expire a payment and emit a PaymentExpired event with refund
-   * instructions. Called by the NestJS cron job for payments past their
-   * expiry_ledger. Idempotent — safe to call multiple times.
-   *
-   * Mirrors the Soroban contract expire_payment(env, id) entry point.
-   */
-  async expirePayment(paymentId: string): Promise<PaymentExpiredEvent | null> {
-    const payment = this.requirePayment(paymentId);
-
-    // Already expired or in a terminal state — nothing to do
-    if (payment.status === 'expired') {
-      this.logger.debug(`Payment ${paymentId} already expired — skipping`);
-      return null;
-    }
-
-    if (payment.status !== 'pending') {
-      this.logger.debug(
-        `expire_payment called on ${paymentId} with status=${payment.status} — skipping`,
-      );
-      return null;
-    }
-
-    const currentLedger = this.getCurrentLedger();
-    if (currentLedger <= payment.expiryLedger) {
-      this.logger.debug(
-        `Payment ${paymentId} not yet expired ` +
-        `(expiry: ${payment.expiryLedger}, current: ${currentLedger})`,
-      );
-      return null;
-    }
-
-    payment.status = 'expired';
-
-    const event: PaymentExpiredEvent = {
-      type: 'PaymentExpired',
-      paymentId,
-      expiryLedger: payment.expiryLedger,
-      ledgerAtExpiry: currentLedger,
-      refundInstruction: {
-        returnToAddress: payment.customerAddress,
-        amountUsdc: payment.amountUsdc,
-      },
+    const event: ContractPausedEvent = {
+      type: 'ContractPaused',
+      admin: adminId,
       timestamp: new Date(),
     };
-
     this.eventLog.push(event);
-    this.logger.warn(
-      `PaymentExpired: ${paymentId} expired at ledger ${payment.expiryLedger} ` +
-      `(current: ${currentLedger})`,
-    );
-
-    return event;
+    this.logger.warn(`CONTRACT PAUSED by admin ${adminId}`);
   }
 
-  // ── View: read contract state (no expiry guard — always accessible) ────────
+  /**
+   * Resumes normal contract operations.
+   * Idempotent — no duplicate events on repeated calls.
+   * Emits ContractUnpaused event.
+   */
+  unpause(adminId: string): void {
+    if (!this.paused) {
+      this.logger.warn(`unpause() called by ${adminId} but contract is not paused`);
+      return;
+    }
 
-  getPayment(id: string): ContractPayment | undefined {
-    return this.payments.get(id);
+    this.paused = false;
+
+    const event: ContractUnpausedEvent = {
+      type: 'ContractUnpaused',
+      admin: adminId,
+      timestamp: new Date(),
+    };
+    this.eventLog.push(event);
+    this.logger.log(`Contract unpaused by admin ${adminId}`);
   }
 
-  getExpiredEventLog(): PaymentExpiredEvent[] {
+  // ── View: pause state (always accessible) ────────────────────────────────
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  getEventLog(): ContractEvent[] {
     return [...this.eventLog];
   }
 
-  isExpired(paymentId: string): boolean {
-    const payment = this.payments.get(paymentId);
-    if (!payment) return false;
-    return this.getCurrentLedger() > payment.expiryLedger;
+  // ── Guards (private) ──────────────────────────────────────────────────────
+
+  private requireNotPaused(): void {
+    if (this.paused) {
+      throw new ContractPausedError();
+    }
   }
 
-  // ── Existing contract entry points ────────────────────────────────────────
+  private acquireLock(): void {
+    if (this.locked) {
+      throw new ReentrantCallError();
+    }
+    this.locked = true;
+  }
+
+  private releaseLock(): void {
+    this.locked = false;
+  }
+
+  // ── Escrow: mutable operations (pause-guarded + reentrancy-guarded) ───────
+
+  /**
+   * Deposit funds into the escrow contract.
+   * Blocked while paused. Blocked if reentrant.
+   */
+  async deposit(stellarAddress: string, amountUsdc: string): Promise<void> {
+    this.requireNotPaused();
+    this.acquireLock();
+    try {
+      this.logger.log(`Depositing ${amountUsdc} USDC from ${stellarAddress} into escrow`);
+      // TODO: invoke CheesePay contract deposit(stellarAddress, amountUsdc)
+    } finally {
+      this.releaseLock();
+    }
+  }
+
+  /**
+   * Release escrowed funds to the merchant.
+   * Blocked while paused. Blocked if reentrant.
+   */
+  async release(paymentId: string, merchantAddress: string): Promise<void> {
+    this.requireNotPaused();
+    this.acquireLock();
+    try {
+      this.logger.log(`Releasing escrow for payment ${paymentId} → ${merchantAddress}`);
+      // TODO: invoke CheesePay contract release(paymentId, merchantAddress)
+    } finally {
+      this.releaseLock();
+    }
+  }
+
+  /**
+   * Refund escrowed funds back to the customer.
+   * Blocked while paused. Blocked if reentrant.
+   */
+  async refund(paymentId: string, customerAddress: string): Promise<void> {
+    this.requireNotPaused();
+    this.acquireLock();
+    try {
+      this.logger.log(`Refunding escrow for payment ${paymentId} → ${customerAddress}`);
+      // TODO: invoke CheesePay contract refund(paymentId, customerAddress)
+    } finally {
+      this.releaseLock();
+    }
+  }
+
+  // ── Read-only contract calls (no pause guard — always accessible) ─────────
 
   async registerUser(username: string, publicKey: string): Promise<void> {
     this.logger.log(`Registering user ${username} (${publicKey}) on Soroban contract`);
