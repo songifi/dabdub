@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { QueueModule } from '../queues/queue.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminAlertModule } from '../alerts/admin-alert.module';
 import { SettlementsService } from './settlements.service';
@@ -19,6 +20,7 @@ import { MerchantsModule } from '../merchants/merchants.module';
     CacheModule,
     EmailModule,
     MerchantsModule,
+    QueueModule,
   ],
   controllers: [SettlementsController, PartnerCallbackController],
   providers: [SettlementsService, PartnerSignatureGuard],

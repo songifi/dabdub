@@ -1,0 +1,229 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: CheesePay Platform Critical Alerts
+    folder: CheesePay
+    interval: 1m
+    rules:
+
+      # Settlement failure rate > 5% → page on-call
+      - uid: settlement_failure_rate_high
+        title: Settlement Failure Rate High (> 5%)
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                rate(settlement_failed_total[5m])
+                / (rate(settlement_failed_total[5m]) + rate(payment_settled_total[5m]) + 0.0001)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.05
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Settlement failure rate exceeded 5% over the last 5 minutes
+          description: 'Settlement failures: {{ $values.A.Value | humanizePercentage }} of total attempts'
+          runbook_url: https://wiki.cheesepay.xyz/runbooks/settlement-failures
+        labels:
+          severity: critical
+          team: oncall
+
+      # API 5xx error rate > 1% → alert team
+      - uid: api_error_rate_high
+        title: API 5xx Error Rate High (> 1%)
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                rate(http_requests_total{status=~"5.."}[5m])
+                / (rate(http_requests_total[5m]) + 0.0001)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.01
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: API 5xx error rate exceeded 1% over the last 5 minutes
+          description: '5xx rate: {{ $values.A.Value | humanizePercentage }}'
+        labels:
+          severity: warning
+          team: platform
+
+      # Queue depth > 1,000 → alert team
+      - uid: queue_depth_high
+        title: Queue Depth Critical (> 1 000 jobs)
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: bull_queue_waiting{queue=~".+"} + bull_queue_active{queue=~".+"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1000
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Queue depth exceeded 1 000 pending/active jobs
+          description: 'Queue {{ $labels.queue }} depth: {{ $values.A.Value }}'
+        labels:
+          severity: warning
+          team: platform
+
+      # Zero payments processed in 1 hour during business hours (8–22 UTC)
+      - uid: no_payments_processed
+        title: No Payments Processed in 1 Hour (Business Hours)
+        condition: C
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (hour() >= 8 and hour() < 22)
+                and
+                increase(payment_settled_total[1h]) == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            queryType: ''
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: No payments have been processed in the last hour during business hours
+          description: Possible pipeline stall — investigate Stellar monitor and settlement queue
+        labels:
+          severity: warning
+          team: platform
+
+contactPoints:
+  - orgId: 1
+    name: CheesePay Slack
+    receivers:
+      - uid: cheesepay_slack
+        type: slack
+        settings:
+          url: ${GRAFANA_SLACK_WEBHOOK_URL}
+          title: |
+            [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}
+          text: |
+            {{ range .Alerts }}
+            *Alert:* {{ .Annotations.summary }}
+            *Details:* {{ .Annotations.description }}
+            *Severity:* {{ .Labels.severity }}
+            {{ end }}
+
+  - orgId: 1
+    name: CheesePay Email
+    receivers:
+      - uid: cheesepay_email
+        type: email
+        settings:
+          addresses: oncall@cheesepay.xyz
+
+policies:
+  - orgId: 1
+    receiver: CheesePay Slack
+    group_by:
+      - alertname
+      - severity
+    routes:
+      - receiver: CheesePay Email
+        matchers:
+          - severity = critical
+        continue: true
