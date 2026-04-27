@@ -491,3 +491,75 @@ export class AdminService {
   }
 }
 
+
+  // ── PCI-DSS Compliance Reports (#704) ─────────────────────────────────────
+
+  async getAccessControlReport(from: Date, to: Date) {
+    return this.auditLogRepo
+      .createQueryBuilder('log')
+      .select(['log.id', 'log.actor', 'log.action', 'log.resourceType', 'log.resourceId', 'log.createdAt'])
+      .where('log.createdAt BETWEEN :from AND :to', { from, to })
+      .orderBy('log.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async getFailedAuthReport(from: Date, to: Date) {
+    return this.auditLogRepo
+      .createQueryBuilder('log')
+      .where('log.action IN (:...actions)', { actions: ['LOGIN_FAILED', 'AUTH_FAILED', 'TOTP_FAILED', 'INVALID_TOKEN'] })
+      .andWhere('log.createdAt BETWEEN :from AND :to', { from, to })
+      .orderBy('log.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async getDataRetentionReport(from: Date, to: Date) {
+    return this.auditLogRepo{ actions: ['RECORD_DELETED', 'RECORD_HARD_DELETED', 'RECORD_RESTORED', 'DATA_PURGED'] })
+      .andWhere('log.createdAt BETWEEN :from AND :to', { from, to })
+      .orderBy('log.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async getSettlementReconciliationReport(from: Date, to: Date) {
+    return this.paymentsRepo
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.merchant', 'merchant')
+      .select([
+        'payment.id',
+        'payment.status',
+        'payment.amountUsd',
+        'payment.txHash',
+        'payment.network',
+        'payment.createdAt',
+        'merchant.id',
+        'merchant.businessName',
+        'merchant.email',
+      ])
+      .where('payment.createdAt BETWEEN :from AND :to', { from, to })
+      .andWhere('payment.status IN (:...statuses)', { statuses: ['completed', 'settled', 'failed'] })
+      .orderBy('payment.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async getFullComplianceReport(from: Date, to: Date) {
+    const [accessControl, failedAuth, dataRetention, settlements] = await Promise.all([
+      this.getAccessControlReport(from, to),
+      this.getFailedAuthReport(from, to),
+      this.getDataRetentionReport(from, to),
+      this.getSettlementReconciliationReport(from, to),
+    ]);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      period: { from: from.toISOString(), to: to.toISOString() },
+      summary: {
+        totalAccessEvents: accessControl.length,
+        totalFailedAuths: failedAuth.length,
+        totalDataRetentionEvents: dataRetention.length,
+        totalSettlements: settlements.length,
+      },
+      accessControl,
+      failedAuth,
+      dataRetention,
+      settlements,
+    };
+  }
