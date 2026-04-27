@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BlockchainWallet } from './entities/blockchain-wallet.entity';
 import { SlippageConfig } from './entities/slippage-config.entity';
 import { BlockchainWalletService } from './blockchain-wallet.service';
@@ -11,8 +10,7 @@ import { WalletController } from './wallet.controller';
 import { InternalWalletController } from './internal-wallet.controller';
 import { SlippageAdminController } from './slippage-admin.controller';
 import { WalletProvisionedListener } from './listeners/wallet-provisioned.listener';
-import { NotificationModule } from '../notification/notification.module';
-import { UserEntity } from '../database/entities/user.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
