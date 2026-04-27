@@ -7,8 +7,7 @@ import { SettlementsService } from '../settlements/settlements.service';
 import { CacheService } from '../cache/cache.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
-import { Payment } from '../payments/entities/payment.entity';
+import { Settlement } from '../settlements/entities/settlement.entity';
 
 interface QueueDispatchPayload {
   type?: string;
@@ -38,19 +37,18 @@ export class SettlementQueueProcessor extends BaseQueueProcessor {
     private readonly cacheService: CacheService,
     @InjectRepository(Settlement)
     private readonly settlementsRepo: Repository<Settlement>,
-    @InjectRepository(Payment)
-    private readonly paymentsRepo: Repository<Payment>,
   ) {
     super(SettlementQueueProcessor.name);
   }
 
   @Process(DEFAULT_QUEUE_JOB)
-  async handle(job: Job<{ settlementId: string; paymentId: string }>): Promise<void> {
+  async handle(job: Job<{ settlementId: string }>): Promise<void> {
     this.logJob(job);
-    const { settlementId, paymentId } = job.data;
+    const { settlementId } = job.data;
 
     const settlement = await this.settlementsRepo.findOne({
       where: { id: settlementId },
+      relations: ['payments'],
     });
 
     if (!settlement) {
@@ -58,12 +56,8 @@ export class SettlementQueueProcessor extends BaseQueueProcessor {
       return;
     }
 
-    const payment = await this.paymentsRepo.findOne({
-      where: { id: paymentId },
-    });
-
-    if (!payment) {
-      this.logger.error(`Payment ${paymentId} not found`);
+    if (!settlement.payments || settlement.payments.length === 0) {
+      this.logger.error(`Settlement ${settlementId} has no linked payments`);
       return;
     }
 
@@ -84,7 +78,7 @@ export class SettlementQueueProcessor extends BaseQueueProcessor {
     }
 
     try {
-      await this.settlementsService.executeFiatTransfer(settlement, payment);
+      await this.settlementsService.executeFiatTransfer(settlement);
     } finally {
       await (this.cacheService as any).redis.del(`lock:${lockKey}`);
     }
