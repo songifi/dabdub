@@ -489,8 +489,6 @@ export class AdminService {
         : null,
     };
   }
-}
-
 
   // ── PCI-DSS Compliance Reports (#704) ─────────────────────────────────────
 
@@ -513,7 +511,9 @@ export class AdminService {
   }
 
   async getDataRetentionReport(from: Date, to: Date) {
-    return this.auditLogRepo{ actions: ['RECORD_DELETED', 'RECORD_HARD_DELETED', 'RECORD_RESTORED', 'DATA_PURGED'] })
+    return this.auditLogRepo
+      .createQueryBuilder('log')
+      .where('log.action IN (:...actions)', { actions: ['RECORD_DELETED', 'RECORD_HARD_DELETED', 'RECORD_RESTORED', 'DATA_PURGED'] })
       .andWhere('log.createdAt BETWEEN :from AND :to', { from, to })
       .orderBy('log.createdAt', 'DESC')
       .getMany();
@@ -563,3 +563,4 @@ export class AdminService {
       settlements,
     };
   }
+}
