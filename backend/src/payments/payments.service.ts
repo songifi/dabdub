@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,9 +12,12 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { SorobanService, PaymentExpiredError } from '../blockchain-wallet/soroban.service';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     @InjectRepository(Payment)
     private paymentsRepo: Repository<Payment>,
@@ -22,6 +25,7 @@ export class PaymentsService {
     private webhooks: WebhooksService,
     private notifications: NotificationsService,
     private merchants: MerchantsService,
+    private soroban: SorobanService,
   ) {}
 
   async create(merchantId: string, dto: CreatePaymentDto): Promise<Payment> {
@@ -53,7 +57,104 @@ export class PaymentsService {
       status: PaymentStatus.PENDING,
     });
 
+    const saved = await this.paymentsRepo.save(payment);
+
+    // Register in Soroban contract with ledger-based expiry.
+    // expiryLedgers defaults to 360 (≈ 30 min at 1 ledger/5 s).
+    const expiryLedgers = (dto.expiryMinutes ?? 30) * SorobanService.LEDGERS_PER_MINUTE;
+    const contractPayment = this.soroban.createPayment(
+      saved.id,
+      depositAddress,
+      '0', // amountUsdc populated on confirmation
+      expiryLedgers,
+    );
+
+    // Persist the expiry_ledger so NestJS cron can query it without RPC calls.
+    saved.expiryLedger = contractPayment.expiryLedger;
+    return this.paymentsRepo.save(saved);
+  }
+
+  /**
+   * Confirm a payment — delegates to the Soroban contract which enforces
+   * ledger-based expiry. Throws PaymentExpiredError (→ 410) if the payment
+   * window has passed, regardless of NestJS state.
+   */
+  async confirmPayment(
+    paymentId: string,
+    customerAddress: string,
+  ): Promise<Payment> {
+    const payment = await this.paymentsRepo.findOne({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+
+    // Contract enforces expiry — this throws PaymentExpiredError if expired.
+    try {
+      await this.soroban.confirm(paymentId, customerAddress);
+    } catch (err) {
+      if (err instanceof PaymentExpiredError) {
+        // Sync NestJS state with contract state
+        payment.status = PaymentStatus.EXPIRED;
+        await this.paymentsRepo.save(payment);
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
+
+    payment.status = PaymentStatus.CONFIRMED;
+    payment.customerWalletAddress = customerAddress;
+    payment.confirmedAt = new Date();
     return this.paymentsRepo.save(payment);
+  }
+
+  /**
+   * expire_payment(id) — called by the NestJS cron job.
+   * Delegates to the Soroban contract which checks ledger sequence.
+   * Emits PaymentExpired event with refund instructions.
+   * Idempotent — safe to call on already-expired payments.
+   */
+  async expirePayment(paymentId: string): Promise<void> {
+    const payment = await this.paymentsRepo.findOne({ where: { id: paymentId } });
+    if (!payment) return;
+
+    const event = await this.soroban.expirePayment(paymentId);
+    if (!event) return; // already expired or not yet due
+
+    payment.status = PaymentStatus.EXPIRED;
+    await this.paymentsRepo.save(payment);
+
+    await this.webhooks.dispatch(payment.merchantId, 'payment.expired', {
+      paymentId: payment.id,
+      reference: payment.reference,
+      expiryLedger: event.expiryLedger,
+      ledgerAtExpiry: event.ledgerAtExpiry,
+      refundInstruction: event.refundInstruction,
+    });
+
+    this.logger.warn(
+      `Payment ${payment.reference} expired at ledger ${event.expiryLedger}`,
+    );
+  }
+
+  /**
+   * Cron entry point — scans all pending payments whose expiryLedger has
+   * passed and expires them via the contract.
+   */
+  async expirePendingPayments(): Promise<void> {
+    const currentLedger = this.soroban.getCurrentLedger();
+
+    const expired = await this.paymentsRepo
+      .createQueryBuilder('payment')
+      .where('payment.status = :status', { status: PaymentStatus.PENDING })
+      .andWhere('payment.expiryLedger IS NOT NULL')
+      .andWhere('payment.expiryLedger < :currentLedger', { currentLedger })
+      .getMany();
+
+    for (const payment of expired) {
+      await this.expirePayment(payment.id);
+    }
+
+    if (expired.length) {
+      this.logger.log(`Expired ${expired.length} payments at ledger ${currentLedger}`);
+    }
   }
 
   async findAll(merchantId: string, page = 1, limit = 20) {

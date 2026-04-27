@@ -101,6 +101,11 @@ export class Payment {
   @Column({ nullable: true })
   expiresAt: Date;
 
+  /** Stellar ledger sequence number after which this payment cannot be confirmed.
+   *  Mirrors expiry_ledger: u32 in the Soroban contract. */
+  @Column({ type: 'int', nullable: true })
+  expiryLedger: number;
+
   @Column({ nullable: true })
   confirmedAt: Date;
 
