@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,14 +7,27 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { Payment, PaymentStatus } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
+import { BatchCreatePaymentDto, BatchPaymentResultDto } from './dto/batch-create-payment.dto';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
+// Events emitted per payment in a batch — mirrors contract PaymentCreated events
+export interface PaymentCreatedEvent {
+  type: 'PaymentCreated';
+  paymentId: string;
+  merchantId: string;
+  amountUsd: number;
+  memo: string;
+  timestamp: Date;
+}
+
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     @InjectRepository(Payment)
     private paymentsRepo: Repository<Payment>,
@@ -54,6 +67,101 @@ export class PaymentsService {
     });
 
     return this.paymentsRepo.save(payment);
+  }
+
+  /**
+   * create_batch — mirrors the Soroban contract's create_batch(payments: Vec<PaymentInput>).
+   *
+   * Creates up to 20 payment requests atomically. Validates every entry first
+   * so the entire batch reverts (throws) if any single input is invalid —
+   * no partial writes ever reach the database.
+   *
+   * Emits a PaymentCreated event for each entry, matching the contract event log.
+   */
+  async createBatch(
+    merchantId: string,
+    dto: BatchCreatePaymentDto,
+  ): Promise<BatchPaymentResultDto> {
+    const { payments: items } = dto;
+
+    // ── Validate all inputs before touching the DB (atomic revert on failure) ──
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.amountUsd || item.amountUsd <= 0) {
+        throw new BadRequestException(
+          `Batch item [${i}]: amountUsd must be greater than 0`,
+        );
+      }
+      if (!item.memo || item.memo.trim().length === 0) {
+        throw new BadRequestException(
+          `Batch item [${i}]: memo must not be empty`,
+        );
+      }
+    }
+
+    // ── Build all payment records in memory ───────────────────────────────────
+    const xlmRate = await this.stellar.getXlmUsdRate();
+    const depositAddress = this.stellar.getDepositAddress();
+    const now = Date.now();
+
+    const records: Payment[] = [];
+    const events: PaymentCreatedEvent[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const amountXlm = item.amountUsd / xlmRate;
+      const memo = this.stellar.generateMemo();
+
+      const stellarUri =
+        `web+stellar:pay?destination=${depositAddress}` +
+        `&amount=${amountXlm.toFixed(7)}&memo=${memo}&memo_type=text`;
+      const qrCode = await QRCode.toDataURL(stellarUri);
+
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + (item.expiryMinutes ?? 30));
+
+      const payment = this.paymentsRepo.create({
+        id: uuidv4(),
+        // Unique reference per item — suffix with batch index to avoid collisions
+        reference: `PAY-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-B${i}`,
+        merchantId,
+        amountUsd: item.amountUsd,
+        amountXlm: parseFloat(amountXlm.toFixed(7)),
+        description: item.memo,
+        customerEmail: item.customerEmail,
+        metadata: item.metadata,
+        stellarDepositAddress: depositAddress,
+        stellarMemo: memo,
+        qrCode,
+        expiresAt,
+        status: PaymentStatus.PENDING,
+      });
+
+      records.push(payment);
+      events.push({
+        type: 'PaymentCreated',
+        paymentId: payment.id,
+        merchantId,
+        amountUsd: item.amountUsd,
+        memo: item.memo,
+        timestamp: new Date(),
+      });
+    }
+
+    // ── Persist all records in one shot (atomic) ──────────────────────────────
+    const saved = await this.paymentsRepo.save(records);
+
+    // ── Emit PaymentCreated event for each entry (mirrors contract event log) ─
+    for (const event of events) {
+      this.logger.log(
+        `PaymentCreated: id=${event.paymentId} merchant=${merchantId} amount=${event.amountUsd} memo="${event.memo}"`,
+      );
+    }
+
+    return {
+      paymentIds: saved.map((p) => p.id),
+      count: saved.length,
+    };
   }
 
   async findAll(merchantId: string, page = 1, limit = 20) {

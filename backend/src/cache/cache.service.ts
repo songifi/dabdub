@@ -142,13 +142,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   }
 
   async flushAll(): Promise<void> {
-    const redis = await this.ensureRedisConnected();
-    if (redis) {
-      await redis.flushdb();
-      return;
-    }
-
-    this.store.clear();
+    await this.redis.flushdb();
   }
 
   async getOrSet<T>(

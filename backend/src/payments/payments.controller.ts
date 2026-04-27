@@ -14,6 +14,7 @@ import {
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
+import { BatchCreatePaymentDto, BatchPaymentResultDto } from './dto/batch-create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IdempotencyInterceptor } from '../payment/idempotency.interceptor';
@@ -34,6 +35,24 @@ export class PaymentsController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   create(@Request() req: { user: { merchantId: string } }, @Body() dto: CreatePaymentDto) {
     return this.paymentsService.create(req.user.merchantId, dto);
+  }
+
+  @Post('batch')
+  @ApiOperation({
+    summary: 'Create up to 20 payment requests in a single contract invocation',
+    description:
+      'Mirrors the Soroban contract create_batch(). All inputs are validated before ' +
+      'any payment is written — the entire batch reverts if any single entry is invalid.',
+  })
+  @ApiOkResponse({ type: BatchPaymentResultDto, description: 'IDs of all created payments' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
+  @ApiBadRequestResponse({ description: 'Validation failed — entire batch rejected' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  createBatch(
+    @Request() req: { user: { merchantId: string } },
+    @Body() dto: BatchCreatePaymentDto,
+  ): Promise<BatchPaymentResultDto> {
+    return this.paymentsService.createBatch(req.user.merchantId, dto);
   }
 
   @Get()
