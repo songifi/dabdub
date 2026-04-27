@@ -1,8 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+// ── Events ────────────────────────────────────────────────────────────────────
+
+export interface ContractPausedEvent {
+  type: 'ContractPaused';
+  admin: string;
+  timestamp: Date;
+}
+
+export interface ContractUnpausedEvent {
+  type: 'ContractUnpaused';
+  admin: string;
+  timestamp: Date;
+}
+
+export type ContractEvent = ContractPausedEvent | ContractUnpausedEvent;
+
+// ── Errors ────────────────────────────────────────────────────────────────────
+
 /**
- * Custom error thrown when a reentrant call is detected.
+ * Thrown when a state-changing operation is attempted while the contract
+ * is paused. Maps to HTTP 403 if surfaced through a controller.
+ */
+export class ContractPausedError extends ForbiddenException {
+  constructor() {
+    super('ContractPaused: all state-changing operations are currently halted');
+  }
+}
+
+/**
+ * Thrown when a reentrant call is detected.
  * Maps to HTTP 409 if surfaced through a controller.
  */
 export class ReentrantCallError extends Error {
@@ -12,28 +40,104 @@ export class ReentrantCallError extends Error {
   }
 }
 
+// ── Service ───────────────────────────────────────────────────────────────────
+
 /**
  * SorobanService wraps the CheesePay Soroban smart contract.
  *
- * Security: a mutex-style `locked` flag guards deposit(), release(), and
- * refund() against reentrant calls. If a cross-contract callback tries to
- * re-enter any of those methods while one is already executing, a
- * ReentrantCallError is thrown immediately — before any state changes occur.
+ * ## Global pause switch
+ * An admin can call pause() to instantly halt all deposits, releases, and
+ * refunds during a security incident. View functions (getBalance,
+ * getStakeBalance) remain callable while paused so monitoring is unaffected.
  *
- * The pattern mirrors the checks-effects-interactions guard used in Solidity
- * and the storage-flag approach available in Soroban's temporary storage.
+ * The `paused` flag mirrors a persistent storage key in the real Soroban
+ * contract. pause() / unpause() emit ContractPaused / ContractUnpaused events
+ * that can be forwarded to an audit log or alert system.
+ *
+ * ## Reentrancy guard
+ * A mutex-style `locked` flag prevents cross-contract reentrant calls from
+ * exploiting the escrow release flow (separate concern, both guards coexist).
  */
 @Injectable()
 export class SorobanService {
   private readonly logger = new Logger(SorobanService.name);
 
-  // Mutex flag — true while any escrow-mutating operation is running.
+  // Persistent storage flag — true while contract is paused by admin.
+  // In the real Soroban contract this is a DataKey::Paused storage entry.
+  private paused = false;
+
+  // Reentrancy mutex — true while any escrow-mutating operation is running.
   // In a real Soroban contract this would be a temporary storage key.
   private locked = false;
 
+  // In-memory event log (replace with persistent audit log / event bus in prod).
+  private readonly eventLog: ContractEvent[] = [];
+
   constructor(private readonly configService: ConfigService) {}
 
-  // ── Reentrancy guard helpers ────────────────────────────────────────────────
+  // ── Admin: pause / unpause ────────────────────────────────────────────────
+
+  /**
+   * Halts all state-changing contract operations immediately.
+   * Idempotent — no duplicate events on repeated calls.
+   * Emits ContractPaused event.
+   */
+  pause(adminId: string): void {
+    if (this.paused) {
+      this.logger.warn(`pause() called by ${adminId} but contract is already paused`);
+      return;
+    }
+
+    this.paused = true;
+
+    const event: ContractPausedEvent = {
+      type: 'ContractPaused',
+      admin: adminId,
+      timestamp: new Date(),
+    };
+    this.eventLog.push(event);
+    this.logger.warn(`CONTRACT PAUSED by admin ${adminId}`);
+  }
+
+  /**
+   * Resumes normal contract operations.
+   * Idempotent — no duplicate events on repeated calls.
+   * Emits ContractUnpaused event.
+   */
+  unpause(adminId: string): void {
+    if (!this.paused) {
+      this.logger.warn(`unpause() called by ${adminId} but contract is not paused`);
+      return;
+    }
+
+    this.paused = false;
+
+    const event: ContractUnpausedEvent = {
+      type: 'ContractUnpaused',
+      admin: adminId,
+      timestamp: new Date(),
+    };
+    this.eventLog.push(event);
+    this.logger.log(`Contract unpaused by admin ${adminId}`);
+  }
+
+  // ── View: pause state (always accessible) ────────────────────────────────
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  getEventLog(): ContractEvent[] {
+    return [...this.eventLog];
+  }
+
+  // ── Guards (private) ──────────────────────────────────────────────────────
+
+  private requireNotPaused(): void {
+    if (this.paused) {
+      throw new ContractPausedError();
+    }
+  }
 
   private acquireLock(): void {
     if (this.locked) {
@@ -46,13 +150,14 @@ export class SorobanService {
     this.locked = false;
   }
 
-  // ── Escrow operations (guarded) ─────────────────────────────────────────────
+  // ── Escrow: mutable operations (pause-guarded + reentrancy-guarded) ───────
 
   /**
    * Deposit funds into the escrow contract.
-   * Guarded: rejects if called while another escrow operation is in flight.
+   * Blocked while paused. Blocked if reentrant.
    */
   async deposit(stellarAddress: string, amountUsdc: string): Promise<void> {
+    this.requireNotPaused();
     this.acquireLock();
     try {
       this.logger.log(`Depositing ${amountUsdc} USDC from ${stellarAddress} into escrow`);
@@ -64,9 +169,10 @@ export class SorobanService {
 
   /**
    * Release escrowed funds to the merchant.
-   * Guarded: rejects if called while another escrow operation is in flight.
+   * Blocked while paused. Blocked if reentrant.
    */
   async release(paymentId: string, merchantAddress: string): Promise<void> {
+    this.requireNotPaused();
     this.acquireLock();
     try {
       this.logger.log(`Releasing escrow for payment ${paymentId} → ${merchantAddress}`);
@@ -78,9 +184,10 @@ export class SorobanService {
 
   /**
    * Refund escrowed funds back to the customer.
-   * Guarded: rejects if called while another escrow operation is in flight.
+   * Blocked while paused. Blocked if reentrant.
    */
   async refund(paymentId: string, customerAddress: string): Promise<void> {
+    this.requireNotPaused();
     this.acquireLock();
     try {
       this.logger.log(`Refunding escrow for payment ${paymentId} → ${customerAddress}`);
@@ -90,7 +197,7 @@ export class SorobanService {
     }
   }
 
-  // ── Read-only contract calls (no guard needed) ──────────────────────────────
+  // ── Read-only contract calls (no pause guard — always accessible) ─────────
 
   async registerUser(username: string, publicKey: string): Promise<void> {
     this.logger.log(`Registering user ${username} (${publicKey}) on Soroban contract`);
