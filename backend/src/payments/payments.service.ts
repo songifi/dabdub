@@ -13,6 +13,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { SorobanService, PaymentExpiredError } from '../blockchain-wallet/soroban.service';
 
 // Events emitted per payment in a batch — mirrors contract PaymentCreated events
 export interface PaymentCreatedEvent {
@@ -35,6 +36,7 @@ export class PaymentsService {
     private webhooks: WebhooksService,
     private notifications: NotificationsService,
     private merchants: MerchantsService,
+    private soroban: SorobanService,
   ) {}
 
   async create(merchantId: string, dto: CreatePaymentDto): Promise<Payment> {
@@ -67,15 +69,51 @@ export class PaymentsService {
     });
 
     const saved = await this.paymentsRepo.save(payment);
-    await this.stellar.invokeContract('create', [
-      saved.id,
-      merchantId,
-      Number(saved.amountUsd),
-      saved.stellarMemo,
-      saved.expiresAt.toISOString(),
-    ]);
 
-    return saved;
+    // Register in Soroban contract with ledger-based expiry.
+    // expiryLedgers defaults to 360 (≈ 30 min at 1 ledger/5 s).
+    const expiryLedgers = (dto.expiryMinutes ?? 30) * SorobanService.LEDGERS_PER_MINUTE;
+    const contractPayment = this.soroban.createPayment(
+      saved.id,
+      depositAddress,
+      '0', // amountUsdc populated on confirmation
+      expiryLedgers,
+    );
+
+    // Persist the expiry_ledger so NestJS cron can query it without RPC calls.
+    saved.expiryLedger = contractPayment.expiryLedger;
+    return this.paymentsRepo.save(saved);
+  }
+
+  /**
+   * Confirm a payment — delegates to the Soroban contract which enforces
+   * ledger-based expiry. Throws PaymentExpiredError (→ 410) if the payment
+   * window has passed, regardless of NestJS state.
+   */
+  async confirmPayment(
+    paymentId: string,
+    customerAddress: string,
+  ): Promise<Payment> {
+    const payment = await this.paymentsRepo.findOne({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+
+    // Contract enforces expiry — this throws PaymentExpiredError if expired.
+    try {
+      await this.soroban.confirm(paymentId, customerAddress);
+    } catch (err) {
+      if (err instanceof PaymentExpiredError) {
+        // Sync NestJS state with contract state
+        payment.status = PaymentStatus.EXPIRED;
+        await this.paymentsRepo.save(payment);
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
+
+    payment.status = PaymentStatus.CONFIRMED;
+    payment.customerWalletAddress = customerAddress;
+    payment.confirmedAt = new Date();
+    return this.paymentsRepo.save(payment);
   }
 
   /**
