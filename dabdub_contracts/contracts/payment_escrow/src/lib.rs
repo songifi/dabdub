@@ -46,6 +46,7 @@ pub enum DataKey {
     DefaultTtlLedgers,
     RegistryContract,
     Payment(BytesN<32>),
+    Version,
 }
 
 #[contracttype]
@@ -123,6 +124,25 @@ impl PaymentEscrowContract {
                 .instance()
                 .set(&DataKey::RegistryContract, &reg);
         }
+
+        // Initialize contract version to 1.
+        env.storage().instance().set(&DataKey::Version, &1u32);
+    }
+
+    /// Upgrade the contract WASM. Only callable by the admin.
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+
+        let version: u32 = env.storage().instance().get(&DataKey::Version).unwrap_or(0);
+        env.storage().instance().set(&DataKey::Version, &(version + 1));
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    /// Return the current contract version.
+    pub fn get_version(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::Version).unwrap_or(0)
     }
 
     /// Update (or remove) the merchant registry address.  Admin-only.
