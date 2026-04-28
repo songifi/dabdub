@@ -28,7 +28,7 @@ fn setup_env() -> (
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin);
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None));
+    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None, &Option::<Address>::None));
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -604,7 +604,7 @@ fn setup_with_registry() -> (
     // Deploy escrow wired to registry.
     let escrow_id = env.register(
         PaymentEscrowContract,
-        (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone())),
+        (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone()), &Option::<Address>::None),
     );
     let escrow = PaymentEscrowContractClient::new(&env, &escrow_id);
 

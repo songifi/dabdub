@@ -13,6 +13,7 @@ use soroban_sdk::{
 trait MerchantRegistry {
     fn is_merchant_active(env: Env, merchant: Address) -> bool;
     fn is_kyc_verified(env: Env, merchant: Address) -> bool;
+    fn get_fee_tier(env: Env, merchant: Address) -> u32;
 }
 
 #[contracttype]
@@ -45,6 +46,7 @@ pub enum DataKey {
     UsdcToken,
     DefaultTtlLedgers,
     RegistryContract,
+    FeeTreasury,
     Payment(BytesN<32>),
 }
 
@@ -106,6 +108,7 @@ impl PaymentEscrowContract {
         usdc_token: Address,
         default_ttl_ledgers: u32,
         registry: Option<Address>,
+        fee_treasury: Option<Address>,
     ) {
         if default_ttl_ledgers == 0 {
             panic!("Default TTL must be > 0");
@@ -122,6 +125,11 @@ impl PaymentEscrowContract {
             env.storage()
                 .instance()
                 .set(&DataKey::RegistryContract, &reg);
+        }
+        if let Some(treasury) = fee_treasury {
+            env.storage()
+                .instance()
+                .set(&DataKey::FeeTreasury, &treasury);
         }
     }
 
@@ -241,7 +249,8 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, remaining);
+        let net = Self::deduct_fee(&env, &payment.merchant, remaining);
+        Self::transfer_from_contract(&env, &payment.merchant, net);
         payment.released_amount = payment.amount;
         payment.status = PaymentStatus::Released;
         env.storage()
@@ -253,7 +262,7 @@ impl PaymentEscrowContract {
             ReleaseEvent {
                 payment_id,
                 merchant: payment.merchant,
-                amount: remaining,
+                amount: net,
             },
         );
     }
@@ -278,7 +287,8 @@ impl PaymentEscrowContract {
             panic!("Release amount exceeds remaining balance");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, amount);
+        let net = Self::deduct_fee(&env, &payment.merchant, amount);
+        Self::transfer_from_contract(&env, &payment.merchant, net);
         payment.released_amount += amount;
         if payment.released_amount == payment.amount {
             payment.status = PaymentStatus::Released;
@@ -292,7 +302,7 @@ impl PaymentEscrowContract {
             PartialReleaseEvent {
                 payment_id,
                 merchant: payment.merchant,
-                amount,
+                amount: net,
             },
         );
     }
@@ -437,6 +447,10 @@ impl PaymentEscrowContract {
         MAX_TTL_LEDGERS
     }
 
+    pub fn get_fee_treasury(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::FeeTreasury)
+    }
+
     fn require_kyc(env: &Env, payment: &PaymentEscrow) {
         if let Some(registry_addr) = env
             .storage()
@@ -495,5 +509,30 @@ impl PaymentEscrowContract {
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
         let token_client = token::Client::new(env, &usdc_token);
         token_client.transfer(&env.current_contract_address(), recipient, &amount);
+    }
+
+    /// Reads fee_bps from the registry (if configured), transfers the fee to
+    /// the treasury (if configured), and returns the net amount for the merchant.
+    fn deduct_fee(env: &Env, merchant: &Address, gross: i128) -> i128 {
+        let registry_addr: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RegistryContract);
+        let treasury_addr: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeTreasury);
+
+        match (registry_addr, treasury_addr) {
+            (Some(reg), Some(treasury)) => {
+                let fee_bps = MerchantRegistryClient::new(env, &reg).get_fee_tier(merchant) as i128;
+                let fee = gross * fee_bps / 10_000;
+                if fee > 0 {
+                    Self::transfer_from_contract(env, &treasury, fee);
+                }
+                gross - fee
+            }
+            _ => gross,
+        }
     }
 }

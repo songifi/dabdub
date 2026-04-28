@@ -15,6 +15,9 @@ pub enum MerchantStatus {
     Terminated,
 }
 
+pub const DEFAULT_FEE_BPS: u32 = 150; // 1.5%
+pub const MAX_FEE_BPS: u32 = 1000;   // 10%
+
 /// On-chain merchant record stored in Persistent storage.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -23,6 +26,7 @@ pub struct MerchantRecord {
     pub name: String,
     pub status: MerchantStatus,
     pub kyc_verified: bool,
+    pub fee_bps: u32,
 }
 
 /// Storage keys used by the registry.
@@ -57,6 +61,12 @@ struct MerchantReactivatedEvent {
 struct KYCStatusUpdatedEvent {
     merchant: Address,
     verified: bool,
+}
+
+#[contracttype]
+struct FeeTierUpdatedEvent {
+    merchant: Address,
+    fee_bps: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +105,7 @@ impl MerchantRegistryContract {
             name: name.clone(),
             status: MerchantStatus::Active,
             kyc_verified: false,
+            fee_bps: DEFAULT_FEE_BPS,
         };
         env.storage().persistent().set(&key, &record);
 
@@ -213,6 +224,41 @@ impl MerchantRegistryContract {
         }
         let record: MerchantRecord = env.storage().persistent().get(&key).unwrap();
         record.kyc_verified
+    }
+
+    /// Update the fee tier (in basis points) for a registered merchant. Admin-only.
+    /// Capped at MAX_FEE_BPS (1000 = 10%).
+    pub fn update_fee_tier(env: Env, caller: Address, merchant: Address, fee_bps: u32) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+
+        if fee_bps > MAX_FEE_BPS {
+            panic!("fee_bps exceeds maximum of 1000");
+        }
+
+        let key = DataKey::Merchant(merchant.clone());
+        let mut record: MerchantRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("Merchant not found");
+
+        record.fee_bps = fee_bps;
+        env.storage().persistent().set(&key, &record);
+
+        env.events().publish(
+            ("REGISTRY", "fee_tier_updated"),
+            FeeTierUpdatedEvent { merchant: merchant.clone(), fee_bps },
+        );
+    }
+
+    /// Returns the fee tier in basis points for a registered merchant.
+    pub fn get_fee_tier(env: Env, merchant: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get::<DataKey, MerchantRecord>(&DataKey::Merchant(merchant))
+            .expect("Merchant not found")
+            .fee_bps
     }
 
     pub fn get_admin(env: Env) -> Address {
