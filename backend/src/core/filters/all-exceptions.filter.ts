@@ -9,6 +9,7 @@ import {
 import { HttpAdapterHost } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
 import * as Sentry from "@sentry/node";
+import { SorobanRpcException } from "../../stellar/stellar.service";
 
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -40,6 +41,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private getStatus(exception: unknown): number {
+    if (exception instanceof SorobanRpcException) {
+      return exception.statusCode;
+    }
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
@@ -73,6 +77,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       message = exception.message;
+    }
+
+    if (exception instanceof SorobanRpcException) {
+      error = "SorobanRpcError";
+      message = exception.sorobanCode
+        ? `${exception.message} (${exception.sorobanCode})`
+        : exception.message;
     }
 
     if (

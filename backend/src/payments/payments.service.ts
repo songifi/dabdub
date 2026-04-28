@@ -66,7 +66,16 @@ export class PaymentsService {
       status: PaymentStatus.PENDING,
     });
 
-    return this.paymentsRepo.save(payment);
+    const saved = await this.paymentsRepo.save(payment);
+    await this.stellar.invokeContract('create', [
+      saved.id,
+      merchantId,
+      Number(saved.amountUsd),
+      saved.stellarMemo,
+      saved.expiresAt.toISOString(),
+    ]);
+
+    return saved;
   }
 
   /**
