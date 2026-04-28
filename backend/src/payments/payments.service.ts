@@ -13,6 +13,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { PaymentConfirmedEventDto } from '../stellar/soroban-event.dto';
 
 // Events emitted per payment in a batch — mirrors contract PaymentCreated events
 export interface PaymentCreatedEvent {
@@ -185,6 +186,25 @@ export class PaymentsService {
     const payment = await this.paymentsRepo.findOne({ where: { reference } });
     if (!payment) throw new NotFoundException('Payment not found');
     return payment;
+  }
+
+  async applySorobanPaymentConfirmed(event: PaymentConfirmedEventDto): Promise<void> {
+    const payment = await this.paymentsRepo.findOne({
+      where: { reference: event.paymentReference },
+    });
+    if (!payment || payment.status !== PaymentStatus.PENDING) {
+      return;
+    }
+
+    payment.status = PaymentStatus.CONFIRMED;
+    payment.txHash = event.txHash;
+    payment.confirmedAt = event.ledgerClosedAt;
+    payment.customerWalletAddress = event.from;
+
+    if (event.asset === 'USDC') payment.amountUsdc = event.amount;
+    else payment.amountXlm = event.amount;
+
+    await this.paymentsRepo.save(payment);
   }
 
   async getStats(merchantId: string) {

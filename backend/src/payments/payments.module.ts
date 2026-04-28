@@ -9,6 +9,7 @@ import { IdempotencyInterceptor } from '../payment/idempotency.interceptor';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MerchantsModule } from '../merchants/merchants.module';
+import { PaymentsSorobanListener } from './payments-soroban.listener';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { MerchantsModule } from '../merchants/merchants.module';
     MerchantsModule,
   ],
   controllers: [PaymentsController, PublicPaymentController],
-  providers: [PaymentsService, IdempotencyInterceptor],
+  providers: [PaymentsService, PaymentsSorobanListener, IdempotencyInterceptor],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

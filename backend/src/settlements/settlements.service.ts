@@ -19,6 +19,7 @@ import { EmailService } from '../email/email.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { NotificationPrefsService } from '../notifications/notification-prefs.service';
 import { NotificationChannel, NotificationEventType } from '../notifications/entities/notification-preference.entity';
+import { SettlementCompletedEventDto } from '../stellar/soroban-event.dto';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -316,6 +317,29 @@ export class SettlementsService {
           },
         );
       }
+    }
+  }
+
+  async applySorobanSettlementCompleted(
+    event: SettlementCompletedEventDto,
+  ): Promise<void> {
+    const settlement = await this.settlementsRepo.findOne({
+      where: { id: event.settlementId },
+      relations: ['payments'],
+    });
+    if (!settlement || settlement.status === SettlementStatus.COMPLETED) {
+      return;
+    }
+
+    settlement.status = SettlementStatus.COMPLETED;
+    settlement.partnerReference = event.partnerReference ?? settlement.partnerReference;
+    settlement.completedAt = event.ledgerClosedAt;
+    await this.settlementsRepo.save(settlement);
+
+    for (const payment of settlement.payments ?? []) {
+      if (payment.status === PaymentStatus.SETTLED) continue;
+      payment.status = PaymentStatus.SETTLED;
+      await this.paymentsRepo.save(payment);
     }
   }
 

@@ -11,6 +11,7 @@ import { PartnerSignatureGuard } from './guards/partner-signature.guard';
 import { CacheModule } from '../cache/cache.module';
 import { EmailModule } from '../email/email.module';
 import { MerchantsModule } from '../merchants/merchants.module';
+import { SettlementsSorobanListener } from './settlements-soroban.listener';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { MerchantsModule } from '../merchants/merchants.module';
     QueueModule,
   ],
   controllers: [SettlementsController, PartnerCallbackController],
-  providers: [SettlementsService, PartnerSignatureGuard],
+  providers: [SettlementsService, SettlementsSorobanListener, PartnerSignatureGuard],
   exports: [SettlementsService],
 })
 export class SettlementsModule {}
