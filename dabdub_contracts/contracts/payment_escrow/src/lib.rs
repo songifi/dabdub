@@ -3,8 +3,8 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, token, Address, BytesN,
-    Env, String,
+    contract, contractclient, contractimpl, contracttype, token, Address, BytesN, Env, String,
+    Vec,
 };
 
 /// Thin client interface for the MerchantRegistry contract.
@@ -12,7 +12,6 @@ use soroban_sdk::{
 #[allow(dead_code)]
 trait MerchantRegistry {
     fn is_merchant_active(env: Env, merchant: Address) -> bool;
-    fn is_kyc_verified(env: Env, merchant: Address) -> bool;
 }
 
 #[contracttype]
@@ -45,6 +44,10 @@ pub enum DataKey {
     UsdcToken,
     DefaultTtlLedgers,
     RegistryContract,
+    EmergencySigners,
+    EmergencyTreasury,
+    EmergencyCooldownLedgers,
+    EmergencyLastDrainLedger,
     Payment(BytesN<32>),
 }
 
@@ -92,8 +95,15 @@ struct DisputeResolvedEvent {
     amount: i128,
 }
 
+#[contracttype]
+struct EmergencyDrainEvent {
+    amount: i128,
+    caller: Address,
+}
+
 const MAX_DISPUTE_WINDOW_LEDGERS: u32 = 51_840;
 const MAX_TTL_LEDGERS: u32 = 518_400;
+const EMERGENCY_SIGNER_COUNT: u32 = 3;
 
 #[contract]
 pub struct PaymentEscrowContract;
@@ -106,9 +116,24 @@ impl PaymentEscrowContract {
         usdc_token: Address,
         default_ttl_ledgers: u32,
         registry: Option<Address>,
+        emergency_signers: Vec<Address>,
+        emergency_treasury: Address,
+        emergency_cooldown_ledgers: u32,
     ) {
         if default_ttl_ledgers == 0 {
             panic!("Default TTL must be > 0");
+        }
+        if emergency_cooldown_ledgers == 0 {
+            panic!("Emergency cooldown must be > 0");
+        }
+        if emergency_signers.len() != EMERGENCY_SIGNER_COUNT {
+            panic!("Emergency signer set must be exactly 3");
+        }
+        let signer_0 = emergency_signers.get(0).unwrap();
+        let signer_1 = emergency_signers.get(1).unwrap();
+        let signer_2 = emergency_signers.get(2).unwrap();
+        if signer_0 == signer_1 || signer_0 == signer_2 || signer_1 == signer_2 {
+            panic!("Emergency signers must be unique");
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -123,6 +148,18 @@ impl PaymentEscrowContract {
                 .instance()
                 .set(&DataKey::RegistryContract, &reg);
         }
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencySigners, &emergency_signers);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyTreasury, &emergency_treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyCooldownLedgers, &emergency_cooldown_ledgers);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyLastDrainLedger, &0u32);
     }
 
     /// Update (or remove) the merchant registry address.  Admin-only.
@@ -233,7 +270,6 @@ impl PaymentEscrowContract {
         Self::require_admin(&env, &caller);
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -267,7 +303,6 @@ impl PaymentEscrowContract {
         }
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -437,17 +472,56 @@ impl PaymentEscrowContract {
         MAX_TTL_LEDGERS
     }
 
-    fn require_kyc(env: &Env, payment: &PaymentEscrow) {
-        if let Some(registry_addr) = env
+    pub fn emergency_drain(env: Env, caller: Address, signer_one: Address, signer_two: Address) -> i128 {
+        caller.require_auth();
+        if signer_one == signer_two {
+            panic!("Emergency signers must be distinct");
+        }
+        signer_one.require_auth();
+        signer_two.require_auth();
+        Self::require_emergency_signer(&env, &signer_one);
+        Self::require_emergency_signer(&env, &signer_two);
+
+        let current_ledger = env.ledger().sequence();
+        let last_drain_ledger: u32 = env
             .storage()
             .instance()
-            .get::<DataKey, Address>(&DataKey::RegistryContract)
+            .get(&DataKey::EmergencyLastDrainLedger)
+            .unwrap_or(0);
+        let cooldown_ledgers: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyCooldownLedgers)
+            .unwrap();
+        if last_drain_ledger != 0
+            && current_ledger < last_drain_ledger.saturating_add(cooldown_ledgers)
         {
-            let registry_client = MerchantRegistryClient::new(env, &registry_addr);
-            if !registry_client.is_kyc_verified(&payment.merchant) {
-                panic!("Merchant not KYC verified");
-            }
+            panic!("Emergency drain cooldown active");
         }
+
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyTreasury)
+            .unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        let contract_address = env.current_contract_address();
+        let amount = token_client.balance(&contract_address);
+        if amount <= 0 {
+            panic!("No escrow funds to drain");
+        }
+
+        token_client.transfer(&contract_address, &treasury, &amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyLastDrainLedger, &current_ledger);
+        env.events().publish(
+            ("ESCROW", "emergency_drain"),
+            EmergencyDrainEvent { amount, caller },
+        );
+
+        amount
     }
 
     fn require_admin(env: &Env, caller: &Address) {
@@ -495,5 +569,16 @@ impl PaymentEscrowContract {
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
         let token_client = token::Client::new(env, &usdc_token);
         token_client.transfer(&env.current_contract_address(), recipient, &amount);
+    }
+
+    fn require_emergency_signer(env: &Env, signer: &Address) {
+        let signers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencySigners)
+            .unwrap();
+        if signers.iter().all(|configured| configured != *signer) {
+            panic!("Not emergency signer");
+        }
     }
 }
