@@ -104,6 +104,7 @@ export class StellarService implements OnModuleInit {
     txHash: string,
     expectedMemo: string,
     expectedAmountUsdc?: number,
+    assetType: 'XLM' | 'USDC' = 'USDC',
   ): Promise<{ verified: boolean; amount?: number; asset?: string; from?: string }> {
     try {
       const tx = await this.server.transactions().transaction(txHash).call();
@@ -166,6 +167,16 @@ export class StellarService implements OnModuleInit {
 
   getUsdcAsset(): StellarSdk.Asset {
     return this.usdcAsset;
+  }
+
+  /**
+   * Build the asset_type argument for the payment_escrow deposit invocation.
+   * Returns the ScVal enum variant expected by the Soroban contract.
+   */
+  buildAssetTypeScVal(assetType: 'XLM' | 'USDC'): StellarSdk.xdr.ScVal {
+    return StellarSdk.xdr.ScVal.scvVec([
+      StellarSdk.xdr.ScVal.scvSymbol(assetType),
+    ]);
   }
 
   getServer(): StellarSdk.Horizon.Server {

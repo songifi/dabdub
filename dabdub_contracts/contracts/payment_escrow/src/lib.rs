@@ -7,6 +7,13 @@ use soroban_sdk::{
     Env, String,
 };
 
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum AssetType {
+    Xlm,
+    Usdc,
+}
+
 /// Thin client interface for the MerchantRegistry contract.
 #[contractclient(name = "MerchantRegistryClient")]
 #[allow(dead_code)]
@@ -35,12 +42,14 @@ pub struct PaymentEscrow {
     pub expiry: u32,
     pub dispute_window_end: u32,
     pub dispute_reason: Option<String>,
+    pub asset_type: AssetType,
 }
 
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
+    XlmToken,
     UsdcToken,
     DefaultTtlLedgers,
     RegistryContract,
@@ -102,6 +111,7 @@ impl PaymentEscrowContract {
     pub fn __constructor(
         env: Env,
         admin: Address,
+        xlm_token: Address,
         usdc_token: Address,
         default_ttl_ledgers: u32,
         registry: Option<Address>,
@@ -111,9 +121,8 @@ impl PaymentEscrowContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::UsdcToken, &usdc_token);
+        env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
+        env.storage().instance().set(&DataKey::UsdcToken, &usdc_token);
         env.storage()
             .instance()
             .set(&DataKey::DefaultTtlLedgers, &default_ttl_ledgers);
@@ -152,6 +161,7 @@ impl PaymentEscrowContract {
         merchant: Address,
         amount: i128,
         ttl_ledgers: u32,
+        asset_type: AssetType,
     ) -> BytesN<32> {
         customer.require_auth();
 
@@ -182,9 +192,13 @@ impl PaymentEscrowContract {
             }
         }
 
-        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
-        let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&customer, &env.current_contract_address(), &amount);
+        // Transfer funds into the contract via the appropriate token interface.
+        let token_addr = Self::token_address(&env, &asset_type);
+        token::Client::new(&env, &token_addr).transfer(
+            &customer,
+            &env.current_contract_address(),
+            &amount,
+        );
 
         let expiry = env.ledger().sequence().saturating_add(ttl_ledgers);
         let dispute_window_end = {
@@ -209,6 +223,7 @@ impl PaymentEscrowContract {
             expiry,
             dispute_window_end,
             dispute_reason: None,
+            asset_type,
         };
 
         env.storage().persistent().set(&key, &payment);
@@ -239,7 +254,7 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, remaining);
+        Self::transfer_from_contract(&env, &payment.merchant, remaining, &payment.asset_type);
         payment.released_amount = payment.amount;
         payment.status = PaymentStatus::Released;
         env.storage()
@@ -275,7 +290,7 @@ impl PaymentEscrowContract {
             panic!("Release amount exceeds remaining balance");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, amount);
+        Self::transfer_from_contract(&env, &payment.merchant, amount, &payment.asset_type);
         payment.released_amount += amount;
         if payment.released_amount == payment.amount {
             payment.status = PaymentStatus::Released;
@@ -307,7 +322,7 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &payment.customer, remaining);
+        Self::transfer_from_contract(&env, &payment.customer, remaining, &payment.asset_type);
         payment.released_amount = payment.amount;
         payment.status = PaymentStatus::Expired;
         env.storage()
@@ -374,7 +389,7 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &winner, remaining);
+        Self::transfer_from_contract(&env, &winner, remaining, &payment.asset_type);
         payment.status = if winner == payment.merchant {
             PaymentStatus::Released
         } else {
@@ -415,6 +430,10 @@ impl PaymentEscrowContract {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
+    pub fn get_xlm_token(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::XlmToken).unwrap()
+    }
+
     pub fn get_usdc_token(env: Env) -> Address {
         env.storage().instance().get(&DataKey::UsdcToken).unwrap()
     }
@@ -432,6 +451,13 @@ impl PaymentEscrowContract {
 
     pub fn get_max_ttl_ledgers(_env: Env) -> u32 {
         MAX_TTL_LEDGERS
+    }
+
+    fn token_address(env: &Env, asset_type: &AssetType) -> Address {
+        match asset_type {
+            AssetType::Xlm => env.storage().instance().get(&DataKey::XlmToken).unwrap(),
+            AssetType::Usdc => env.storage().instance().get(&DataKey::UsdcToken).unwrap(),
+        }
     }
 
     fn require_admin(env: &Env, caller: &Address) {
@@ -475,9 +501,9 @@ impl PaymentEscrowContract {
         payment.amount.saturating_sub(payment.released_amount)
     }
 
-    fn transfer_from_contract(env: &Env, recipient: &Address, amount: i128) {
-        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
-        let token_client = token::Client::new(env, &usdc_token);
-        token_client.transfer(&env.current_contract_address(), recipient, &amount);
+    fn transfer_from_contract(env: &Env, recipient: &Address, amount: i128, asset_type: &AssetType) {
+        let token_addr = Self::token_address(env, asset_type);
+        token::Client::new(env, &token_addr)
+            .transfer(&env.current_contract_address(), recipient, &amount);
     }
 }
