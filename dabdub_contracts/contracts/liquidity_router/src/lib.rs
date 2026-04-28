@@ -3,7 +3,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, Address, Env, Symbol,
+    contract, contractimpl, contracttype, Address, Env, Symbol,
 };
 
 #[contracttype]
@@ -11,14 +11,6 @@ use soroban_sdk::{
 pub enum Route {
     SorobanAMM,
     StellarClassicDEX,
-}
-
-#[contractevent]
-#[derive(Clone, Debug, PartialEq)]
-pub struct FallbackRouteUsed {
-    pub pool_id: Address,
-    pub amount: i128,
-    pub reserve: i128,
 }
 
 #[soroban_sdk::contractclient(name = "AmmClient")]
@@ -51,11 +43,7 @@ impl LiquidityRouter {
             // Emit FallbackRouteUsed event
             env.events().publish(
                 (Symbol::new(&env, "FallbackRouteUsed"),),
-                FallbackRouteUsed {
-                    pool_id: pool_address,
-                    amount: amount_in,
-                    reserve: reserve_a,
-                },
+                (pool_address, amount_in, reserve_a),
             );
             Route::StellarClassicDEX
         }
