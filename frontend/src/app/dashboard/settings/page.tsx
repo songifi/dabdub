@@ -8,6 +8,8 @@ import { useAuthStore } from '@/lib/store';
 export default function SettingsPage() {
   const { merchant } = useAuthStore();
   const [form, setForm] = useState({ businessName: '', country: '', bankAccountNumber: '', bankCode: '', bankName: '' });
+  const [currentScopes, setCurrentScopes] = useState<string[]>([]);
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(['payments:read', 'settlements:read']);
   const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [generatingKey, setGeneratingKey] = useState(false);
@@ -21,6 +23,7 @@ export default function SettingsPage() {
         bankCode: data.bankCode ?? '',
         bankName: data.bankName ?? '',
       });
+      setCurrentScopes(data.apiKeyScopes ?? []);
     });
   }, []);
 
@@ -37,10 +40,16 @@ export default function SettingsPage() {
     }
   };
 
+  const toggleScope = (scope: string) => {
+    setSelectedScopes((current) =>
+      current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope],
+    );
+  };
+
   const generateKey = async () => {
     setGeneratingKey(true);
     try {
-      const { data } = await merchantApi.generateApiKey();
+      const { data } = await merchantApi.generateApiKey(selectedScopes);
       setApiKey(data.apiKey);
       toast.success('API key generated — save it now, it won\'t be shown again');
     } catch {
@@ -82,6 +91,40 @@ export default function SettingsPage() {
       <div className="card p-6">
         <h2 className="font-semibold mb-2">API Key</h2>
         <p className="text-sm text-gray-500 mb-4">Use your API key to authenticate server-side API requests.</p>
+
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-2 font-medium">Current key scopes</p>
+          {currentScopes.length > 0 ? (
+            <ul className="list-disc list-inside text-sm text-gray-700 mb-3">
+              {currentScopes.map((scope) => (
+                <li key={scope}>{scope}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-500 mb-3">No API key scopes assigned yet.</p>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-2 font-medium">Select scopes for new key</p>
+          {[
+            { value: 'payments:read', label: 'Payments: read' },
+            { value: 'payments:write', label: 'Payments: write' },
+            { value: 'settlements:read', label: 'Settlements: read' },
+            { value: 'webhooks:manage', label: 'Webhooks: manage' },
+          ].map(({ value, label }) => (
+            <label key={value} className="flex items-center gap-2 mb-2 block text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={selectedScopes.includes(value)}
+                onChange={() => toggleScope(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+
         {apiKey ? (
           <div className="bg-gray-900 text-green-400 font-mono text-sm p-3 rounded-lg break-all mb-3">
             {apiKey}

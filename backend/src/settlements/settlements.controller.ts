@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { SettlementsService, PartnerCallbackPayload } from './settlements.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { Scopes } from '../auth/decorators/scopes.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PartnerSignatureGuard } from './guards/partner-signature.guard';
 
@@ -21,6 +22,7 @@ export class SettlementsController {
   constructor(private readonly settlementsService: SettlementsService) {}
 
   @Get()
+  @Scopes('settlements:read')
   @ApiOperation({ summary: 'List settlements' })
   @ApiOkResponse({ description: 'Paginated settlements' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })

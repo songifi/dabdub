@@ -16,6 +16,7 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
 import { BatchCreatePaymentDto, BatchPaymentResultDto } from './dto/batch-create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { Scopes } from '../auth/decorators/scopes.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { IdempotencyInterceptor } from '../payment/idempotency.interceptor';
 
@@ -27,6 +28,7 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post()
+  @Scopes('payments:write')
   @UseInterceptors(IdempotencyInterceptor)
   @ApiOperation({ summary: 'Create a payment request' })
   @ApiOkResponse({ description: 'Payment created' })
@@ -38,6 +40,7 @@ export class PaymentsController {
   }
 
   @Post('batch')
+  @Scopes('payments:write')
   @ApiOperation({
     summary: 'Create up to 20 payment requests in a single contract invocation',
     description:
@@ -56,6 +59,7 @@ export class PaymentsController {
   }
 
   @Get()
+  @Scopes('payments:read')
   @ApiOperation({ summary: 'List all payments' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -67,6 +71,7 @@ export class PaymentsController {
   }
 
   @Get('stats')
+  @Scopes('payments:read')
   @ApiOperation({ summary: 'Payment statistics' })
   @ApiOkResponse({ description: 'Aggregated stats' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
@@ -76,6 +81,7 @@ export class PaymentsController {
   }
 
   @Get(':id')
+  @Scopes('payments:read')
   @ApiOperation({ summary: 'Get payment by ID' })
   @ApiParam({ name: 'id', description: 'Payment UUID' })
   @ApiOkResponse({ description: 'Payment detail' })
@@ -87,6 +93,7 @@ export class PaymentsController {
   }
 
   @Post(':id/refund')
+  @Scopes('payments:write')
   @ApiOperation({ summary: 'Initiate a refund for a settled payment' })
   @ApiParam({ name: 'id', description: 'Payment UUID' })
   @ApiOkResponse({ description: 'Refund successful' })
