@@ -11,6 +11,7 @@ import { Exclude, Transform } from 'class-transformer';
 import { Payment } from '../../payments/entities/payment.entity';
 import { Settlement } from '../../settlements/entities/settlement.entity';
 import { Webhook } from '../../webhooks/entities/webhook.entity';
+import { encryptedColumnTransformer } from '../../security/encrypted-column.transformer';
 
 export enum MerchantStatus {
   ACTIVE = 'active',
@@ -46,7 +47,10 @@ export class Merchant {
   country: string;
 
   @Transform(({ value }) => (value ? `****${String(value).slice(-4)}` : null))
-  @Column({ nullable: true })
+  @Column({
+    nullable: true,
+    transformer: encryptedColumnTransformer('merchants.bankAccountNumber'),
+  })
   bankAccountNumber: string;
 
   @Column({ nullable: true })
