@@ -46,13 +46,6 @@ export class StellarMonitorService implements OnModuleInit {
   }
 
   async scanPendingPayments() {
-    const pendingPayments = await this.paymentsRepo.find({
-      where: { status: PaymentStatus.PENDING },
-      relations: ['merchant'],
-    });
-
-    if (!pendingPayments.length) return;
-
     const depositAddress = this.stellar.getDepositAddress();
     if (!depositAddress) return;
 
@@ -79,7 +72,14 @@ export class StellarMonitorService implements OnModuleInit {
       const paymentMemo = tx.memo;
       if (!paymentMemo) continue;
 
-      const matched = pendingPayments.find((p) => p.stellarMemo === paymentMemo);
+      // Query directly by memo+status so monitoring can use the memo index.
+      const matched = await this.paymentsRepo.findOne({
+        where: {
+          status: PaymentStatus.PENDING,
+          stellarMemo: paymentMemo,
+        },
+        relations: ['merchant'],
+      });
       if (!matched) continue;
 
       const result = await this.stellar.verifyPayment(tx.hash, paymentMemo);

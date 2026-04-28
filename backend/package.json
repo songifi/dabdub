@@ -20,6 +20,7 @@
     "test:integration": "jest --testRegex=\"\\.integration-spec\\.ts$\"",
     "test:e2e": "jest --testPathPattern=e2e-spec",
     "test:e2e:ci": "jest --runInBand --config jest.ci.config.js",
+    "explain:queries": "ts-node --transpile-only scripts/explain-list-queries.ts",
     "migration:generate": "ts-node --transpile-only node_modules/.bin/typeorm migration:generate -f ormconfig",
     "migration:run": "ts-node --transpile-only node_modules/.bin/typeorm migration:run -f ormconfig",
     "migration:revert": "ts-node --transpile-only node_modules/.bin/typeorm migration:revert -f ormconfig",
