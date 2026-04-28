@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    security-updates: true
+    allow:
+      - dependency-type: direct
+        update-types:
+          - version-update:semver-patch
+    target-branch: main
+    labels:
+      - dependencies
+      - security
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    security-updates: true
+    allow:
+      - dependency-type: direct
+        update-types:
+          - version-update:semver-patch
+    target-branch: main
+    labels:
+      - dependencies
+      - security
