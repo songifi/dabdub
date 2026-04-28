@@ -40,7 +40,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Test Merchant"
+                  "u32": 250
                 }
               ]
             }
@@ -308,18 +308,26 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "merchant"
+                        "symbol": "created_at"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "u64": 0
                       }
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "fee_bps"
                       },
                       "val": {
-                        "string": "Test Merchant"
+                        "u32": 250
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_verified"
+                      },
+                      "val": {
+                        "bool": true
                       }
                     },
                     {

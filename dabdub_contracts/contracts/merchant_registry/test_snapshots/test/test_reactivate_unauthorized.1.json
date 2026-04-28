@@ -21,7 +21,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "string": "Acme Corp"
+                  "u32": 250
                 }
               ]
             }
@@ -57,7 +57,7 @@
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 1717171717,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -169,18 +169,26 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "merchant"
+                        "symbol": "created_at"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "u64": 1717171717
                       }
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "fee_bps"
                       },
                       "val": {
-                        "string": "Acme Corp"
+                        "u32": 250
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "kyc_verified"
+                      },
+                      "val": {
+                        "bool": true
                       }
                     },
                     {

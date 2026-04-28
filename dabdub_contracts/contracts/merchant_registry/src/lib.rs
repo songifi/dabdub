@@ -2,15 +2,13 @@
 
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 /// Lifecycle states for a registered merchant.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MerchantStatus {
-    Active,
+    Approved,
     Suspended,
     Terminated,
 }
@@ -19,9 +17,10 @@ pub enum MerchantStatus {
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct MerchantRecord {
-    pub merchant: Address,
-    pub name: String,
     pub status: MerchantStatus,
+    pub fee_bps: u32,
+    pub kyc_verified: bool,
+    pub created_at: u64,
 }
 
 /// Storage keys used by the registry.
@@ -39,7 +38,8 @@ pub enum DataKey {
 #[contracttype]
 struct MerchantRegisteredEvent {
     merchant: Address,
-    name: String,
+    fee_bps: u32,
+    created_at: u64,
 }
 
 #[contracttype]
@@ -74,9 +74,13 @@ impl MerchantRegistryContract {
     // ------------------------------------------------------------------
 
     /// Register a new merchant.  Callable by admin only.
-    pub fn register_merchant(env: Env, caller: Address, merchant: Address, name: String) {
+    pub fn register_merchant(env: Env, caller: Address, merchant: Address, fee_bps: u32) {
         caller.require_auth();
         Self::require_admin(&env, &caller);
+
+        if fee_bps > 10_000 {
+            panic!("fee_bps must be <= 10000");
+        }
 
         let key = DataKey::Merchant(merchant.clone());
         if env.storage().persistent().has(&key) {
@@ -84,15 +88,20 @@ impl MerchantRegistryContract {
         }
 
         let record = MerchantRecord {
-            merchant: merchant.clone(),
-            name: name.clone(),
-            status: MerchantStatus::Active,
+            status: MerchantStatus::Approved,
+            fee_bps,
+            kyc_verified: true,
+            created_at: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&key, &record);
 
         env.events().publish(
             ("REGISTRY", "merchant_registered"),
-            MerchantRegisteredEvent { merchant: merchant.clone(), name: name.clone() },
+            MerchantRegisteredEvent {
+                merchant: merchant.clone(),
+                fee_bps,
+                created_at: record.created_at,
+            },
         );
     }
 
@@ -122,7 +131,9 @@ impl MerchantRegistryContract {
 
         env.events().publish(
             ("REGISTRY", "merchant_suspended"),
-            MerchantSuspendedEvent { merchant: merchant.clone() },
+            MerchantSuspendedEvent {
+                merchant: merchant.clone(),
+            },
         );
     }
 
@@ -138,19 +149,21 @@ impl MerchantRegistryContract {
             .get(&key)
             .expect("Merchant not found");
 
-        if record.status == MerchantStatus::Active {
+        if record.status == MerchantStatus::Approved {
             panic!("Merchant already active");
         }
         if record.status == MerchantStatus::Terminated {
             panic!("Cannot reactivate terminated merchant");
         }
 
-        record.status = MerchantStatus::Active;
+        record.status = MerchantStatus::Approved;
         env.storage().persistent().set(&key, &record);
 
         env.events().publish(
             ("REGISTRY", "merchant_reactivated"),
-            MerchantReactivatedEvent { merchant: merchant.clone() },
+            MerchantReactivatedEvent {
+                merchant: merchant.clone(),
+            },
         );
     }
 
@@ -165,14 +178,19 @@ impl MerchantRegistryContract {
             .expect("Merchant not found")
     }
 
-    /// Returns `true` when the merchant is registered and Active.
-    pub fn is_merchant_active(env: Env, merchant: Address) -> bool {
+    /// Returns `true` when the merchant is registered, approved, and KYC-verified.
+    pub fn is_approved(env: Env, merchant: Address) -> bool {
         let key = DataKey::Merchant(merchant);
         if !env.storage().persistent().has(&key) {
             return false;
         }
         let record: MerchantRecord = env.storage().persistent().get(&key).unwrap();
-        record.status == MerchantStatus::Active
+        record.status == MerchantStatus::Approved && record.kyc_verified
+    }
+
+    /// Compatibility alias used by existing contracts that gate merchant activity.
+    pub fn is_merchant_active(env: Env, merchant: Address) -> bool {
+        Self::is_approved(env, merchant)
     }
 
     pub fn get_admin(env: Env) -> Address {

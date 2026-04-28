@@ -28,7 +28,15 @@ fn setup_env() -> (
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin);
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None));
+    let contract_id = env.register(
+        PaymentEscrowContract,
+        (
+            &admin,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Option::<Address>::None,
+        ),
+    );
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -599,12 +607,17 @@ fn setup_with_registry() -> (
     // Deploy registry and register the merchant.
     let registry_id = env.register(MerchantRegistryContract, (&admin,));
     let registry = MerchantRegistryContractClient::new(&env, &registry_id);
-    registry.register_merchant(&admin, &merchant, &String::from_str(&env, "Test Merchant"));
+    registry.register_merchant(&admin, &merchant, &250);
 
     // Deploy escrow wired to registry.
     let escrow_id = env.register(
         PaymentEscrowContract,
-        (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone())),
+        (
+            &admin,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Some(registry_id.clone()),
+        ),
     );
     let escrow = PaymentEscrowContractClient::new(&env, &escrow_id);
 
@@ -634,7 +647,7 @@ fn test_deposit_allowed_for_active_merchant() {
 }
 
 #[test]
-#[should_panic(expected = "Merchant is suspended or not registered")]
+#[should_panic(expected = "Merchant is not approved")]
 fn test_deposit_blocked_for_suspended_merchant() {
     let (env, escrow, registry, admin, customer, merchant, _usdc) = setup_with_registry();
     let payment_id = make_id(&env, 43);
@@ -674,7 +687,7 @@ fn test_deposit_allowed_after_reactivation() {
 }
 
 #[test]
-#[should_panic(expected = "Merchant is suspended or not registered")]
+#[should_panic(expected = "Merchant is not approved")]
 fn test_deposit_blocked_for_unregistered_merchant() {
     let (env, escrow, _registry, _admin, customer, _merchant, _usdc) = setup_with_registry();
     let payment_id = make_id(&env, 45);

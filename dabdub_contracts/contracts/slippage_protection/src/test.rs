@@ -103,7 +103,7 @@ fn test_tightened_slippage_rejects_previously_valid_swap() {
 fn test_tightened_slippage_reverts_swap() {
     let (_env, client, admin) = setup_env();
     client.set_max_slippage(&admin, &50); // 0.5%
-    // 0.8% deviation → should now revert
+                                          // 0.8% deviation → should now revert
     client.check_slippage(&10_000, &9_920);
 }
 
