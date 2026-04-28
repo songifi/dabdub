@@ -22,10 +22,17 @@ interface SorobanEventsResponse {
   latestLedger: number;
 }
 
+type EscrowEventTopic = 'deposit' | 'release' | 'refund' | 'expired' | 'dispute';
+
+interface EscrowEventPayload {
+  payment_id?: string;
+  paymentId?: string;
+  amount?: string | number;
+}
+
 /**
- * SorobanMonitorService: subscribes to SEP-41 USDC transfer events on the
- * escrow contract as a secondary confirmation signal alongside the Horizon
- * transaction monitor. Used as a fallback if escrow events are missed.
+ * SorobanMonitorService: polls escrow contract state-transition events through
+ * Soroban RPC getEvents and maps them into backend PaymentStatus updates.
  */
 @Injectable()
 export class SorobanMonitorService {
@@ -33,7 +40,7 @@ export class SorobanMonitorService {
   private readonly processedEventIds = new Set<string>();
   private startLedger = 0;
   private rpcUrl: string;
-  private usdcContractId: string;
+  private escrowContractId: string;
 
   constructor(
     @InjectRepository(Payment)
@@ -45,19 +52,19 @@ export class SorobanMonitorService {
       'SOROBAN_RPC_URL',
       'https://soroban-testnet.stellar.org',
     );
-    this.usdcContractId = this.config.get<string>(
-      'STELLAR_USDC_CONTRACT_ID',
+    this.escrowContractId = this.config.get<string>(
+      'SOROBAN_ESCROW_CONTRACT_ID',
       '',
     );
   }
 
   /**
-   * Poll Soroban RPC for USDC transfer events and correlate to pending payments.
+   * Poll Soroban RPC for escrow events and map them to payment statuses.
    * Called by the Stellar monitor Bull job every 30 seconds.
    */
-  async pollTransferEvents(): Promise<void> {
-    if (!this.usdcContractId) {
-      this.logger.debug('STELLAR_USDC_CONTRACT_ID not set — skipping Soroban event poll');
+  async pollEscrowEvents(): Promise<void> {
+    if (!this.escrowContractId) {
+      this.logger.debug('SOROBAN_ESCROW_CONTRACT_ID not set — skipping Soroban event poll');
       return;
     }
 
@@ -83,11 +90,9 @@ export class SorobanMonitorService {
     // Update cursor to latest ledger for next poll
     this.startLedger = latestLedger;
 
-    const pendingPayments = await this.paymentsRepo.find({
-      where: { status: PaymentStatus.PENDING },
-    });
+    const payments = await this.paymentsRepo.find();
 
-    if (!pendingPayments.length) return;
+    if (!payments.length) return;
 
     for (const event of events) {
       // De-duplicate: skip already processed events
@@ -100,74 +105,82 @@ export class SorobanMonitorService {
         this.processedEventIds.delete(oldest);
       }
 
-      await this.processTransferEvent(event, pendingPayments);
+      await this.processEscrowEvent(event, payments);
     }
   }
 
-  private async processTransferEvent(
-    event: SorobanEvent,
-    pendingPayments: Payment[],
-  ): Promise<void> {
-    // SEP-41 transfer event topics: ["transfer", from_address, to_address]
-    // value: { amount: i128 }
-    const topics = event.topic ?? [];
-    if (topics.length < 3) return;
+  private async processEscrowEvent(event: SorobanEvent, payments: Payment[]): Promise<void> {
+    const topic = this.extractTopic(event.topic);
+    if (!topic) return;
 
-    const [topic, , toAddress] = topics;
-    if (topic !== 'transfer') return;
+    const payload = this.normalizePayload(event.value);
+    const paymentId = payload.payment_id ?? payload.paymentId;
+    if (!paymentId) return;
 
-    const depositAddress = this.config.get<string>('STELLAR_ACCOUNT_PUBLIC', '');
-    if (!depositAddress || toAddress !== depositAddress) return;
+    const matched = payments.find((payment) => this.matchesEscrowPaymentId(payment, paymentId));
+    if (!matched) return;
 
-    // Amount in i128 stroops (7 decimal places for USDC on Stellar)
-    const rawAmount = this.extractAmount(event.value);
-    if (rawAmount === null) return;
+    const nextStatus = this.mapTopicToStatus(topic);
+    if (!nextStatus || matched.status === nextStatus) return;
 
-    const amountUsdc = rawAmount / 1e7;
+    matched.status = nextStatus;
+    await this.paymentsRepo.save(matched);
 
-    // Try to correlate with a pending payment by amount (best-effort fallback)
-    const matched = pendingPayments.find(
-      (p) => Math.abs(Number(p.amountUsdc ?? 0) - amountUsdc) < 0.000001,
-    );
-
-    if (!matched) {
-      this.logger.debug(
-        `Soroban USDC transfer of ${amountUsdc} USDC to ${toAddress} — no pending payment matched`,
-      );
-      return;
-    }
-
-    // Check that it wasn't already confirmed via Horizon (avoid double-processing)
-    if (matched.status !== PaymentStatus.PENDING) return;
-
+    const amount = this.extractAmount(payload);
     this.logger.log(
-      `Soroban fallback: matched USDC transfer ${amountUsdc} to payment ${matched.reference} (event ${event.id})`,
+      `Soroban escrow event ${topic} mapped payment ${matched.reference} -> ${nextStatus} (event ${event.id}${amount !== null ? `, amount=${amount}` : ''})`,
     );
-
-    await this.adminAlerts.raise({
-      type: AdminAlertType.STELLAR_MONITOR,
-      dedupeKey: `soroban.fallback:${matched.id}`,
-      message:
-        `Soroban fallback match for payment ${matched.reference}: ` +
-        `${amountUsdc} USDC transferred via token contract (event ${event.id}). ` +
-        `Horizon monitor should confirm this shortly.`,
-      metadata: {
-        paymentId: matched.id,
-        reference: matched.reference,
-        amountUsdc,
-        sorobanEventId: event.id,
-      },
-      thresholdValue: 1,
-    });
   }
 
-  private extractAmount(value: any): number | null {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'object' && value !== null) {
-      const raw = value.amount ?? value._amount ?? value.value;
-      if (raw !== undefined) return Number(raw);
+  private extractTopic(topics: string[]): EscrowEventTopic | null {
+    const first = topics?.[1] ?? topics?.[0];
+    if (typeof first !== 'string') return null;
+    const normalized = first.toLowerCase();
+    if (
+      normalized === 'deposit' ||
+      normalized === 'release' ||
+      normalized === 'refund' ||
+      normalized === 'expired' ||
+      normalized === 'dispute'
+    ) {
+      return normalized;
     }
     return null;
+  }
+
+  private normalizePayload(value: unknown): EscrowEventPayload {
+    if (typeof value === 'object' && value !== null) {
+      return value as EscrowEventPayload;
+    }
+    return {};
+  }
+
+  private matchesEscrowPaymentId(payment: Payment, paymentId: string): boolean {
+    const metadataId = payment.metadata?.escrowPaymentId;
+    return metadataId === paymentId || payment.reference === paymentId;
+  }
+
+  private mapTopicToStatus(topic: EscrowEventTopic): PaymentStatus | null {
+    switch (topic) {
+      case 'deposit':
+        return PaymentStatus.CONFIRMED;
+      case 'release':
+        return PaymentStatus.SETTLED;
+      case 'refund':
+        return PaymentStatus.REFUNDED;
+      case 'expired':
+        return PaymentStatus.EXPIRED;
+      case 'dispute':
+        return PaymentStatus.FAILED;
+      default:
+        return null;
+    }
+  }
+
+  private extractAmount(value: EscrowEventPayload): number | null {
+    const raw = value.amount;
+    if (raw === undefined || raw === null) return null;
+    return Number(raw);
   }
 
   private async getEvents(): Promise<SorobanEventsResponse> {
@@ -180,8 +193,8 @@ export class SorobanMonitorService {
         filters: [
           {
             type: 'contract',
-            contractIds: [this.usdcContractId],
-            topics: [['transfer', '*', '*']],
+            contractIds: [this.escrowContractId],
+            topics: [['ESCROW', '*']],
           },
         ],
         pagination: { limit: 200 },

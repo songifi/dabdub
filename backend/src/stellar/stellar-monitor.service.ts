@@ -100,8 +100,8 @@ export class StellarMonitorService implements OnModuleInit {
 
     await this.expireOldPayments();
 
-    // Soroban fallback: poll USDC token contract transfer events
-    await this.sorobanMonitor.pollTransferEvents();
+    // Soroban escrow monitor: poll contract state-transition events
+    await this.sorobanMonitor.pollEscrowEvents();
   }
 
   private async confirmPayment(

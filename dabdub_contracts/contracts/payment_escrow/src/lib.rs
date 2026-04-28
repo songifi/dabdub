@@ -12,7 +12,6 @@ use soroban_sdk::{
 #[allow(dead_code)]
 trait MerchantRegistry {
     fn is_merchant_active(env: Env, merchant: Address) -> bool;
-    fn is_kyc_verified(env: Env, merchant: Address) -> bool;
 }
 
 #[contracttype]
@@ -58,37 +57,8 @@ struct DepositEvent {
 }
 
 #[contracttype]
-struct ReleaseEvent {
+struct EscrowStateEvent {
     payment_id: BytesN<32>,
-    merchant: Address,
-    amount: i128,
-}
-
-#[contracttype]
-struct PartialReleaseEvent {
-    payment_id: BytesN<32>,
-    merchant: Address,
-    amount: i128,
-}
-
-#[contracttype]
-struct ExpiryEvent {
-    payment_id: BytesN<32>,
-    customer: Address,
-    amount: i128,
-}
-
-#[contracttype]
-struct DisputeOpenedEvent {
-    payment_id: BytesN<32>,
-    opened_by: Address,
-    reason: String,
-}
-
-#[contracttype]
-struct DisputeResolvedEvent {
-    payment_id: BytesN<32>,
-    winner: Address,
     amount: i128,
 }
 
@@ -233,7 +203,6 @@ impl PaymentEscrowContract {
         Self::require_admin(&env, &caller);
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -250,9 +219,8 @@ impl PaymentEscrowContract {
 
         env.events().publish(
             ("ESCROW", "release"),
-            ReleaseEvent {
+            EscrowStateEvent {
                 payment_id,
-                merchant: payment.merchant,
                 amount: remaining,
             },
         );
@@ -267,7 +235,6 @@ impl PaymentEscrowContract {
         }
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -288,17 +255,37 @@ impl PaymentEscrowContract {
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
         env.events().publish(
-            ("ESCROW", "partial_release"),
-            PartialReleaseEvent {
+            ("ESCROW", "release"),
+            EscrowStateEvent {
                 payment_id,
-                merchant: payment.merchant,
                 amount,
             },
         );
     }
 
     pub fn expire(env: Env, payment_id: BytesN<32>) {
-        Self::refund(env, payment_id);
+        let mut payment = Self::get_payment(env.clone(), payment_id.clone());
+        Self::require_expirable(&env, &payment);
+
+        let remaining = Self::remaining_amount(&payment);
+        if remaining <= 0 {
+            panic!("Payment fully released");
+        }
+
+        Self::transfer_from_contract(&env, &payment.customer, remaining);
+        payment.released_amount = payment.amount;
+        payment.status = PaymentStatus::Expired;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Payment(payment_id.clone()), &payment);
+
+        env.events().publish(
+            ("ESCROW", "expired"),
+            EscrowStateEvent {
+                payment_id,
+                amount: remaining,
+            },
+        );
     }
 
     pub fn refund(env: Env, payment_id: BytesN<32>) {
@@ -318,16 +305,15 @@ impl PaymentEscrowContract {
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
         env.events().publish(
-            ("ESCROW", "expiry"),
-            ExpiryEvent {
+            ("ESCROW", "refund"),
+            EscrowStateEvent {
                 payment_id,
-                customer: payment.customer,
                 amount: remaining,
             },
         );
     }
 
-    pub fn dispute(env: Env, caller: Address, payment_id: BytesN<32>, reason: String) {
+    pub fn dispute(env: Env, caller: Address, payment_id: BytesN<32>, _reason: String) {
         caller.require_auth();
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
@@ -345,17 +331,16 @@ impl PaymentEscrowContract {
         }
 
         payment.status = PaymentStatus::Disputed;
-        payment.dispute_reason = Some(reason.clone());
+        payment.dispute_reason = Some(_reason.clone());
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
         env.events().publish(
-            ("ESCROW", "dispute_opened"),
-            DisputeOpenedEvent {
+            ("ESCROW", "dispute"),
+            EscrowStateEvent {
                 payment_id,
-                opened_by: caller,
-                reason,
+                amount: Self::remaining_amount(&payment),
             },
         );
     }
@@ -388,11 +373,15 @@ impl PaymentEscrowContract {
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
 
+        let topic = if winner == payment.merchant {
+            "release"
+        } else {
+            "refund"
+        };
         env.events().publish(
-            ("ESCROW", "dispute_resolved"),
-            DisputeResolvedEvent {
+            ("ESCROW", topic),
+            EscrowStateEvent {
                 payment_id,
-                winner,
                 amount: remaining,
             },
         );
@@ -435,19 +424,6 @@ impl PaymentEscrowContract {
 
     pub fn get_max_ttl_ledgers(_env: Env) -> u32 {
         MAX_TTL_LEDGERS
-    }
-
-    fn require_kyc(env: &Env, payment: &PaymentEscrow) {
-        if let Some(registry_addr) = env
-            .storage()
-            .instance()
-            .get::<DataKey, Address>(&DataKey::RegistryContract)
-        {
-            let registry_client = MerchantRegistryClient::new(env, &registry_addr);
-            if !registry_client.is_kyc_verified(&payment.merchant) {
-                panic!("Merchant not KYC verified");
-            }
-        }
     }
 
     fn require_admin(env: &Env, caller: &Address) {
