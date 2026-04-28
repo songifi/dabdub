@@ -52,6 +52,12 @@ struct MerchantReactivatedEvent {
     merchant: Address,
 }
 
+#[contracttype]
+struct AdminTransferredEvent {
+    old_admin: Address,
+    new_admin: Address,
+}
+
 // ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
@@ -177,6 +183,24 @@ impl MerchantRegistryContract {
 
     pub fn get_admin(env: Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
+    }
+
+    // ------------------------------------------------------------------
+    // Admin management
+    // ------------------------------------------------------------------
+
+    /// Transfer admin to a new address.  Callable by current admin only.
+    pub fn transfer_admin(env: Env, caller: Address, new_admin: Address) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+
+        let old_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+
+        env.events().publish(
+            ("REGISTRY", "admin_transferred"),
+            AdminTransferredEvent { old_admin, new_admin },
+        );
     }
 
     // ------------------------------------------------------------------
