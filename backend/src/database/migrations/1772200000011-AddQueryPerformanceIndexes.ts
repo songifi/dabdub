@@ -6,26 +6,32 @@ export class AddQueryPerformanceIndexes1772200000011
   name = 'AddQueryPerformanceIndexes1772200000011';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_payments_merchant_created_at"
-      ON "payments" ("merchantId", "createdAt" DESC)
-    `);
+    const paymentsTableExists = await queryRunner.hasTable('payments');
+    if (paymentsTableExists) {
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_payments_merchant_created_at"
+        ON "payments" ("merchantId", "createdAt" DESC)
+      `);
 
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_payments_stellar_memo"
-      ON "payments" ("stellarMemo")
-      WHERE "stellarMemo" IS NOT NULL
-    `);
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_payments_stellar_memo"
+        ON "payments" ("stellarMemo")
+        WHERE "stellarMemo" IS NOT NULL
+      `);
 
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_payments_status"
-      ON "payments" ("status")
-    `);
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_payments_status"
+        ON "payments" ("status")
+      `);
+    }
 
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS "IDX_settlements_merchant_status"
-      ON "settlements" ("merchantId", "status")
-    `);
+    const settlementsTableExists = await queryRunner.hasTable('settlements');
+    if (settlementsTableExists) {
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_settlements_merchant_status"
+        ON "settlements" ("merchantId", "status")
+      `);
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
