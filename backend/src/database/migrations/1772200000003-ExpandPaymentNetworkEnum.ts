@@ -4,6 +4,21 @@ export class ExpandPaymentNetworkEnum1772200000003 implements MigrationInterface
   name = 'ExpandPaymentNetworkEnum1772200000003';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const enumExistsResult = await queryRunner.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'payments_network_enum'
+          AND n.nspname = 'public'
+      ) AS "exists"
+    `);
+
+    const enumExists = Boolean(enumExistsResult?.[0]?.exists);
+    if (!enumExists) {
+      return;
+    }
+
     const values = [
       'polygon',
       'base',
