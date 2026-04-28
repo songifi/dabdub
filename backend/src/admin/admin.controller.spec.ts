@@ -17,6 +17,7 @@ describe('AdminController', () => {
     updateMerchantStatus: jest.fn(),
     bulkUpdateMerchantStatus: jest.fn(),
     getGlobalStats: jest.fn(),
+    getLiveAnalytics: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -91,6 +92,22 @@ describe('AdminController', () => {
       mockAdminService.getGlobalStats.mockResolvedValue(result);
       expect(await controller.getStats()).toBe(result);
       expect(service.getGlobalStats).toHaveBeenCalled();
+    });
+  });
+
+  describe('getLiveAnalytics', () => {
+    it('should call service.getLiveAnalytics', async () => {
+      const result = {
+        generatedAt: new Date().toISOString(),
+        maxAgeSeconds: 60,
+        paymentsLastHour: { count: 0, valueUsd: '0.000000' },
+        pendingSettlements: { count: 0, valueUsd: '0.000000', statuses: [] },
+        stellarMonitor: { lastRunAt: null, status: 'idle', lastError: null },
+        cacheHit: false,
+      };
+      mockAdminService.getLiveAnalytics.mockResolvedValue(result);
+      expect(await controller.getLiveAnalytics()).toBe(result);
+      expect(service.getLiveAnalytics).toHaveBeenCalled();
     });
   });
 });
