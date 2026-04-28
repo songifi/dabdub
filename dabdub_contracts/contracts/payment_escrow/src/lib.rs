@@ -12,7 +12,6 @@ use soroban_sdk::{
 #[allow(dead_code)]
 trait MerchantRegistry {
     fn is_merchant_active(env: Env, merchant: Address) -> bool;
-    fn is_kyc_verified(env: Env, merchant: Address) -> bool;
 }
 
 #[contracttype]
@@ -185,7 +184,12 @@ impl PaymentEscrowContract {
 
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
         let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&customer, &env.current_contract_address(), &amount);
+        let contract_address = env.current_contract_address();
+        let allowance = token_client.allowance(&customer, &contract_address);
+        if allowance < amount {
+            panic!("Insufficient allowance: approve escrow contract before deposit");
+        }
+        token_client.transfer_from(&contract_address, &customer, &contract_address, &amount);
 
         let expiry = env.ledger().sequence().saturating_add(ttl_ledgers);
         let dispute_window_end = {
@@ -233,7 +237,6 @@ impl PaymentEscrowContract {
         Self::require_admin(&env, &caller);
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -267,7 +270,6 @@ impl PaymentEscrowContract {
         }
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
-        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -435,19 +437,6 @@ impl PaymentEscrowContract {
 
     pub fn get_max_ttl_ledgers(_env: Env) -> u32 {
         MAX_TTL_LEDGERS
-    }
-
-    fn require_kyc(env: &Env, payment: &PaymentEscrow) {
-        if let Some(registry_addr) = env
-            .storage()
-            .instance()
-            .get::<DataKey, Address>(&DataKey::RegistryContract)
-        {
-            let registry_client = MerchantRegistryClient::new(env, &registry_addr);
-            if !registry_client.is_kyc_verified(&payment.merchant) {
-                panic!("Merchant not KYC verified");
-            }
-        }
     }
 
     fn require_admin(env: &Env, caller: &Address) {
