@@ -84,15 +84,14 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: wasm build
-        run: cargo wasm-build
+        run: cargo build --workspace --target wasm32v1-none --release
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-contracts
           path: |
-            contracts/paylink/target/wasm32v1-none/release/paylink.wasm
-            contracts/cheese_pay/target/wasm32v1-none/release/cheese_pay.wasm
+            dabdub_contracts/target/wasm32v1-none/release/*.wasm
           retention-days: 30
 
   backend-migration-safety:
