@@ -60,10 +60,10 @@ impl BatchPaymentContract {
         for i in 0..count {
             let item = payments.get(i).unwrap();
             if item.amount <= 0 {
-                panic!("payment at index {}: amount must be > 0");
+                panic!("payment amount must be > 0");
             }
             if item.memo.len() == 0 {
-                panic!("payment at index {}: memo must not be empty");
+                panic!("payment memo must not be empty");
             }
         }
 
@@ -78,7 +78,7 @@ impl BatchPaymentContract {
             let seed: u64 = (env.ledger().sequence() as u64) * 1000 + i as u64;
             let id_bytes: BytesN<32> = env.crypto().sha256(
                 &soroban_sdk::Bytes::from_slice(&env, &seed.to_be_bytes()),
-            );
+            ).into();
 
             // Emit PaymentCreated event — one per batch entry.
             env.events().publish(

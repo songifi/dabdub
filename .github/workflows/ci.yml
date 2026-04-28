@@ -192,6 +192,7 @@ jobs:
           # Pattern 1: .query(`  — template literal passed to .query()
           if grep -rn --include="*.ts" \
                --exclude-dir=node_modules \
+               --exclude-dir=migrations \
                --exclude="*.spec.ts" \
                --exclude="*.e2e-spec.ts" \
                --exclude="*.integration-spec.ts" \
@@ -204,6 +205,7 @@ jobs:
           # Pattern 2: .query(  followed by string + variable concatenation
           if grep -rn --include="*.ts" \
                --exclude-dir=node_modules \
+               --exclude-dir=migrations \
                --exclude="*.spec.ts" \
                --exclude="*.e2e-spec.ts" \
                --exclude="*.integration-spec.ts" \

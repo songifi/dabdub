@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Env, String,
+};
 
 fn make_payment(env: &Env, amount: i128, memo: &str) -> PaymentInput {
     PaymentInput {
@@ -15,7 +18,7 @@ fn make_payment(env: &Env, amount: i128, memo: &str) -> PaymentInput {
 fn test_batch_of_1_payment() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -29,7 +32,7 @@ fn test_batch_of_1_payment() {
 fn test_batch_of_10_payments() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -46,7 +49,7 @@ fn test_batch_of_10_payments() {
 fn test_batch_of_20_payments() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -64,7 +67,7 @@ fn test_batch_of_20_payments() {
 fn test_batch_over_20_reverts() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -81,7 +84,7 @@ fn test_batch_over_20_reverts() {
 fn test_zero_amount_reverts_entire_batch() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -104,7 +107,7 @@ fn test_zero_amount_reverts_entire_batch() {
 fn test_empty_memo_reverts_entire_batch() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -124,7 +127,7 @@ fn test_empty_memo_reverts_entire_batch() {
 fn test_payment_created_events_emitted() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
 
     let merchant = Address::generate(&env);
@@ -146,7 +149,7 @@ fn test_payment_created_events_emitted() {
 #[test]
 fn test_max_batch_size_is_20() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
     assert_eq!(client.max_batch_size(), 20);
 }
