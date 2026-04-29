@@ -159,6 +159,38 @@ describe('Authentication flows (e2e)', () => {
 
     expect(me.body.email).toBe(email);
   });
+
+  it('read-only API key cannot create payments or webhooks', async () => {
+    const email = `readonly-${Date.now()}@example.com`;
+    const reg = await request(app.getHttpServer())
+      .post(`${API}/auth/register`)
+      .send({ email, password: 'SecurePass123!', businessName: 'ReadOnly Co' })
+      .expect(201);
+
+    const jwt = reg.body.accessToken as string;
+    const keyRes = await request(app.getHttpServer())
+      .post(`${API}/merchants/api-keys`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ scopes: ['payments:read', 'settlements:read'] })
+      .expect(201);
+
+    const apiKey = keyRes.body.apiKey as string;
+
+    await request(app.getHttpServer()).get(`${API}/payments`).set('X-API-Key', apiKey).expect(200);
+    await request(app.getHttpServer())
+      .post(`${API}/payments`)
+      .set('X-API-Key', apiKey)
+      .send({ amountUsd: 10.0 })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post(`${API}/webhooks`)
+      .set('X-API-Key', apiKey)
+      .send({ url: 'https://example.com/webhooks', events: ['payment.completed'] })
+      .expect(403);
+
+    await request(app.getHttpServer()).get(`${API}/settlements`).set('X-API-Key', apiKey).expect(200);
+  });
 });
 
 describe('Authentication flows — rate limit (e2e)', () => {

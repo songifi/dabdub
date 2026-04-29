@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { MerchantsService } from './merchants.service';
 import { UpdateMerchantDto } from './dto/create-merchant.dto';
+import { GenerateApiKeyDto } from './dto/generate-api-key.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { NotificationPrefsService } from '../notifications/notification-prefs.service';
 import { UpdateNotificationPrefsDto, NotificationPrefsResponseDto } from '../notifications/dto/notification-prefs.dto';
@@ -48,8 +49,11 @@ export class MerchantsController {
   @ApiOkResponse({ description: 'New API key payload' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  generateApiKey(@Request() req: { user: { merchantId: string } }) {
-    return this.merchantsService.generateApiKey(req.user.merchantId);
+  generateApiKey(
+    @Request() req: { user: { merchantId: string } },
+    @Body() dto: GenerateApiKeyDto,
+  ) {
+    return this.merchantsService.generateApiKey(req.user.merchantId, dto.scopes);
   }
 
   @Get('me/notification-prefs')

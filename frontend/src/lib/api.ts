@@ -48,7 +48,7 @@ export const settlementsApi = {
 export const merchantApi = {
   profile: () => api.get('/merchants/me'),
   update: (data: Record<string, string>) => api.patch('/merchants/me', data),
-  generateApiKey: () => api.post('/merchants/api-keys'),
+  generateApiKey: (scopes?: string[]) => api.post('/merchants/api-keys', { scopes }),
 };
 
 export const webhooksApi = {

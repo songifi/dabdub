@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { WebhooksService } from './webhooks.service';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { Scopes } from '../auth/decorators/scopes.decorator';
 import { CreateWebhookDto } from './dto/create-webhook.dto';
 
 @ApiTags('webhooks')
@@ -23,6 +24,7 @@ export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
 
   @Get()
+  @Scopes('webhooks:manage')
   @ApiOperation({ summary: 'List webhooks' })
   @ApiOkResponse({ description: 'Webhook subscriptions' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
@@ -32,6 +34,7 @@ export class WebhooksController {
   }
 
   @Post()
+  @Scopes('webhooks:manage')
   @ApiOperation({ summary: 'Create webhook' })
   @ApiCreatedResponse({ description: 'Webhook created' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid JWT' })
@@ -42,6 +45,7 @@ export class WebhooksController {
   }
 
   @Delete(':id')
+  @Scopes('webhooks:manage')
   @ApiOperation({ summary: 'Delete webhook' })
   @ApiParam({ name: 'id', description: 'Webhook id' })
   @ApiOkResponse({ description: 'Deleted' })
