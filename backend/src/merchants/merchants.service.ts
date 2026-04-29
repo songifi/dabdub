@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Merchant, MerchantStatus } from './entities/merchant.entity';
+import { ApiScope, API_KEY_SCOPES } from '../auth/scopes';
 import { AdminAuditLog } from './entities/admin-audit-log.entity';
 import { UpdateMerchantDto } from './dto/create-merchant.dto';
 import { BulkMerchantActionDto, BulkActionResponseDto, BulkActionResultDto } from './dto/bulk-merchant-action.dto';
@@ -92,13 +93,14 @@ export class MerchantsService {
     };
   }
 
-  async generateApiKey(id: string): Promise<{ apiKey: string }> {
+  async generateApiKey(id: string, scopes?: ApiScope[]): Promise<{ apiKey: string }> {
     const merchant = await this.findOne(id);
     const rawKey = `cpk_${crypto.randomBytes(32).toString('hex')}`;
     const hash = await bcrypt.hash(rawKey, 10);
 
     merchant.apiKey = rawKey.substring(0, 12) + '...';
     merchant.apiKeyHash = hash;
+    merchant.apiKeyScopes = scopes?.length ? scopes : API_KEY_SCOPES;
     await this.merchantsRepo.save(merchant);
 
     return { apiKey: rawKey };
