@@ -26,6 +26,7 @@ fn setup_env() -> (
     let customer = Address::generate(&env);
     let merchant = Address::generate(&env);
     let token_admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
 
     let usdc_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
     let usdc = usdc_asset.address();
@@ -35,7 +36,7 @@ fn setup_env() -> (
 
     let contract_id = env.register(
         PaymentEscrowContract,
-        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None),
+        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None, &0u32, &treasury),
     );
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
@@ -734,7 +735,7 @@ fn setup_with_registry() -> (
     // Deploy escrow wired to registry.
     let escrow_id = env.register(
         PaymentEscrowContract,
-        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone())),
+        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone()), &0u32, &Address::generate(&env)),
     );
     let escrow = PaymentEscrowContractClient::new(&env, &escrow_id);
 
@@ -943,4 +944,187 @@ fn test_release_allowed_when_no_registry_configured() {
     let token_client = token::Client::new(&env, &usdc);
     assert_eq!(token_client.balance(&merchant), 250_000_000);
     assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Fee deduction tests
+// ---------------------------------------------------------------------------
+
+/// Helper: deploy escrow with a specific fee_bps and return treasury address.
+fn setup_env_with_fee(fee_bps: u32) -> (
+    Env,
+    PaymentEscrowContractClient<'static>,
+    Address, // contract_id
+    Address, // admin
+    Address, // customer
+    Address, // merchant
+    Address, // usdc
+    Address, // treasury
+) {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_sequence_number(10);
+
+    let admin = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let merchant = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let usdc_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = usdc_asset.address();
+    let xlm_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let xlm = xlm_asset.address();
+
+    let contract_id = env.register(
+        PaymentEscrowContract,
+        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None, &fee_bps, &treasury),
+    );
+    let client = PaymentEscrowContractClient::new(&env, &contract_id);
+
+    token::StellarAssetClient::new(&env, &usdc).mint(&customer, &1_000_000_000i128);
+
+    (env, client, contract_id, admin, customer, merchant, usdc, treasury)
+}
+
+#[test]
+fn test_fee_bps_stored_and_readable() {
+    let (_env, client, _contract_id, _admin, _customer, _merchant, _usdc, _treasury) =
+        setup_env_with_fee(250);
+    assert_eq!(client.get_fee_bps(), 250);
+}
+
+#[test]
+fn test_treasury_stored_and_readable() {
+    let (_env, client, _contract_id, _admin, _customer, _merchant, _usdc, treasury) =
+        setup_env_with_fee(100);
+    assert_eq!(client.get_treasury(), treasury);
+}
+
+#[test]
+fn test_release_deducts_fee_and_sends_net_to_merchant() {
+    // 2.5% fee (250 bps) on 100_000_000 stroops
+    // fee = 100_000_000 * 250 / 10_000 = 2_500_000
+    // net = 97_500_000
+    let (env, client, contract_id, admin, customer, merchant, usdc, treasury) =
+        setup_env_with_fee(250);
+    let payment_id = make_id(&env, 60);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 100_000_000i128);
+    client.release(&admin, &payment_id);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 97_500_000);
+    assert_eq!(token_client.balance(&treasury), 2_500_000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(client.get_balance(&payment_id), 0);
+}
+
+#[test]
+fn test_release_partial_deducts_fee_proportionally() {
+    // 1% fee (100 bps) on 50_000_000 stroops
+    // fee = 50_000_000 * 100 / 10_000 = 500_000
+    // net = 49_500_000
+    let (env, client, contract_id, admin, customer, merchant, usdc, treasury) =
+        setup_env_with_fee(100);
+    let payment_id = make_id(&env, 61);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 100_000_000i128);
+    client.release_partial(&admin, &payment_id, &50_000_000i128);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 49_500_000);
+    assert_eq!(token_client.balance(&treasury), 500_000);
+    assert_eq!(token_client.balance(&contract_id), 50_000_000); // remaining in escrow
+}
+
+#[test]
+fn test_release_zero_fee_sends_full_amount_to_merchant() {
+    let (env, client, contract_id, admin, customer, merchant, usdc, treasury) =
+        setup_env_with_fee(0);
+    let payment_id = make_id(&env, 62);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    client.release(&admin, &payment_id);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+    assert_eq!(token_client.balance(&treasury), 0);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn test_release_100_percent_fee_sends_all_to_treasury() {
+    // 100% fee (10_000 bps): entire amount goes to treasury, merchant gets 0
+    let (env, client, contract_id, admin, customer, merchant, usdc, treasury) =
+        setup_env_with_fee(10_000);
+    let payment_id = make_id(&env, 63);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 100_000_000i128);
+    client.release(&admin, &payment_id);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&treasury), 100_000_000);
+    assert_eq!(token_client.balance(&merchant), 0);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn test_fee_rounding_truncates_toward_zero() {
+    // 1 bps on 1 stroop: fee = 1 * 1 / 10_000 = 0 (truncated)
+    // net = 1
+    let (env, client, _contract_id, admin, customer, merchant, usdc, treasury) =
+        setup_env_with_fee(1);
+    let payment_id = make_id(&env, 64);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 1i128);
+    client.release(&admin, &payment_id);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 1);
+    assert_eq!(token_client.balance(&treasury), 0);
+}
+
+#[test]
+fn test_set_fee_bps_updates_fee() {
+    let (_env, client, _contract_id, admin, _customer, _merchant, _usdc, _treasury) =
+        setup_env_with_fee(100);
+    assert_eq!(client.get_fee_bps(), 100);
+
+    client.set_fee_bps(&admin, &500u32);
+    assert_eq!(client.get_fee_bps(), 500);
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_set_fee_bps_unauthorized() {
+    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc, _treasury) =
+        setup_env_with_fee(100);
+    let random = Address::generate(&env);
+    client.set_fee_bps(&random, &200u32);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps cannot exceed 10000")]
+fn test_set_fee_bps_exceeds_max() {
+    let (_env, client, _contract_id, admin, _customer, _merchant, _usdc, _treasury) =
+        setup_env_with_fee(100);
+    client.set_fee_bps(&admin, &10_001u32);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps cannot exceed 10000")]
+fn test_constructor_rejects_fee_bps_over_10000() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let usdc = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let xlm = env.register_stellar_asset_contract_v2(token_admin).address();
+
+    env.register(
+        PaymentEscrowContract,
+        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None, &10_001u32, &treasury),
+    );
 }

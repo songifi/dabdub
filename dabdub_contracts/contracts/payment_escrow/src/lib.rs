@@ -55,6 +55,8 @@ pub enum DataKey {
     RegistryContract,
     Payment(BytesN<32>),
     Version,
+    FeeBps,
+    Treasury,
 }
 
 #[contracttype]
@@ -72,6 +74,13 @@ struct EscrowStateEvent {
     amount: i128,
 }
 
+#[contracttype]
+struct FeeCollectedEvent {
+    payment_id: BytesN<32>,
+    fee: i128,
+    treasury: Address,
+}
+
 const MAX_DISPUTE_WINDOW_LEDGERS: u32 = 51_840;
 const MAX_TTL_LEDGERS: u32 = 518_400;
 
@@ -87,9 +96,14 @@ impl PaymentEscrowContract {
         usdc_token: Address,
         default_ttl_ledgers: u32,
         registry: Option<Address>,
+        fee_bps: u32,
+        treasury: Address,
     ) {
         if default_ttl_ledgers == 0 {
             panic!("Default TTL must be > 0");
+        }
+        if fee_bps > 10_000 {
+            panic!("fee_bps cannot exceed 10000");
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -98,6 +112,8 @@ impl PaymentEscrowContract {
         env.storage()
             .instance()
             .set(&DataKey::DefaultTtlLedgers, &default_ttl_ledgers);
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
         if let Some(reg) = registry {
             env.storage()
                 .instance()
@@ -143,6 +159,27 @@ impl PaymentEscrowContract {
     /// Return the registry contract address if one is configured.
     pub fn get_registry(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::RegistryContract)
+    }
+
+    /// Update the platform fee in basis points. Admin-only.
+    /// fee_bps must be in [0, 10_000] (0% – 100%).
+    pub fn set_fee_bps(env: Env, caller: Address, fee_bps: u32) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        if fee_bps > 10_000 {
+            panic!("fee_bps cannot exceed 10000");
+        }
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+    }
+
+    /// Return the current fee in basis points.
+    pub fn get_fee_bps(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0)
+    }
+
+    /// Return the treasury address that receives collected fees.
+    pub fn get_treasury(env: Env) -> Address {
+        env.storage().instance().get(&DataKey::Treasury).unwrap()
     }
 
     pub fn deposit(
@@ -245,7 +282,20 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, remaining, &payment.asset_type);
+        let (fee, net) = Self::split_fee(&env, remaining);
+        if fee > 0 {
+            let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
+            Self::transfer_from_contract(&env, &treasury, fee, &payment.asset_type);
+            env.events().publish(
+                ("ESCROW", "fee_collected"),
+                FeeCollectedEvent {
+                    payment_id: payment_id.clone(),
+                    fee,
+                    treasury,
+                },
+            );
+        }
+        Self::transfer_from_contract(&env, &payment.merchant, net, &payment.asset_type);
         payment.released_amount = payment.amount;
         payment.status = PaymentStatus::Released;
         env.storage()
@@ -256,7 +306,7 @@ impl PaymentEscrowContract {
             ("ESCROW", "release"),
             EscrowStateEvent {
                 payment_id,
-                amount: remaining,
+                amount: net,
             },
         );
     }
@@ -280,7 +330,20 @@ impl PaymentEscrowContract {
             panic!("Release amount exceeds remaining balance");
         }
 
-        Self::transfer_from_contract(&env, &payment.merchant, amount, &payment.asset_type);
+        let (fee, net) = Self::split_fee(&env, amount);
+        if fee > 0 {
+            let treasury: Address = env.storage().instance().get(&DataKey::Treasury).unwrap();
+            Self::transfer_from_contract(&env, &treasury, fee, &payment.asset_type);
+            env.events().publish(
+                ("ESCROW", "fee_collected"),
+                FeeCollectedEvent {
+                    payment_id: payment_id.clone(),
+                    fee,
+                    treasury,
+                },
+            );
+        }
+        Self::transfer_from_contract(&env, &payment.merchant, net, &payment.asset_type);
         payment.released_amount += amount;
         if payment.released_amount == payment.amount {
             payment.status = PaymentStatus::Released;
@@ -504,6 +567,19 @@ impl PaymentEscrowContract {
 
     fn remaining_amount(payment: &PaymentEscrow) -> i128 {
         payment.amount.saturating_sub(payment.released_amount)
+    }
+
+    /// Calculate (fee, net) for a given amount using the stored fee_bps.
+    /// fee = amount * fee_bps / 10_000  (integer division, truncating)
+    /// net = amount - fee
+    fn split_fee(env: &Env, amount: i128) -> (i128, i128) {
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(0);
+        let fee = amount * (fee_bps as i128) / 10_000;
+        (fee, amount - fee)
     }
 
     fn transfer_from_contract(env: &Env, recipient: &Address, amount: i128, asset_type: &AssetType) {
