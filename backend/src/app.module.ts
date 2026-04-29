@@ -36,9 +36,40 @@ import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CacheWarmupService } from './cache/cache-warmup.service';
 
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
+import Redis from 'ioredis';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => {
+        const host = config.get('REDIS_HOST', 'localhost');
+        const port = config.get<number>('REDIS_PORT', 6379);
+        const password = config.get<string>('REDIS_PASSWORD');
+        const ttl = config.get<number>('CACHE_TTL', 300);
+        try {
+          const client = new Redis({ host, port, password });
+          await client.ping();
+          console.log('Redis cache connected successfully');
+          return {
+            store: redisStore,
+            redisInstance: client,
+            ttl,
+          };
+        } catch (error) {
+          console.warn('Redis cache unavailable, falling back to memory store:', error.message);
+          return {
+            store: 'memory',
+            ttl,
+          };
+        }
+      },
+      isGlobal: true,
+    }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
