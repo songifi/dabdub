@@ -22,6 +22,9 @@
     "migration:run": "ts-node --transpile-only node_modules/.bin/typeorm migration:run -f ormconfig",
     "migration:revert": "ts-node --transpile-only node_modules/.bin/typeorm migration:revert -f ormconfig",
     "migration:show": "ts-node --transpile-only node_modules/.bin/typeorm migration:show -f ormconfig",
+    "db:seed": "ts-node --transpile-only scripts/db-seed.ts",
+    "db:seed:test": "NODE_ENV=test ts-node --transpile-only scripts/db-seed.ts",
+    "db:reset": "ts-node --transpile-only scripts/db-reset.ts",
     "migration:check": "ts-node --transpile-only scripts/migration-check.ts",
     "migration:rollback:check": "ts-node --transpile-only scripts/migration-rollback-check.ts",
     "migration:uncommitted:check": "ts-node --transpile-only scripts/migration-uncommitted-check.ts"
