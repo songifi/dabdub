@@ -110,6 +110,38 @@ fn test_deposit_happy_path() {
 }
 
 #[test]
+fn test_lifecycle_create_deposit_confirm_settle() {
+    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let payment_id = make_id(&env, 2);
+
+    // create
+    assert_eq!(client.get_admin(), admin.clone());
+    assert_eq!(client.get_usdc_token(), usdc.clone());
+
+    // deposit
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Pending);
+    assert_eq!(client.get_balance(&payment_id), 250_000_000);
+
+    // confirm (modeled as partial release approval)
+    client.release_partial(&admin, &payment_id, &100_000_000i128);
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Pending);
+    assert_eq!(client.get_balance(&payment_id), 150_000_000);
+
+    // settle
+    client.release(&admin, &payment_id);
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Released);
+    assert_eq!(client.get_balance(&payment_id), 0);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
 #[should_panic(expected = "Payment ID already exists")]
 fn test_deposit_duplicate_payment_id() {
     let (env, client, _contract_id, _admin, customer, merchant, _usdc, _xlm) = setup_env();
@@ -163,6 +195,35 @@ fn test_deposit_excessive_ttl() {
         &ttl,
         &AssetType::Usdc,
     );
+}
+
+#[test]
+fn test_deposit_max_ttl_boundary() {
+    let (env, client, _contract_id, _admin, customer, merchant, _usdc) = setup_env();
+    let payment_id = make_id(&env, 88);
+    let max_ttl = client.get_max_ttl_ledgers();
+
+    client.deposit(&customer, &payment_id, &merchant, &250_000_000i128, &max_ttl);
+
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.expiry, 10 + max_ttl);
+}
+
+#[test]
+fn test_deposit_minimum_positive_amount_boundary() {
+    let (env, client, contract_id, _admin, customer, merchant, usdc) = setup_env();
+    let payment_id = make_id(&env, 89);
+
+    client.deposit(&customer, &payment_id, &merchant, &1i128, &DEFAULT_PAYMENT_TTL);
+
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.amount, 1);
+    assert_eq!(payment.status, PaymentStatus::Pending);
+    assert_eq!(client.get_balance(&payment_id), 1);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&customer), 999_999_999);
+    assert_eq!(token_client.balance(&contract_id), 1);
 }
 
 #[test]
@@ -451,6 +512,23 @@ fn test_dispute_after_window_rejected() {
 }
 
 #[test]
+fn test_dispute_allowed_at_dispute_window_boundary() {
+    let (env, client, _contract_id, _admin, customer, merchant, _usdc) = setup_env();
+    let payment_id = make_id(&env, 90);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    env.ledger().set_sequence_number(110);
+    client.dispute(
+        &customer,
+        &payment_id,
+        &String::from_str(&env, "opened at boundary"),
+    );
+
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Disputed);
+}
+
+#[test]
 #[should_panic(expected = "Dispute is open")]
 fn test_release_blocked_while_disputed() {
     let (env, client, _contract_id, admin, customer, merchant, _usdc, _xlm) = setup_env();
@@ -519,6 +597,29 @@ fn test_resolve_dispute_to_customer() {
 }
 
 #[test]
+fn test_cancellation_path_refunds_customer_via_dispute_resolution() {
+    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let payment_id = make_id(&env, 91);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    client.dispute(
+        &customer,
+        &payment_id,
+        &String::from_str(&env, "cancel requested"),
+    );
+    client.resolve_dispute(&admin, &payment_id, &customer);
+
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Expired);
+    assert_eq!(client.get_balance(&payment_id), 0);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&customer), 1_000_000_000);
+    assert_eq!(token_client.balance(&merchant), 0);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
 fn test_resolve_dispute_to_merchant() {
     let (env, client, contract_id, admin, customer, merchant, usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 1);
@@ -554,6 +655,16 @@ fn test_resolve_dispute_unauthorized() {
         &String::from_str(&env, "investigate"),
     );
     client.resolve_dispute(&random, &payment_id, &merchant);
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_set_registry_unauthorized() {
+    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc) = setup_env();
+    let random = Address::generate(&env);
+    let registry = Address::generate(&env);
+
+    client.set_registry(&random, &Some(registry));
 }
 
 #[test]
