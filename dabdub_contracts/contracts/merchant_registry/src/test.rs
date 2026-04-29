@@ -209,3 +209,70 @@ fn test_is_merchant_active_returns_false_for_unknown() {
     let unknown = Address::generate(&env);
     assert!(!client.is_merchant_active(&unknown));
 }
+
+// ---------------------------------------------------------------------------
+// set_kyc_status / is_kyc_verified
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_kyc_defaults_to_false() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+
+    assert!(!client.is_kyc_verified(&merchant));
+}
+
+#[test]
+fn test_set_kyc_status_to_true() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.set_kyc_status(&admin, &merchant, &true);
+
+    assert!(client.is_kyc_verified(&merchant));
+}
+
+#[test]
+fn test_set_kyc_status_toggle_back_to_false() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.set_kyc_status(&admin, &merchant, &true);
+    client.set_kyc_status(&admin, &merchant, &false);
+
+    assert!(!client.is_kyc_verified(&merchant));
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_set_kyc_status_unauthorized() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.set_kyc_status(&attacker, &merchant, &true);
+}
+
+#[test]
+fn test_is_kyc_verified_returns_false_for_unknown() {
+    let (env, client, _admin) = setup();
+    let unknown = Address::generate(&env);
+
+    assert!(!client.is_kyc_verified(&unknown));
+}
+
+#[test]
+fn test_get_merchant_includes_kyc_field() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    let record = client.get_merchant(&merchant);
+
+    assert_eq!(record.kyc_verified, false);
+}

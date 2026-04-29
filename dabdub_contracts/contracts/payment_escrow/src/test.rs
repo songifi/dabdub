@@ -689,3 +689,86 @@ fn test_deposit_blocked_for_unregistered_merchant() {
         &DEFAULT_PAYMENT_TTL,
     );
 }
+
+// ---------------------------------------------------------------------------
+// KYC release gating
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "Merchant not KYC verified")]
+fn test_release_blocked_for_unverified_merchant() {
+    let (env, escrow, _registry, admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 50);
+
+    // Deposit — merchant is active but not KYC verified.
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &100_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+
+    // Release must be blocked by KYC check.
+    escrow.release(&admin, &payment_id);
+}
+
+#[test]
+fn test_release_allowed_for_verified_merchant() {
+    let (env, escrow, registry, admin, customer, merchant, usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 51);
+
+    // Verify the merchant first.
+    registry.set_kyc_status(&admin, &merchant, &true);
+
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &250_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+    escrow.release(&admin, &payment_id);
+
+    let payment = escrow.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Released);
+    assert_eq!(payment.released_amount, 250_000_000);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Merchant not KYC verified")]
+fn test_partial_release_blocked_for_unverified_merchant() {
+    let (env, escrow, _registry, admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 52);
+
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &200_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
+    );
+
+    // Partial release must also be blocked.
+    escrow.release_partial(&admin, &payment_id, &50_000_000i128);
+}
+
+#[test]
+fn test_release_allowed_when_no_registry_configured() {
+    // Without a registry, KYC is not enforced.
+    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let payment_id = make_id(&env, 53);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    client.release(&admin, &payment_id);
+
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Released);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}

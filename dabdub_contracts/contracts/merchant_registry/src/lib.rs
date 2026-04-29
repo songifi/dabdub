@@ -22,6 +22,7 @@ pub struct MerchantRecord {
     pub merchant: Address,
     pub name: String,
     pub status: MerchantStatus,
+    pub kyc_verified: bool,
 }
 
 /// Storage keys used by the registry.
@@ -56,6 +57,12 @@ struct MerchantReactivatedEvent {
 struct AdminTransferredEvent {
     old_admin: Address,
     new_admin: Address,
+}
+
+#[contracttype]
+struct KYCStatusUpdatedEvent {
+    merchant: Address,
+    verified: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +100,7 @@ impl MerchantRegistryContract {
             merchant: merchant.clone(),
             name: name.clone(),
             status: MerchantStatus::Active,
+            kyc_verified: false,
         };
         env.storage().persistent().set(&key, &record);
 
@@ -160,6 +168,27 @@ impl MerchantRegistryContract {
         );
     }
 
+    /// Set the KYC verification status for a merchant.  Admin-only.
+    pub fn set_kyc_status(env: Env, caller: Address, merchant: Address, verified: bool) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+
+        let key = DataKey::Merchant(merchant.clone());
+        let mut record: MerchantRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("Merchant not found");
+
+        record.kyc_verified = verified;
+        env.storage().persistent().set(&key, &record);
+
+        env.events().publish(
+            ("REGISTRY", "kyc_status_updated"),
+            KYCStatusUpdatedEvent { merchant: merchant.clone(), verified },
+        );
+    }
+
     // ------------------------------------------------------------------
     // Queries
     // ------------------------------------------------------------------
@@ -179,6 +208,17 @@ impl MerchantRegistryContract {
         }
         let record: MerchantRecord = env.storage().persistent().get(&key).unwrap();
         record.status == MerchantStatus::Active
+    }
+
+    /// Returns `true` when the merchant is KYC verified.
+    /// Returns `false` for unregistered merchants.
+    pub fn is_kyc_verified(env: Env, merchant: Address) -> bool {
+        let key = DataKey::Merchant(merchant);
+        if !env.storage().persistent().has(&key) {
+            return false;
+        }
+        let record: MerchantRecord = env.storage().persistent().get(&key).unwrap();
+        record.kyc_verified
     }
 
     pub fn get_admin(env: Env) -> Address {
