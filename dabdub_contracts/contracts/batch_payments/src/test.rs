@@ -98,15 +98,15 @@ fn test_amount_below_min_reverts_entire_batch() {
     env.mock_all_auths();
     let contract_id = env.register(BatchPaymentContract, ());
     let client = BatchPaymentContractClient::new(&env, &contract_id);
-    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
+    let (client, _admin) = deploy_and_init(&env, 100, 10_000);
 
     let merchant = Address::generate(&env);
-    // First item is valid, second has zero amount — entire batch must revert.
+    // First item is valid, second is below the configured minimum — entire batch must revert.
     let payments = soroban_sdk::vec![
         &env,
         make_payment(&env, 500, "valid"),
         PaymentInput {
-            amount: 0,
+            amount: 99,
             memo: String::from_str(&env, "invalid"),
             customer: None,
         },

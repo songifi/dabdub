@@ -122,6 +122,7 @@ impl BatchPaymentContract {
             let item = payments.get(i).unwrap();
             if item.amount <= 0 {
                 panic!("payment amount must be > 0");
+            }
             if item.amount < min_amount || item.amount > max_amount {
                 panic!("payment amount outside configured limits");
             }
