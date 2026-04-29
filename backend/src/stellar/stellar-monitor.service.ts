@@ -127,6 +127,8 @@ export class StellarMonitorService implements OnModuleInit {
       status: this.lastRunStatus,
       lastError: this.lastRunError,
     };
+    // Soroban escrow monitor: poll contract state-transition events
+    await this.sorobanMonitor.pollEscrowEvents();
   }
 
   private async confirmPayment(
@@ -136,6 +138,14 @@ export class StellarMonitorService implements OnModuleInit {
     asset: string,
     from?: string,
   ) {
+    await this.stellar.invokeContract('confirm', [
+      payment.id,
+      txHash,
+      amount,
+      asset,
+      from ?? null,
+    ]);
+
     this.logger.log(`Payment confirmed: ${payment.reference} | tx: ${txHash}`);
 
     payment.status = PaymentStatus.CONFIRMED;
@@ -218,6 +228,7 @@ export class StellarMonitorService implements OnModuleInit {
       .getMany();
 
     for (const payment of expired) {
+      await this.stellar.invokeContract('expire', [payment.id]);
       payment.status = PaymentStatus.EXPIRED;
       await this.paymentsRepo.save(payment);
 

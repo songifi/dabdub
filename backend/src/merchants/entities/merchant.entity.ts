@@ -12,6 +12,7 @@ import { Payment } from '../../payments/entities/payment.entity';
 import { Settlement } from '../../settlements/entities/settlement.entity';
 import { Webhook } from '../../webhooks/entities/webhook.entity';
 import { encryptedColumnTransformer } from '../../security/encrypted-column.transformer';
+import { ApiScope } from '../../auth/scopes';
 
 export enum MerchantStatus {
   ACTIVE = 'active',
@@ -67,6 +68,9 @@ export class Merchant {
 
   @Column({ nullable: true })
   apiKey: string;
+
+  @Column('simple-array', { name: 'api_key_scopes', nullable: true })
+  apiKeyScopes?: ApiScope[];
 
   @Exclude()
   @Column({ nullable: true })
