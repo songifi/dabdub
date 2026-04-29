@@ -307,7 +307,7 @@ impl PaymentEscrowContract {
             panic!("Payment fully released");
         }
 
-        Self::transfer_from_contract(&env, &payment.customer, remaining);
+        Self::transfer_from_contract(&env, &payment.customer, remaining, &payment.asset_type);
         payment.released_amount = payment.amount;
         payment.status = PaymentStatus::Expired;
         env.storage()
@@ -510,5 +510,23 @@ impl PaymentEscrowContract {
         let token_addr = Self::token_address(env, asset_type);
         token::Client::new(env, &token_addr)
             .transfer(&env.current_contract_address(), recipient, &amount);
+    }
+
+    /// Resolve the on-chain token contract address for the given asset type.
+    /// Both addresses are stored in instance storage during construction and
+    /// validated at that point, so the unwrap here is safe.
+    fn token_address(env: &Env, asset_type: &AssetType) -> Address {
+        match asset_type {
+            AssetType::Usdc => env
+                .storage()
+                .instance()
+                .get(&DataKey::UsdcToken)
+                .unwrap(),
+            AssetType::Xlm => env
+                .storage()
+                .instance()
+                .get(&DataKey::XlmToken)
+                .unwrap(),
+        }
     }
 }

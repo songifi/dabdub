@@ -111,7 +111,7 @@ fn test_deposit_happy_path() {
 
 #[test]
 fn test_lifecycle_create_deposit_confirm_settle() {
-    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let (env, client, contract_id, admin, customer, merchant, usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 2);
 
     // create
@@ -199,11 +199,11 @@ fn test_deposit_excessive_ttl() {
 
 #[test]
 fn test_deposit_max_ttl_boundary() {
-    let (env, client, _contract_id, _admin, customer, merchant, _usdc) = setup_env();
+    let (env, client, _contract_id, _admin, customer, merchant, _usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 88);
     let max_ttl = client.get_max_ttl_ledgers();
 
-    client.deposit(&customer, &payment_id, &merchant, &250_000_000i128, &max_ttl);
+    client.deposit(&customer, &payment_id, &merchant, &250_000_000i128, &max_ttl, &AssetType::Usdc);
 
     let payment = client.get_payment(&payment_id);
     assert_eq!(payment.expiry, 10 + max_ttl);
@@ -211,10 +211,10 @@ fn test_deposit_max_ttl_boundary() {
 
 #[test]
 fn test_deposit_minimum_positive_amount_boundary() {
-    let (env, client, contract_id, _admin, customer, merchant, usdc) = setup_env();
+    let (env, client, contract_id, _admin, customer, merchant, usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 89);
 
-    client.deposit(&customer, &payment_id, &merchant, &1i128, &DEFAULT_PAYMENT_TTL);
+    client.deposit(&customer, &payment_id, &merchant, &1i128, &DEFAULT_PAYMENT_TTL, &AssetType::Usdc);
 
     let payment = client.get_payment(&payment_id);
     assert_eq!(payment.amount, 1);
@@ -513,7 +513,7 @@ fn test_dispute_after_window_rejected() {
 
 #[test]
 fn test_dispute_allowed_at_dispute_window_boundary() {
-    let (env, client, _contract_id, _admin, customer, merchant, _usdc) = setup_env();
+    let (env, client, _contract_id, _admin, customer, merchant, _usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 90);
 
     deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
@@ -598,7 +598,7 @@ fn test_resolve_dispute_to_customer() {
 
 #[test]
 fn test_cancellation_path_refunds_customer_via_dispute_resolution() {
-    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let (env, client, contract_id, admin, customer, merchant, usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 91);
 
     deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
@@ -660,7 +660,7 @@ fn test_resolve_dispute_unauthorized() {
 #[test]
 #[should_panic(expected = "Not admin")]
 fn test_set_registry_unauthorized() {
-    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc) = setup_env();
+    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc, _xlm) = setup_env();
     let random = Address::generate(&env);
     let registry = Address::generate(&env);
 
@@ -836,6 +836,7 @@ fn test_release_blocked_for_unverified_merchant() {
         &merchant,
         &100_000_000i128,
         &DEFAULT_PAYMENT_TTL,
+        &AssetType::Usdc,
     );
 
     // Release must be blocked by KYC check.
@@ -856,6 +857,7 @@ fn test_release_allowed_for_verified_merchant() {
         &merchant,
         &250_000_000i128,
         &DEFAULT_PAYMENT_TTL,
+        &AssetType::Usdc,
     );
     escrow.release(&admin, &payment_id);
 
@@ -869,14 +871,14 @@ fn test_release_allowed_for_verified_merchant() {
 
 #[test]
 fn test_version_initialization() {
-    let (_env, client, _contract_id, _admin, _customer, _merchant, _usdc) = setup_env();
+    let (_env, client, _contract_id, _admin, _customer, _merchant, _usdc, _xlm) = setup_env();
     assert_eq!(client.get_version(), 1);
 }
 
 #[test]
 #[should_panic(expected = "Not admin")]
 fn test_upgrade_unauthorized() {
-    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc) = setup_env();
+    let (env, client, _contract_id, _admin, _customer, _merchant, _usdc, _xlm) = setup_env();
     let random = Address::generate(&env);
     let dummy_hash = BytesN::from_array(&env, &[0; 32]);
 
@@ -885,7 +887,7 @@ fn test_upgrade_unauthorized() {
 
 #[test]
 fn test_upgrade_version_increment_stub() {
-    let (env, client, _contract_id, admin, _customer, _merchant, _usdc) = setup_env();
+    let (env, client, _contract_id, admin, _customer, _merchant, _usdc, _xlm) = setup_env();
     
     assert_eq!(client.get_version(), 1);
 
@@ -919,6 +921,7 @@ fn test_partial_release_blocked_for_unverified_merchant() {
         &merchant,
         &200_000_000i128,
         &DEFAULT_PAYMENT_TTL,
+        &AssetType::Usdc,
     );
 
     // Partial release must also be blocked.
@@ -928,7 +931,7 @@ fn test_partial_release_blocked_for_unverified_merchant() {
 #[test]
 fn test_release_allowed_when_no_registry_configured() {
     // Without a registry, KYC is not enforced.
-    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let (env, client, contract_id, admin, customer, merchant, usdc, _xlm) = setup_env();
     let payment_id = make_id(&env, 53);
 
     deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
