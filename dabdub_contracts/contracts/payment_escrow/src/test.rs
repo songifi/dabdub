@@ -28,7 +28,15 @@ fn setup_env() -> (
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin);
     let usdc = asset_contract.address();
 
-    let contract_id = env.register(PaymentEscrowContract, (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None));
+    let contract_id = env.register(
+        PaymentEscrowContract,
+        (
+            &admin,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Option::<Address>::None,
+        ),
+    );
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
@@ -174,6 +182,27 @@ fn test_get_expiry_with_long_ttl() {
     );
 
     assert_eq!(client.get_expiry(&payment_id), 2_010);
+}
+
+#[test]
+fn test_admin_can_extend_payment_ttl() {
+    let (env, client, _contract_id, admin, customer, merchant, _usdc) = setup_env();
+    let payment_id = make_id(&env, 1);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    client.extend_payment_ttl(&admin, &payment_id);
+
+    assert_eq!(client.get_payment(&payment_id).amount, 250_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_extend_payment_ttl_unauthorized() {
+    let (env, client, _contract_id, _admin, customer, merchant, _usdc) = setup_env();
+    let payment_id = make_id(&env, 1);
+
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    client.extend_payment_ttl(&customer, &payment_id);
 }
 
 #[test]
@@ -604,7 +633,12 @@ fn setup_with_registry() -> (
     // Deploy escrow wired to registry.
     let escrow_id = env.register(
         PaymentEscrowContract,
-        (&admin, &usdc, &DEFAULT_PAYMENT_TTL, &Some(registry_id.clone())),
+        (
+            &admin,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Some(registry_id.clone()),
+        ),
     );
     let escrow = PaymentEscrowContractClient::new(&env, &escrow_id);
 

@@ -3,8 +3,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, token, Address, BytesN,
-    Env, String,
+    contract, contractclient, contractimpl, contracttype, token, Address, BytesN, Env, String,
 };
 
 /// Thin client interface for the MerchantRegistry contract.
@@ -40,10 +39,12 @@ pub struct PaymentEscrow {
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
+    // Instance storage: global contract configuration tied to contract code TTL.
     Admin,
     UsdcToken,
     DefaultTtlLedgers,
     RegistryContract,
+    // Persistent storage: per-payment escrow state that must remain recoverable.
     Payment(BytesN<32>),
 }
 
@@ -93,6 +94,8 @@ struct DisputeResolvedEvent {
 
 const MAX_DISPUTE_WINDOW_LEDGERS: u32 = 51_840;
 const MAX_TTL_LEDGERS: u32 = 518_400;
+const STORAGE_TTL_THRESHOLD_LEDGERS: u32 = MAX_DISPUTE_WINDOW_LEDGERS;
+const STORAGE_TTL_EXTEND_TO_LEDGERS: u32 = MAX_TTL_LEDGERS;
 
 #[contract]
 pub struct PaymentEscrowContract;
@@ -122,6 +125,7 @@ impl PaymentEscrowContract {
                 .instance()
                 .set(&DataKey::RegistryContract, &reg);
         }
+        Self::extend_instance_storage_ttl(&env);
     }
 
     /// Update (or remove) the merchant registry address.  Admin-only.
@@ -133,11 +137,9 @@ impl PaymentEscrowContract {
                 .storage()
                 .instance()
                 .set(&DataKey::RegistryContract, &reg),
-            None => env
-                .storage()
-                .instance()
-                .remove(&DataKey::RegistryContract),
+            None => env.storage().instance().remove(&DataKey::RegistryContract),
         }
+        Self::extend_instance_storage_ttl(&env);
     }
 
     /// Return the registry contract address if one is configured.
@@ -212,6 +214,8 @@ impl PaymentEscrowContract {
         };
 
         env.storage().persistent().set(&key, &payment);
+        Self::extend_payment_storage_ttl(&env, &key);
+        Self::extend_instance_storage_ttl(&env);
 
         env.events().publish(
             ("ESCROW", "deposit"),
@@ -245,6 +249,7 @@ impl PaymentEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
+        Self::extend_payment_storage_ttl(&env, &DataKey::Payment(payment_id.clone()));
 
         env.events().publish(
             ("ESCROW", "release"),
@@ -283,6 +288,7 @@ impl PaymentEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
+        Self::extend_payment_storage_ttl(&env, &DataKey::Payment(payment_id.clone()));
 
         env.events().publish(
             ("ESCROW", "partial_release"),
@@ -313,6 +319,7 @@ impl PaymentEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
+        Self::extend_payment_storage_ttl(&env, &DataKey::Payment(payment_id.clone()));
 
         env.events().publish(
             ("ESCROW", "expiry"),
@@ -346,6 +353,7 @@ impl PaymentEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
+        Self::extend_payment_storage_ttl(&env, &DataKey::Payment(payment_id.clone()));
 
         env.events().publish(
             ("ESCROW", "dispute_opened"),
@@ -384,6 +392,7 @@ impl PaymentEscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Payment(payment_id.clone()), &payment);
+        Self::extend_payment_storage_ttl(&env, &DataKey::Payment(payment_id.clone()));
 
         env.events().publish(
             ("ESCROW", "dispute_resolved"),
@@ -400,6 +409,20 @@ impl PaymentEscrowContract {
             .persistent()
             .get(&DataKey::Payment(payment_id))
             .expect("Payment not found")
+    }
+
+    /// Admin-only TTL extension for a payment's persistent storage entry.
+    pub fn extend_payment_ttl(env: Env, caller: Address, payment_id: BytesN<32>) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+
+        let key = DataKey::Payment(payment_id);
+        if !env.storage().persistent().has(&key) {
+            panic!("Payment not found");
+        }
+
+        Self::extend_payment_storage_ttl(&env, &key);
+        Self::extend_instance_storage_ttl(&env);
     }
 
     pub fn get_balance(env: Env, payment_id: BytesN<32>) -> i128 {
@@ -479,5 +502,19 @@ impl PaymentEscrowContract {
         let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
         let token_client = token::Client::new(env, &usdc_token);
         token_client.transfer(&env.current_contract_address(), recipient, &amount);
+    }
+
+    fn extend_instance_storage_ttl(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(STORAGE_TTL_THRESHOLD_LEDGERS, STORAGE_TTL_EXTEND_TO_LEDGERS);
+    }
+
+    fn extend_payment_storage_ttl(env: &Env, key: &DataKey) {
+        env.storage().persistent().extend_ttl(
+            key,
+            STORAGE_TTL_THRESHOLD_LEDGERS,
+            STORAGE_TTL_EXTEND_TO_LEDGERS,
+        );
     }
 }
