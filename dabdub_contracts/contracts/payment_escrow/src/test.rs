@@ -709,64 +709,84 @@ fn test_deposit_blocked_for_unregistered_merchant() {
 }
 
 // ---------------------------------------------------------------------------
-// Multi-asset: XLM and USDC deposit/release paths
+// KYC release gating
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_deposit_and_release_usdc() {
-    let (env, client, contract_id, admin, customer, merchant, usdc, _xlm) = setup_env();
-    let payment_id = make_id(&env, 10);
+#[should_panic(expected = "Merchant not KYC verified")]
+fn test_release_blocked_for_unverified_merchant() {
+    let (env, escrow, _registry, admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 50);
 
-    client.deposit(
+    // Deposit — merchant is active but not KYC verified.
+    escrow.deposit(
         &customer,
         &payment_id,
         &merchant,
-        &500_000_000i128,
+        &100_000_000i128,
         &DEFAULT_PAYMENT_TTL,
-        &AssetType::Usdc,
     );
 
-    let payment = client.get_payment(&payment_id);
-    assert_eq!(payment.asset_type, AssetType::Usdc);
-    assert_eq!(payment.amount, 500_000_000);
-
-    let usdc_client = token::Client::new(&env, &usdc);
-    assert_eq!(usdc_client.balance(&contract_id), 500_000_000);
-
-    client.release(&admin, &payment_id);
-
-    assert_eq!(usdc_client.balance(&merchant), 500_000_000);
-    assert_eq!(usdc_client.balance(&contract_id), 0);
-    assert_eq!(client.get_payment(&payment_id).status, PaymentStatus::Released);
+    // Release must be blocked by KYC check.
+    escrow.release(&admin, &payment_id);
 }
 
 #[test]
-fn test_deposit_and_release_xlm() {
-    let (env, client, contract_id, admin, customer, merchant, _usdc, xlm) = setup_env();
-    let payment_id = make_id(&env, 11);
+fn test_release_allowed_for_verified_merchant() {
+    let (env, escrow, registry, admin, customer, merchant, usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 51);
 
-    // Mint XLM for customer.
-    token::StellarAssetClient::new(&env, &xlm).mint(&customer, &1_000_000_000i128);
+    // Verify the merchant first.
+    registry.set_kyc_status(&admin, &merchant, &true);
 
-    client.deposit(
+    escrow.deposit(
         &customer,
         &payment_id,
         &merchant,
-        &300_000_000i128,
+        &250_000_000i128,
         &DEFAULT_PAYMENT_TTL,
-        &AssetType::Xlm,
+    );
+    escrow.release(&admin, &payment_id);
+
+    let payment = escrow.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Released);
+    assert_eq!(payment.released_amount, 250_000_000);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Merchant not KYC verified")]
+fn test_partial_release_blocked_for_unverified_merchant() {
+    let (env, escrow, _registry, admin, customer, merchant, _usdc) = setup_with_registry();
+    let payment_id = make_id(&env, 52);
+
+    escrow.deposit(
+        &customer,
+        &payment_id,
+        &merchant,
+        &200_000_000i128,
+        &DEFAULT_PAYMENT_TTL,
     );
 
-    let payment = client.get_payment(&payment_id);
-    assert_eq!(payment.asset_type, AssetType::Xlm);
-    assert_eq!(payment.amount, 300_000_000);
+    // Partial release must also be blocked.
+    escrow.release_partial(&admin, &payment_id, &50_000_000i128);
+}
 
-    let xlm_client = token::Client::new(&env, &xlm);
-    assert_eq!(xlm_client.balance(&contract_id), 300_000_000);
+#[test]
+fn test_release_allowed_when_no_registry_configured() {
+    // Without a registry, KYC is not enforced.
+    let (env, client, contract_id, admin, customer, merchant, usdc) = setup_env();
+    let payment_id = make_id(&env, 53);
 
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
     client.release(&admin, &payment_id);
 
-    assert_eq!(xlm_client.balance(&merchant), 300_000_000);
-    assert_eq!(xlm_client.balance(&contract_id), 0);
-    assert_eq!(client.get_payment(&payment_id).status, PaymentStatus::Released);
+    let payment = client.get_payment(&payment_id);
+    assert_eq!(payment.status, PaymentStatus::Released);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&merchant), 250_000_000);
+    assert_eq!(token_client.balance(&contract_id), 0);
 }

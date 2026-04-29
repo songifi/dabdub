@@ -541,6 +541,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "kyc_verified"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "merchant"
                       },
                       "val": {

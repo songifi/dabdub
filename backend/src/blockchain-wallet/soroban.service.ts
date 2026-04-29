@@ -215,4 +215,12 @@ export class SorobanService {
     // TODO: invoke CheesePay contract getStakeBalance(stellarAddress)
     return '0';
   }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  private requirePayment(id: string): ContractPayment {
+    const payment = this.payments.get(id);
+    if (!payment) throw new Error(`Payment ${id} not found in contract storage`);
+    return payment;
+  }
 }

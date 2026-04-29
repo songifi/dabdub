@@ -19,6 +19,7 @@ pub enum AssetType {
 #[allow(dead_code)]
 trait MerchantRegistry {
     fn is_merchant_active(env: Env, merchant: Address) -> bool;
+    fn is_kyc_verified(env: Env, merchant: Address) -> bool;
 }
 
 #[contracttype]
@@ -247,6 +248,7 @@ impl PaymentEscrowContract {
         Self::require_admin(&env, &caller);
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
+        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -280,6 +282,7 @@ impl PaymentEscrowContract {
         }
 
         let mut payment = Self::get_payment(env.clone(), payment_id.clone());
+        Self::require_kyc(&env, &payment);
         Self::require_releasable(&env, &payment);
 
         let remaining = Self::remaining_amount(&payment);
@@ -453,10 +456,16 @@ impl PaymentEscrowContract {
         MAX_TTL_LEDGERS
     }
 
-    fn token_address(env: &Env, asset_type: &AssetType) -> Address {
-        match asset_type {
-            AssetType::Xlm => env.storage().instance().get(&DataKey::XlmToken).unwrap(),
-            AssetType::Usdc => env.storage().instance().get(&DataKey::UsdcToken).unwrap(),
+    fn require_kyc(env: &Env, payment: &PaymentEscrow) {
+        if let Some(registry_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::RegistryContract)
+        {
+            let registry_client = MerchantRegistryClient::new(env, &registry_addr);
+            if !registry_client.is_kyc_verified(&payment.merchant) {
+                panic!("Merchant not KYC verified");
+            }
         }
     }
 
