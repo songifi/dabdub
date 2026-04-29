@@ -11,12 +11,19 @@ fn make_payment(env: &Env, amount: i128, memo: &str) -> PaymentInput {
     }
 }
 
+fn deploy_and_init(env: &Env, min_amount: i128, max_amount: i128) -> (BatchPaymentContractClient, Address) {
+    let contract_id = env.register_contract(None, BatchPaymentContract);
+    let client = BatchPaymentContractClient::new(env, &contract_id);
+    let admin = Address::generate(env);
+    client.init(&admin, &min_amount, &max_amount);
+    (client, admin)
+}
+
 #[test]
 fn test_batch_of_1_payment() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let payments = soroban_sdk::vec![&env, make_payment(&env, 1000, "order-1")];
@@ -29,8 +36,7 @@ fn test_batch_of_1_payment() {
 fn test_batch_of_10_payments() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let mut payments = soroban_sdk::vec![&env];
@@ -46,8 +52,7 @@ fn test_batch_of_10_payments() {
 fn test_batch_of_20_payments() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let mut payments = soroban_sdk::vec![&env];
@@ -64,8 +69,7 @@ fn test_batch_of_20_payments() {
 fn test_batch_over_20_reverts() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let mut payments = soroban_sdk::vec![&env];
@@ -77,12 +81,11 @@ fn test_batch_over_20_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "amount must be")]
-fn test_zero_amount_reverts_entire_batch() {
+#[should_panic(expected = "outside configured limits")]
+fn test_amount_below_min_reverts_entire_batch() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     // First item is valid, second has zero amount — entire batch must revert.
@@ -104,8 +107,7 @@ fn test_zero_amount_reverts_entire_batch() {
 fn test_empty_memo_reverts_entire_batch() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let payments = soroban_sdk::vec![
@@ -124,8 +126,7 @@ fn test_empty_memo_reverts_entire_batch() {
 fn test_payment_created_events_emitted() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, BatchPaymentContract);
-    let client = BatchPaymentContractClient::new(&env, &contract_id);
+    let (client, _admin) = deploy_and_init(&env, 1, 10_000);
 
     let merchant = Address::generate(&env);
     let payments = soroban_sdk::vec![
@@ -149,4 +150,74 @@ fn test_max_batch_size_is_20() {
     let contract_id = env.register_contract(None, BatchPaymentContract);
     let client = BatchPaymentContractClient::new(&env, &contract_id);
     assert_eq!(client.max_batch_size(), 20);
+}
+
+#[test]
+#[should_panic(expected = "outside configured limits")]
+fn test_amount_min_minus_1_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+    let merchant = Address::generate(&env);
+    let payments = soroban_sdk::vec![&env, make_payment(&env, 99, "below-min")];
+    client.create_batch(&merchant, &payments);
+}
+
+#[test]
+fn test_amount_equal_min_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+    let merchant = Address::generate(&env);
+    let payments = soroban_sdk::vec![&env, make_payment(&env, 100, "at-min")];
+    let ids = client.create_batch(&merchant, &payments);
+    assert_eq!(ids.len(), 1);
+}
+
+#[test]
+fn test_amount_equal_max_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+    let merchant = Address::generate(&env);
+    let payments = soroban_sdk::vec![&env, make_payment(&env, 1_000, "at-max")];
+    let ids = client.create_batch(&merchant, &payments);
+    assert_eq!(ids.len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "outside configured limits")]
+fn test_amount_max_plus_1_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+    let merchant = Address::generate(&env);
+    let payments = soroban_sdk::vec![&env, make_payment(&env, 1_001, "above-max")];
+    client.create_batch(&merchant, &payments);
+}
+
+#[test]
+fn test_admin_can_update_limits_without_redeploy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+
+    let original = client.get_limits();
+    assert_eq!(original, (100, 1_000));
+
+    client.set_limits(&200, &2_000);
+    let updated = client.get_limits();
+    assert_eq!(updated, (200, 2_000));
+}
+
+#[test]
+fn test_limits_updated_event_emitted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = deploy_and_init(&env, 100, 1_000);
+
+    let before = env.events().all().len();
+    client.set_limits(&150, &1_500);
+    let events = env.events().all();
+    assert_eq!(events.len(), before + 1);
 }

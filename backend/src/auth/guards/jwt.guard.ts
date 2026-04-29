@@ -1,13 +1,16 @@
-import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Reflector } from '@nestjs/core';
 import { AuthService } from '../auth.service';
 import { RateLimitService } from '../rate-limit.service';
+import { ApiScope } from '../scopes';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(
     private readonly authService: AuthService,
     private readonly rateLimitService: RateLimitService,
+    private readonly reflector: Reflector,
   ) {
     super();
   }
@@ -23,10 +26,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         throw new UnauthorizedException('Invalid API key');
       }
 
+      const scopes = merchant.apiKeyScopes ?? [];
       req.user = {
         merchantId: merchant.id,
         email: merchant.email,
         role: merchant.role,
+        authType: 'apiKey' as const,
+        scopes,
       };
 
       // Apply per-merchant sliding window rate limit
@@ -50,9 +56,25 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         return false;
       }
 
+      this.enforceApiKeyScopes(context, scopes);
       return true;
     }
 
     return (await super.canActivate(context)) as boolean;
+  }
+
+  private enforceApiKeyScopes(context: ExecutionContext, scopes: ApiScope[]): void {
+    const requiredScopes = this.reflector.getAllAndOverride<ApiScope[]>('scopes', [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!requiredScopes?.length) {
+      return;
+    }
+
+    const missing = requiredScopes.filter((scope) => !scopes.includes(scope));
+    if (missing.length) {
+      throw new ForbiddenException('Insufficient API key scopes');
+    }
   }
 }

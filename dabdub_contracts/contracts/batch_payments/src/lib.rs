@@ -6,6 +6,14 @@ use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, En
 
 const MAX_BATCH_SIZE: u32 = 20;
 
+#[contracttype]
+#[derive(Clone)]
+enum DataKey {
+    Admin,
+    MinAmount,
+    MaxAmount,
+}
+
 /// A single payment input in the batch.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -34,6 +42,48 @@ pub struct BatchPaymentContract;
 
 #[contractimpl]
 impl BatchPaymentContract {
+    /// One-time initialization for admin and amount limits.
+    pub fn init(env: Env, admin: Address, min_amount: i128, max_amount: i128) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("contract already initialized");
+        }
+        if min_amount <= 0 {
+            panic!("min amount must be > 0");
+        }
+        if min_amount > max_amount {
+            panic!("min amount must be <= max amount");
+        }
+
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::MinAmount, &min_amount);
+        env.storage().instance().set(&DataKey::MaxAmount, &max_amount);
+    }
+
+    /// Update payment amount limits. Admin-only.
+    pub fn set_limits(env: Env, min_amount: i128, max_amount: i128) {
+        if min_amount <= 0 {
+            panic!("min amount must be > 0");
+        }
+        if min_amount > max_amount {
+            panic!("min amount must be <= max amount");
+        }
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic!("contract not initialized"));
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::MinAmount, &min_amount);
+        env.storage().instance().set(&DataKey::MaxAmount, &max_amount);
+        env.events().publish(
+            (soroban_sdk::Symbol::new(&env, "LimitsUpdated"),),
+            (min_amount, max_amount),
+        );
+    }
+
     /// Create up to 20 payments atomically in a single contract invocation.
     ///
     /// Validates every input before any state is written — if any item is
@@ -48,6 +98,17 @@ impl BatchPaymentContract {
     ) -> Vec<BytesN<32>> {
         merchant.require_auth();
 
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinAmount)
+            .unwrap_or_else(|| panic!("contract not initialized"));
+        let max_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxAmount)
+            .unwrap_or_else(|| panic!("contract not initialized"));
+
         let count = payments.len();
         if count == 0 {
             panic!("batch must contain at least one payment");
@@ -59,8 +120,8 @@ impl BatchPaymentContract {
         // ── Validation pass (all items checked before any state write) ────────
         for i in 0..count {
             let item = payments.get(i).unwrap();
-            if item.amount <= 0 {
-                panic!("payment at index {}: amount must be > 0");
+            if item.amount < min_amount || item.amount > max_amount {
+                panic!("payment amount outside configured limits");
             }
             if item.memo.len() == 0 {
                 panic!("payment at index {}: memo must not be empty");
@@ -95,5 +156,20 @@ impl BatchPaymentContract {
     /// Returns the maximum allowed batch size.
     pub fn max_batch_size(_env: Env) -> u32 {
         MAX_BATCH_SIZE
+    }
+
+    /// Return the currently configured min and max payment amounts.
+    pub fn get_limits(env: Env) -> (i128, i128) {
+        let min_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinAmount)
+            .unwrap_or_else(|| panic!("contract not initialized"));
+        let max_amount: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxAmount)
+            .unwrap_or_else(|| panic!("contract not initialized"));
+        (min_amount, max_amount)
     }
 }

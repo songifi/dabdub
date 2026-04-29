@@ -8,6 +8,7 @@ import { CacheService } from '../cache/cache.service';
 import { EmailService } from '../email/email.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { NotificationPrefsService } from '../notifications/notification-prefs.service';
+import { StellarService } from '../stellar/stellar.service';
 
 describe('SettlementsService batching', () => {
   let service: SettlementsService;
@@ -25,6 +26,9 @@ describe('SettlementsService batching', () => {
     emailService: { queue: jest.fn().mockResolvedValue(undefined) } as unknown as EmailService,
     merchantsService: { findOne: jest.fn().mockResolvedValue({ email: 'merchant@example.com' }) } as unknown as MerchantsService,
     notificationPrefs: { isEnabled: jest.fn().mockResolvedValue(false) } as unknown as NotificationPrefsService,
+    stellar: {
+      invokeContract: jest.fn().mockResolvedValue('mock-contract-hash'),
+    } as unknown as StellarService,
   });
 
   beforeEach(() => {
@@ -56,6 +60,7 @@ describe('SettlementsService batching', () => {
       deps().emailService,
       deps().merchantsService,
       deps().notificationPrefs,
+      deps().stellar,
       settlementQueue as any,
     );
 
