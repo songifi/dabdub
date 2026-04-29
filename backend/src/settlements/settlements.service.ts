@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
@@ -19,6 +19,7 @@ import { EmailService } from '../email/email.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { NotificationPrefsService } from '../notifications/notification-prefs.service';
 import { NotificationChannel, NotificationEventType } from '../notifications/entities/notification-preference.entity';
+import { StellarService } from '../stellar/stellar.service';
 
 export interface PartnerCallbackPayload {
   reference: string;
@@ -47,6 +48,8 @@ export class SettlementsService {
     private emailService: EmailService,
     private merchantsService: MerchantsService,
     private notificationPrefs: NotificationPrefsService,
+    @Inject(forwardRef(() => StellarService))
+    private stellar: StellarService,
     @InjectQueue(QUEUE_NAMES.settlement)
     private settlementQueue: Queue,
   ) {}
@@ -252,6 +255,7 @@ export class SettlementsService {
       await this.settlementsRepo.save(settlement);
 
       for (const payment of payments) {
+        await this.stellar.invokeContract('settle', [payment.id, settlement.id]);
         payment.status = PaymentStatus.SETTLED;
         await this.paymentsRepo.save(payment);
       }
@@ -349,6 +353,7 @@ export class SettlementsService {
       await this.settlementsRepo.save(settlement);
 
       for (const payment of payments) {
+        await this.stellar.invokeContract('settle', [payment.id, settlement.id]);
         payment.status = PaymentStatus.SETTLED;
         await this.paymentsRepo.save(payment);
       }
