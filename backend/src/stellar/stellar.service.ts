@@ -267,6 +267,61 @@ export class StellarService implements OnModuleInit {
     }
   }
 
+  /**
+   * Read-only query: calls get_balance(payment_id) on the escrow contract via
+   * simulateTransaction (no signing, no fee). Returns the on-chain remaining
+   * balance in stroops (i128 represented as bigint).
+   *
+   * Returns null when the contract ID is not configured or the simulation fails.
+   */
+  async queryContractBalance(paymentId: string): Promise<bigint | null> {
+    if (!this.sorobanContractId) return null;
+
+    try {
+      const contract = new StellarSdk.Contract(this.sorobanContractId);
+      // Build a minimal transaction — source account is not required to exist
+      // for simulation-only calls; we use a well-known testnet account as a
+      // placeholder when no keypair is configured.
+      const sourcePublicKey = this.keypair
+        ? this.keypair.publicKey()
+        : 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN';
+
+      const source = new StellarSdk.Account(sourcePublicKey, '0');
+      const tx = new StellarSdk.TransactionBuilder(source, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          contract.call(
+            'get_balance',
+            StellarSdk.nativeToScVal(paymentId, { type: 'bytes' }),
+          ),
+        )
+        .setTimeout(30)
+        .build();
+
+      const simulated = await this.sorobanRpcServer.simulateTransaction(tx);
+      if (StellarSdk.rpc.Api.isSimulationError(simulated)) {
+        this.logger.warn(
+          `get_balance simulation error for payment ${paymentId}: ${simulated.error}`,
+        );
+        return null;
+      }
+
+      const result = (simulated as StellarSdk.rpc.Api.SimulateTransactionSuccessResponse)
+        .result?.retval;
+      if (!result) return null;
+
+      // The contract returns i128; scValToNative converts it to bigint.
+      return BigInt(StellarSdk.scValToNative(result) as string | number | bigint);
+    } catch (err) {
+      this.logger.warn(
+        `queryContractBalance failed for payment ${paymentId}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   private extractSorobanErrorCode(error: unknown): string {
     const serialized =
       typeof error === 'string' ? error : JSON.stringify(error ?? {});
