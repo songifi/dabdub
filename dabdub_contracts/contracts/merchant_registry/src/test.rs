@@ -48,6 +48,16 @@ fn test_register_duplicate_merchant_panics() {
     client.register_merchant(&admin, &merchant, &sample_name(&env));
 }
 
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_register_unauthorized() {
+    let (env, client, _admin) = setup();
+    let merchant = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.register_merchant(&attacker, &merchant, &sample_name(&env));
+}
+
 // ---------------------------------------------------------------------------
 // suspend_merchant / reactivate_merchant
 // ---------------------------------------------------------------------------
@@ -120,6 +130,43 @@ fn test_reactivate_already_active() {
     client.register_merchant(&admin, &merchant, &sample_name(&env));
     // merchant is Active after registration – reactivating should panic
     client.reactivate_merchant(&admin, &merchant);
+}
+
+// ---------------------------------------------------------------------------
+// transfer_admin
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_transfer_admin_happy_path() {
+    let (env, client, admin) = setup();
+    let new_admin = Address::generate(&env);
+
+    client.transfer_admin(&admin, &new_admin);
+
+    assert_eq!(client.get_admin(), new_admin);
+}
+
+#[test]
+fn test_transfer_admin_updates_merchant_ops() {
+    let (env, client, admin) = setup();
+    let new_admin = Address::generate(&env);
+    let merchant = Address::generate(&env);
+
+    client.transfer_admin(&admin, &new_admin);
+    client.register_merchant(&new_admin, &merchant, &sample_name(&env));
+
+    let record = client.get_merchant(&merchant);
+    assert_eq!(record.status, MerchantStatus::Active);
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_transfer_admin_unauthorized() {
+    let (env, client, _admin) = setup();
+    let attacker = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.transfer_admin(&attacker, &new_admin);
 }
 
 // ---------------------------------------------------------------------------
