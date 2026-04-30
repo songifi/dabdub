@@ -4,6 +4,7 @@ import { QUEUE_LIST } from './queue.constants';
 import {
   NotificationQueueProcessor,
   SettlementQueueProcessor,
+  SorobanEventDlqProcessor,
   StellarMonitorQueueProcessor,
   WebhookQueueProcessor,
 } from './queue.processors';
@@ -37,6 +38,7 @@ import { Payment } from '../payments/entities/payment.entity';
     WebhookQueueProcessor,
     NotificationQueueProcessor,
     StellarMonitorQueueProcessor,
+    SorobanEventDlqProcessor,
     QueueMetricsService,
   ],
   exports: [BullModule],
