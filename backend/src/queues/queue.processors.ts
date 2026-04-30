@@ -131,3 +131,15 @@ export class StellarMonitorQueueProcessor extends BaseQueueProcessor {
     this.logJob(job);
   }
 }
+
+@Processor(QUEUE_NAMES.sorobanEventDlq)
+export class SorobanEventDlqProcessor extends BaseQueueProcessor {
+  constructor() {
+    super(SorobanEventDlqProcessor.name);
+  }
+
+  @Process(DEFAULT_QUEUE_JOB)
+  handle(job: Job<QueueDispatchPayload>): void {
+    this.logJob(job);
+  }
+}

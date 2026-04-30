@@ -3,6 +3,7 @@ export const QUEUE_NAMES = {
   webhook: 'webhook',
   notification: 'notification',
   stellarMonitor: 'stellar-monitor',
+  sorobanEventDlq: 'soroban-event-dlq',
 } as const;
 
 export const QUEUE_LIST = Object.values(QUEUE_NAMES);
