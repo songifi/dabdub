@@ -276,3 +276,67 @@ fn test_get_merchant_includes_kyc_field() {
 
     assert_eq!(record.kyc_verified, false);
 }
+
+// ---------------------------------------------------------------------------
+// update_fee_tier / get_fee_tier
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_fee_tier_defaults_to_150() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    assert_eq!(client.get_fee_tier(&merchant), 150);
+}
+
+#[test]
+fn test_update_fee_tier_happy_path() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.update_fee_tier(&admin, &merchant, &300);
+    assert_eq!(client.get_fee_tier(&merchant), 300);
+}
+
+#[test]
+fn test_update_fee_tier_to_zero() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.update_fee_tier(&admin, &merchant, &0);
+    assert_eq!(client.get_fee_tier(&merchant), 0);
+}
+
+#[test]
+fn test_update_fee_tier_to_max() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.update_fee_tier(&admin, &merchant, &1000);
+    assert_eq!(client.get_fee_tier(&merchant), 1000);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps exceeds maximum of 1000")]
+fn test_update_fee_tier_above_max_panics() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.update_fee_tier(&admin, &merchant, &1001);
+}
+
+#[test]
+#[should_panic(expected = "Not admin")]
+fn test_update_fee_tier_unauthorized() {
+    let (env, client, admin) = setup();
+    let merchant = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    client.register_merchant(&admin, &merchant, &sample_name(&env));
+    client.update_fee_tier(&attacker, &merchant, &200);
+}
