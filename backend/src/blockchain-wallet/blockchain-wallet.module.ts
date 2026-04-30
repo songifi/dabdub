@@ -11,6 +11,7 @@ import { SlippageAdminController } from './slippage-admin.controller';
 import { WalletProvisionedListener } from './listeners/wallet-provisioned.listener';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SorobanModule } from '../soroban/soroban.module';
+import { EncryptionService } from '../security/encryption.service';
 
 @Module({
   imports: [
@@ -19,7 +20,12 @@ import { SorobanModule } from '../soroban/soroban.module';
     NotificationsModule,
     SorobanModule,
   ],
-  providers: [BlockchainWalletService, SlippageService, WalletProvisionedListener],
+  providers: [
+    EncryptionService,
+    BlockchainWalletService,
+    SlippageService,
+    WalletProvisionedListener,
+  ],
   controllers: [WalletController, InternalWalletController, SlippageAdminController],
   exports: [BlockchainWalletService, SlippageService],
 })

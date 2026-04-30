@@ -6,15 +6,16 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BlockchainWalletService, WALLET_PROVISIONED_EVENT } from './blockchain-wallet.service';
 import { SorobanService } from './soroban.service';
 import { BlockchainWallet } from './entities/blockchain-wallet.entity';
+import { EncryptionService } from '../security/encryption.service';
 
-const MOCK_ENC_KEY = 'test-encryption-key-32-chars-long!!';
+const MOCK_ENC_KEY = '0123456789abcdef0123456789abcdef';
 
 const mockWallet = (): BlockchainWallet => ({
   id: 'wallet-uuid',
   userId: 'user-uuid',
   stellarAddress: 'GABC123',
   encryptedSecretKey: '',
-  iv: '',
+  iv: null,
   balanceUsdc: '0',
   stakedBalance: '0',
   lastSyncedAt: null,
@@ -27,6 +28,7 @@ describe('BlockchainWalletService', () => {
   let sorobanService: jest.Mocked<SorobanService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
   let configService: jest.Mocked<ConfigService>;
+  let encryptionService: EncryptionService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -53,6 +55,7 @@ describe('BlockchainWalletService', () => {
           useValue: {
             get: jest.fn((key: string, def?: any) => {
               if (key === 'STELLAR_WALLET_ENCRYPTION_KEY') return MOCK_ENC_KEY;
+              if (key === 'ENCRYPTION_KEY') return MOCK_ENC_KEY;
               if (key === 'STELLAR_NETWORK') return 'TESTNET';
               if (key === 'STELLAR_HORIZON_URL') return 'https://horizon-testnet.stellar.org';
               return def;
@@ -63,6 +66,7 @@ describe('BlockchainWalletService', () => {
           provide: EventEmitter2,
           useValue: { emit: jest.fn() },
         },
+        EncryptionService,
       ],
     }).compile();
 
@@ -71,6 +75,7 @@ describe('BlockchainWalletService', () => {
     sorobanService = module.get(SorobanService);
     eventEmitter = module.get(EventEmitter2);
     configService = module.get(ConfigService);
+    encryptionService = module.get(EncryptionService);
   });
 
   // ── provision ───────────────────────────────────────────────────────────────
@@ -123,25 +128,30 @@ describe('BlockchainWalletService', () => {
     });
   });
 
-  // ── decryptSecretKey AES round-trip ─────────────────────────────────────────
+  // ── decryptSecretKey ─────────────────────────────────────────────────────────
 
   describe('decryptSecretKey', () => {
-    it('correctly encrypts and decrypts a Stellar secret key', () => {
+    it('returns decrypted value directly for transformer-managed rows', () => {
       const secret = 'SCZANGBA5RLGSRSGIDJIS7LJFTD3GVLKIGUTHARCHUU5MQNKQIE3EDXX';
-      const { ciphertext, iv } = (service as any).encrypt(secret);
-
-      const fakeWallet = { encryptedSecretKey: ciphertext, iv } as BlockchainWallet;
+      const fakeWallet = { encryptedSecretKey: secret, iv: null } as BlockchainWallet;
       const decrypted = service.decryptSecretKey(fakeWallet);
-
       expect(decrypted).toBe(secret);
     });
 
-    it('produces different ciphertext each call (random IV)', () => {
+    it('decrypts legacy iv+authTag payloads for backward compatibility', () => {
       const secret = 'SCZANGBA5RLGSRSGIDJIS7LJFTD3GVLKIGUTHARCHUU5MQNKQIE3EDXX';
-      const first = (service as any).encrypt(secret);
-      const second = (service as any).encrypt(secret);
-      expect(first.iv).not.toBe(second.iv);
-      expect(first.ciphertext).not.toBe(second.ciphertext);
+      const encrypted = encryptionService.encrypt(secret);
+      const [, ivB64, authTagB64, payloadB64] = encrypted.split(':');
+      const legacyWallet = {
+        encryptedSecretKey: `${Buffer.from(authTagB64, 'base64').toString('hex')}:${Buffer.from(
+          payloadB64,
+          'base64',
+        ).toString('hex')}`,
+        iv: Buffer.from(ivB64, 'base64').toString('hex'),
+      } as BlockchainWallet;
+
+      const decrypted = service.decryptSecretKey(legacyWallet);
+      expect(decrypted).toBe(secret);
     });
   });
 
