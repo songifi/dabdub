@@ -37,6 +37,30 @@ jobs:
         env:
           NODE_ENV: test
 
+  dependency-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Run npm audit on backend
+        run: npm audit --audit-level=high
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ../frontend
+
+      - name: Run npm audit on frontend
+        run: npm --prefix ../frontend audit --audit-level=high
+
   ci:
     runs-on: ubuntu-latest
     steps:
