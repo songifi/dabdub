@@ -172,6 +172,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "fee_bps"
+                      },
+                      "val": {
+                        "u32": 150
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "kyc_verified"
                       },
                       "val": {
