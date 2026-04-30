@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 3,
+    "address": 2,
     "nonce": 0
   },
   "auth": [
@@ -12,16 +12,19 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "function_name": "register_merchant",
+              "function_name": "schedule_change",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "string": "fee_rate"
                 },
                 {
-                  "string": "Acme Corp"
+                  "string": "200"
+                },
+                {
+                  "u32": 100
                 }
               ]
             }
@@ -37,35 +40,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "function_name": "suspend_merchant",
+              "function_name": "apply_change",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-              "function_name": "reactivate_merchant",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "bytes": "cd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50"
                 }
               ]
             }
@@ -78,7 +59,7 @@
   ],
   "ledger": {
     "protocol_version": 22,
-    "sequence_number": 0,
+    "sequence_number": 200,
     "timestamp": 0,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
@@ -116,40 +97,7 @@
             },
             "ext": "v0"
           },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 1033654523790656264
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 1033654523790656264
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
+          6312099
         ]
       ],
       [
@@ -182,7 +130,7 @@
             },
             "ext": "v0"
           },
-          6311999
+          6312199
         ]
       ],
       [
@@ -192,10 +140,10 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "Merchant"
+                  "symbol": "Change"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "bytes": "cd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50"
                 }
               ]
             },
@@ -212,10 +160,10 @@
                 "key": {
                   "vec": [
                     {
-                      "symbol": "Merchant"
+                      "symbol": "Change"
                     },
                     {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                      "bytes": "cd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50"
                     }
                   ]
                 },
@@ -224,34 +172,34 @@
                   "map": [
                     {
                       "key": {
-                        "symbol": "fee_bps"
+                        "symbol": "change_id"
                       },
                       "val": {
-                        "u32": 150
+                        "bytes": "cd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50"
                       }
                     },
                     {
                       "key": {
-                        "symbol": "kyc_verified"
+                        "symbol": "execute_after"
                       },
                       "val": {
-                        "bool": false
+                        "u32": 200
                       }
                     },
                     {
                       "key": {
-                        "symbol": "merchant"
+                        "symbol": "param"
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "string": "fee_rate"
                       }
                     },
                     {
                       "key": {
-                        "symbol": "name"
+                        "symbol": "scheduled_at"
                       },
                       "val": {
-                        "string": "Acme Corp"
+                        "u32": 100
                       }
                     },
                     {
@@ -261,9 +209,17 @@
                       "val": {
                         "vec": [
                           {
-                            "symbol": "Active"
+                            "symbol": "Applied"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "value"
+                      },
+                      "val": {
+                        "string": "200"
                       }
                     }
                   ]
@@ -272,7 +228,7 @@
             },
             "ext": "v0"
           },
-          4095
+          4195
         ]
       ],
       [
@@ -309,6 +265,18 @@
                         "val": {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "Counter"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 1
+                        }
                       }
                     ]
                   }
@@ -317,7 +285,7 @@
             },
             "ext": "v0"
           },
-          4095
+          4195
         ]
       ],
       [
@@ -338,7 +306,7 @@
             },
             "ext": "v0"
           },
-          4095
+          4195
         ]
       ]
     ]
