@@ -108,6 +108,12 @@ export class AdminController {
     return this.adminService.getGeographicDistribution(sortBy);
   }
 
+  @Get('analytics/live')
+  @ApiOperation({ summary: 'Get real-time dashboard counters (max age: 60s)' })
+  getLiveAnalytics() {
+    return this.adminService.getLiveAnalytics();
+  }
+
   // ── Admin User Management with 2FA (#707) ──────────────────────────────────
 
   @Post('users')
