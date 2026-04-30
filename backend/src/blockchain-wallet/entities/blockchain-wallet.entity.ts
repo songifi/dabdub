@@ -4,6 +4,8 @@ import {
   Column,
   CreateDateColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
+import { encryptedColumnTransformer } from '../../security/encrypted-column.transformer';
 
 @Entity('blockchain_wallets')
 export class BlockchainWallet {
@@ -17,12 +19,18 @@ export class BlockchainWallet {
   stellarAddress: string;
 
   /** AES-256-GCM ciphertext of the Stellar secret key */
-  @Column({ type: 'text' })
+  @Exclude()
+  @Column({
+    type: 'text',
+    transformer: encryptedColumnTransformer(
+      'blockchain_wallets.encryptedSecretKey',
+    ),
+  })
   encryptedSecretKey: string;
 
   /** AES-256-GCM initialization vector (hex) */
-  @Column({ type: 'varchar' })
-  iv: string;
+  @Column({ type: 'varchar', nullable: true })
+  iv: string | null;
 
   /** USDC balance stored as string to avoid float precision loss */
   @Column({ type: 'varchar', default: '0' })
