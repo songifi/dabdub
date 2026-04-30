@@ -3,8 +3,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, token, Address, BytesN,
-    Env, String,
+    contract, contractclient, contractimpl, contracttype, token, Address, BytesN, Env, String,
 };
 
 #[contracttype]
@@ -18,7 +17,7 @@ pub enum AssetType {
 #[contractclient(name = "MerchantRegistryClient")]
 #[allow(dead_code)]
 trait MerchantRegistry {
-    fn is_merchant_active(env: Env, merchant: Address) -> bool;
+    fn is_approved(env: Env, merchant: Address) -> bool;
 }
 
 #[contracttype]
@@ -133,10 +132,7 @@ impl PaymentEscrowContract {
                 .storage()
                 .instance()
                 .set(&DataKey::RegistryContract, &reg),
-            None => env
-                .storage()
-                .instance()
-                .remove(&DataKey::RegistryContract),
+            None => env.storage().instance().remove(&DataKey::RegistryContract),
         }
     }
 
@@ -171,15 +167,15 @@ impl PaymentEscrowContract {
             panic!("Payment ID already exists");
         }
 
-        // If a registry contract is configured, verify the merchant is active.
+        // If a registry contract is configured, verify the merchant is approved.
         if let Some(registry_addr) = env
             .storage()
             .instance()
             .get::<DataKey, Address>(&DataKey::RegistryContract)
         {
             let registry_client = MerchantRegistryClient::new(&env, &registry_addr);
-            if !registry_client.is_merchant_active(&merchant) {
-                panic!("Merchant is suspended or not registered");
+            if !registry_client.is_approved(&merchant) {
+                panic!("Merchant is not approved");
             }
         }
 
