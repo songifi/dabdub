@@ -1,0 +1,49 @@
+name: Weekly Dependency Audit Report
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  dependency-audit-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+
+      - name: Generate backend audit report
+        run: node scripts/dependency-audit-report.js backend --output backend-audit-report.txt
+
+      - name: Generate frontend audit report
+        run: node scripts/dependency-audit-report.js frontend --output frontend-audit-report.txt
+
+      - name: Combine audit reports
+        run: |
+          echo "# Weekly Dependency Audit Report" > audit-report.txt
+          echo "" >> audit-report.txt
+          echo "## Backend" >> audit-report.txt
+          cat backend-audit-report.txt >> audit-report.txt
+          echo "" >> audit-report.txt
+          echo "## Frontend" >> audit-report.txt
+          cat frontend-audit-report.txt >> audit-report.txt
+
+      - name: Send audit report to admin
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SMTP_HOST }}
+          server_port: ${{ secrets.EMAIL_SMTP_PORT }}
+          username: ${{ secrets.EMAIL_SMTP_USER }}
+          password: ${{ secrets.EMAIL_SMTP_PASS }}
+          subject: 'Weekly Dependency Audit Report'
+          body_file: audit-report.txt
+          to: ${{ secrets.EMAIL_ADMIN }}
+          from: ${{ secrets.EMAIL_FROM || secrets.EMAIL_SMTP_USER }}
+          secure: ${{ secrets.EMAIL_SMTP_SECURE }}
