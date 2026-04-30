@@ -11,13 +11,23 @@ import { CronModule } from '../cron/cron.module';
 import { AuditLog } from './entities/audit-log.entity';
 import { RatesModule } from '../rates/rates.module';
 import { CacheModule } from '../cache/cache.module';
+import { Settlement } from '../settlements/entities/settlement.entity';
+import { StellarModule } from '../stellar/stellar.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Merchant, Payment, FeeConfig, FeeHistory, AuditLog]),
+    TypeOrmModule.forFeature([
+      Merchant,
+      Payment,
+      Settlement,
+      FeeConfig,
+      FeeHistory,
+      AuditLog,
+    ]),
     CronModule,
     RatesModule,
     CacheModule,
+    StellarModule,
   ],
   controllers: [AdminController, CronAdminController],
   providers: [AdminService, IpAllowlistGuard],
