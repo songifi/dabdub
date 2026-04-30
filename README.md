@@ -321,9 +321,9 @@ Cheese sends webhooks for the following events:
 
 ### Customer Payment Flow
 
-1. Scan QR code with any Web3 wallet
-2. Auto-populate payment details
-3. Confirm transaction
+1. Approve USDC allowance for escrow contract (`approve(escrow_contract, amount)`)
+2. Deposit into escrow (`deposit()`) so the contract pulls funds via `transfer_from`
+3. Confirm transaction in wallet (customer signs in-wallet, no private key sharing)
 4. Real-time status updates
 5. Receipt generation
 

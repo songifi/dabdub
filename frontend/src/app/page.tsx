@@ -88,7 +88,7 @@ export default function LandingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
             { step: '01', title: 'Create payment', desc: 'Enter amount in USD. We generate a QR code with your Stellar deposit address.' },
-            { step: '02', title: 'Customer pays', desc: 'Customer scans QR, sends USDC or XLM from their Stellar wallet. Confirmed in seconds.' },
+            { step: '02', title: 'Customer approves + deposits', desc: 'Customer scans QR, approves USDC allowance for escrow, then calls deposit from their Stellar wallet.' },
             { step: '03', title: 'Receive fiat', desc: 'We detect the payment, convert to fiat, and transfer to your bank account automatically.' },
           ].map(({ step, title, desc }) => (
             <div key={step} className="text-center">

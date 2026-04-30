@@ -71,8 +71,16 @@ export default function PayPage({ params }: { params: { paymentId: string } }) {
                 </div>
               </div>
               <p className="text-center text-xs text-gray-500 mb-4">
-                Scan with a Stellar wallet app
+                Scan with a Stellar wallet app, then approve USDC before deposit
               </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs mb-4">
+                <p className="font-semibold text-blue-900 mb-1">Required customer flow</p>
+                <p className="text-blue-800">1) approve(escrow_contract, amount)</p>
+                <p className="text-blue-800">2) deposit()</p>
+                <p className="text-blue-700 mt-1">
+                  Your wallet signs both steps. No private keys are shared with CheesePay.
+                </p>
+              </div>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs">
                 <p className="font-semibold text-amber-800 mb-1">Important: Include memo</p>
                 <code className="text-amber-900 font-bold text-sm">{payment.stellarMemo}</code>
