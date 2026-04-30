@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as Sentry from '@sentry/nestjs';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { AdminAlertService } from '../alerts/admin-alert.service';
 import { AdminAlertType } from '../alerts/admin-alert.entity';
+import { StellarService } from './stellar.service';
 
 interface SorobanEvent {
   type: string;
@@ -47,6 +49,7 @@ export class SorobanMonitorService {
     private readonly paymentsRepo: Repository<Payment>,
     private readonly config: ConfigService,
     private readonly adminAlerts: AdminAlertService,
+    private readonly stellar: StellarService,
   ) {
     this.rpcUrl = this.config.get<string>(
       'SOROBAN_RPC_URL',
@@ -120,6 +123,15 @@ export class SorobanMonitorService {
     const matched = payments.find((payment) => this.matchesEscrowPaymentId(payment, paymentId));
     if (!matched) return;
 
+    // ── Balance verification on deposit ──────────────────────────────────────
+    // Before confirming a deposit event, query the escrow contract to verify
+    // the on-chain balance matches the expected payment amount. Short-paid
+    // deposits are flagged and skipped — they must not be auto-settled.
+    if (topic === 'deposit') {
+      const shortPaid = await this.verifyDepositBalance(matched, paymentId, event.id);
+      if (shortPaid) return;
+    }
+
     const nextStatus = this.mapTopicToStatus(topic);
     if (!nextStatus || matched.status === nextStatus) return;
 
@@ -130,6 +142,83 @@ export class SorobanMonitorService {
     this.logger.log(
       `Soroban escrow event ${topic} mapped payment ${matched.reference} -> ${nextStatus} (event ${event.id}${amount !== null ? `, amount=${amount}` : ''})`,
     );
+  }
+
+  /**
+   * Query the escrow contract's get_balance view function and compare the
+   * on-chain balance against the payment's expected USDC amount.
+   *
+   * Returns true (short-paid / mismatch) when the balance check fails and the
+   * deposit should NOT be confirmed. Returns false when the balance is
+   * sufficient and processing can continue.
+   */
+  private async verifyDepositBalance(
+    payment: Payment,
+    escrowPaymentId: string,
+    eventId: string,
+  ): Promise<boolean> {
+    const onChainBalance = await this.stellar.queryContractBalance(escrowPaymentId);
+
+    if (onChainBalance === null) {
+      // Could not query — log a warning but allow processing to continue so
+      // a transient RPC failure does not permanently block confirmation.
+      this.logger.warn(
+        `Balance query unavailable for payment ${payment.reference} (escrowId=${escrowPaymentId}); proceeding without verification`,
+      );
+      return false;
+    }
+
+    // Expected amount in stroops: amountUsdc is stored as a decimal number of
+    // USDC units; 1 USDC = 10_000_000 stroops (7 decimal places on Stellar).
+    const expectedStroops = BigInt(
+      Math.round(Number(payment.amountUsdc ?? 0) * 10_000_000),
+    );
+
+    if (onChainBalance < expectedStroops) {
+      const discrepancy = expectedStroops - onChainBalance;
+      const message =
+        `Short-paid deposit detected for payment ${payment.reference} ` +
+        `(escrowId=${escrowPaymentId}): ` +
+        `expected=${expectedStroops} stroops, ` +
+        `on-chain=${onChainBalance} stroops, ` +
+        `shortfall=${discrepancy} stroops`;
+
+      this.logger.warn(message);
+
+      Sentry.captureException(new Error(message), {
+        tags: {
+          component: 'soroban-monitor',
+          event: 'short_paid_deposit',
+        },
+        extra: {
+          paymentId: payment.id,
+          reference: payment.reference,
+          escrowPaymentId,
+          eventId,
+          expectedStroops: expectedStroops.toString(),
+          onChainBalance: onChainBalance.toString(),
+          discrepancyStroops: discrepancy.toString(),
+        },
+      });
+
+      await this.adminAlerts.raise({
+        type: AdminAlertType.STELLAR_MONITOR,
+        dedupeKey: `soroban-monitor.short-paid:${payment.id}`,
+        message,
+        metadata: {
+          paymentId: payment.id,
+          reference: payment.reference,
+          escrowPaymentId,
+          expectedStroops: expectedStroops.toString(),
+          onChainBalance: onChainBalance.toString(),
+        },
+        thresholdValue: 1,
+      });
+
+      return true; // short-paid — do not confirm
+    }
+
+    return false; // balance OK
   }
 
   private extractTopic(topics: string[]): EscrowEventTopic | null {
