@@ -7,6 +7,7 @@ use soroban_sdk::{
 };
 
 const DEFAULT_PAYMENT_TTL: u32 = 100;
+const EMERGENCY_COOLDOWN_LEDGERS: u32 = 50;
 
 fn setup_env() -> (
     Env,
@@ -33,9 +34,24 @@ fn setup_env() -> (
     let xlm_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
     let xlm = xlm_asset.address();
 
+    let e_signer_1 = Address::generate(&env);
+    let e_signer_2 = Address::generate(&env);
+    let e_signer_3 = Address::generate(&env);
+    let e_treasury = Address::generate(&env);
+    let e_signers = soroban_sdk::vec![&env, e_signer_1, e_signer_2, e_signer_3];
+
     let contract_id = env.register(
         PaymentEscrowContract,
-        (&admin, &xlm, &usdc, &DEFAULT_PAYMENT_TTL, &Option::<Address>::None),
+        (
+            &admin,
+            &xlm,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Option::<Address>::None,
+            &e_signers,
+            &e_treasury,
+            &EMERGENCY_COOLDOWN_LEDGERS,
+        ),
     );
     let client = PaymentEscrowContractClient::new(&env, &contract_id);
 
@@ -43,6 +59,77 @@ fn setup_env() -> (
     token::StellarAssetClient::new(&env, &usdc).mint(&customer, &1_000_000_000i128);
 
     (env, client, contract_id, admin, customer, merchant, usdc, xlm)
+}
+
+fn setup_env_with_emergency() -> (
+    Env,
+    PaymentEscrowContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_sequence_number(10);
+
+    let admin = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let merchant = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let usdc_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let usdc = usdc_asset.address();
+
+    let xlm_asset = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let xlm = xlm_asset.address();
+
+    let emergency_signer_one = Address::generate(&env);
+    let emergency_signer_two = Address::generate(&env);
+    let emergency_signer_three = Address::generate(&env);
+    let emergency_treasury = Address::generate(&env);
+    let emergency_signers = soroban_sdk::vec![
+        &env,
+        emergency_signer_one.clone(),
+        emergency_signer_two.clone(),
+        emergency_signer_three.clone(),
+    ];
+
+    let contract_id = env.register(
+        PaymentEscrowContract,
+        (
+            &admin,
+            &xlm,
+            &usdc,
+            &DEFAULT_PAYMENT_TTL,
+            &Option::<Address>::None,
+            &emergency_signers,
+            &emergency_treasury,
+            &EMERGENCY_COOLDOWN_LEDGERS,
+        ),
+    );
+    let client = PaymentEscrowContractClient::new(&env, &contract_id);
+
+    token::StellarAssetClient::new(&env, &usdc).mint(&customer, &1_000_000_000i128);
+
+    (
+        env,
+        client,
+        contract_id,
+        admin,
+        customer,
+        merchant,
+        usdc,
+        emergency_signer_one,
+        emergency_signer_two,
+        emergency_signer_three,
+        emergency_treasury,
+    )
 }
 
 fn make_id(env: &Env, seed: u8) -> BytesN<32> {
@@ -940,4 +1027,93 @@ fn test_release_allowed_when_no_registry_configured() {
     let token_client = token::Client::new(&env, &usdc);
     assert_eq!(token_client.balance(&merchant), 250_000_000);
     assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn test_emergency_drain_moves_all_funds_to_treasury() {
+    let (
+        env,
+        client,
+        contract_id,
+        _admin,
+        customer,
+        merchant,
+        usdc,
+        emergency_signer_one,
+        emergency_signer_two,
+        _emergency_signer_three,
+        emergency_treasury,
+    ) = setup_env_with_emergency();
+
+    let payment_id = make_id(&env, 51);
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+
+    let drained = client.emergency_drain(
+        &emergency_signer_one,
+        &emergency_signer_one,
+        &emergency_signer_two,
+    );
+    assert_eq!(drained, 250_000_000);
+
+    let token_client = token::Client::new(&env, &usdc);
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(token_client.balance(&emergency_treasury), 250_000_000);
+}
+
+#[test]
+#[should_panic(expected = "Not emergency signer")]
+fn test_emergency_drain_rejects_non_multisig_signer() {
+    let (
+        env,
+        client,
+        _contract_id,
+        _admin,
+        customer,
+        merchant,
+        _usdc,
+        emergency_signer_one,
+        _emergency_signer_two,
+        _emergency_signer_three,
+        _emergency_treasury,
+    ) = setup_env_with_emergency();
+
+    let payment_id = make_id(&env, 52);
+    deposit_default_ttl(&client, &customer, &payment_id, &merchant, 250_000_000i128);
+    let random = Address::generate(&env);
+
+    client.emergency_drain(&emergency_signer_one, &emergency_signer_one, &random);
+}
+
+#[test]
+#[should_panic(expected = "Emergency drain cooldown active")]
+fn test_emergency_drain_cooldown_prevents_repeated_drain() {
+    let (
+        env,
+        client,
+        _contract_id,
+        _admin,
+        customer,
+        merchant,
+        _usdc,
+        emergency_signer_one,
+        emergency_signer_two,
+        _emergency_signer_three,
+        _emergency_treasury,
+    ) = setup_env_with_emergency();
+
+    let payment_id_a = make_id(&env, 53);
+    deposit_default_ttl(&client, &customer, &payment_id_a, &merchant, 100_000_000i128);
+    client.emergency_drain(
+        &emergency_signer_one,
+        &emergency_signer_one,
+        &emergency_signer_two,
+    );
+
+    let payment_id_b = make_id(&env, 54);
+    deposit_default_ttl(&client, &customer, &payment_id_b, &merchant, 100_000_000i128);
+    client.emergency_drain(
+        &emergency_signer_one,
+        &emergency_signer_one,
+        &emergency_signer_two,
+    );
 }
