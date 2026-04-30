@@ -266,33 +266,3 @@ jobs:
           fail_ci_if_error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  escrow-deploy:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    defaults:
-      run:
-        working-directory: dabdub_contracts
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32v1-none
-
-      - name: Install Stellar CLI
-        uses: taiki-e/install-action@v2
-        with:
-          tool: stellar-cli
-
-      - name: Deploy and initialize escrow contract
-        env:
-          NETWORK: ${{ secrets.SOROBAN_NETWORK }}
-          STELLAR_SOURCE_ACCOUNT_SECRET: ${{ secrets.SOROBAN_SOURCE_ACCOUNT_SECRET }}
-          ESCROW_ADMIN: ${{ secrets.ESCROW_ADMIN }}
-          ESCROW_USDC_TOKEN: ${{ secrets.ESCROW_USDC_TOKEN }}
-          ESCROW_DEFAULT_TTL_LEDGERS: ${{ secrets.ESCROW_DEFAULT_TTL_LEDGERS }}
-          ESCROW_REGISTRY_CONTRACT: ${{ secrets.ESCROW_REGISTRY_CONTRACT }}
-          INIT_FN: init
-        run: bash contracts/payment_escrow/scripts/deploy.sh
