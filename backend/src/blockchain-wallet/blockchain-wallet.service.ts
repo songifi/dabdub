@@ -3,27 +3,22 @@ import {
   Logger,
   NotFoundException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  scryptSync,
-} from 'crypto';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { BlockchainWallet } from './entities/blockchain-wallet.entity';
 import { SorobanService } from './soroban.service';
+import { EncryptionService } from '../security/encryption.service';
 
 export const WALLET_PROVISIONED_EVENT = 'wallet.provisioned';
 
 @Injectable()
 export class BlockchainWalletService {
   private readonly logger = new Logger(BlockchainWalletService.name);
-  private readonly encryptionKey: Buffer;
   private readonly isTestnet: boolean;
 
   constructor(
@@ -32,11 +27,8 @@ export class BlockchainWalletService {
     private readonly sorobanService: SorobanService,
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly encryptionService: EncryptionService,
   ) {
-    const rawKey = this.configService.get<string>('STELLAR_WALLET_ENCRYPTION_KEY');
-    if (!rawKey) throw new Error('STELLAR_WALLET_ENCRYPTION_KEY is not set');
-    // Derive a 32-byte key from the env var using scrypt
-    this.encryptionKey = scryptSync(rawKey, 'cheese-wallet-salt', 32);
     this.isTestnet =
       this.configService.get<string>('STELLAR_NETWORK', 'TESTNET') === 'TESTNET';
   }
@@ -52,15 +44,12 @@ export class BlockchainWalletService {
     const publicKey = keypair.publicKey();
     const secretKey = keypair.secret();
 
-    // 2. AES-256-GCM encrypt the secret key
-    const { ciphertext, iv } = this.encrypt(secretKey);
-
-    // 3. Persist wallet
+    // 2. Persist wallet (column transformer encrypts sensitive fields at rest)
     const wallet = this.walletRepo.create({
       userId,
       stellarAddress: publicKey,
-      encryptedSecretKey: ciphertext,
-      iv,
+      encryptedSecretKey: secretKey,
+      iv: null,
     });
     const saved = await this.walletRepo.save(wallet);
 
@@ -123,30 +112,31 @@ export class BlockchainWalletService {
   // ── Decrypt secret key (private — never exposed via controller/DTO) ─────────
 
   decryptSecretKey(wallet: BlockchainWallet): string {
-    return this.decrypt(wallet.encryptedSecretKey, wallet.iv);
-  }
+    if (!wallet.encryptedSecretKey) {
+      throw new InternalServerErrorException(
+        'Encrypted key unavailable. Security team has been notified.',
+      );
+    }
 
-  // ── AES-256-GCM helpers ─────────────────────────────────────────────────────
+    // New records are transparently decrypted by the column transformer.
+    if (!wallet.iv) {
+      return wallet.encryptedSecretKey;
+    }
 
-  private encrypt(plaintext: string): { ciphertext: string; iv: string } {
-    const iv = randomBytes(12); // 96-bit IV for GCM
-    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    // Store as: iv_hex:authTag_hex:ciphertext_hex
-    return {
-      ciphertext: `${authTag.toString('hex')}:${encrypted.toString('hex')}`,
-      iv: iv.toString('hex'),
-    };
-  }
-
-  private decrypt(ciphertext: string, ivHex: string): string {
-    const iv = Buffer.from(ivHex, 'hex');
-    const [authTagHex, encryptedHex] = ciphertext.split(':');
-    const authTag = Buffer.from(authTagHex, 'hex');
-    const encrypted = Buffer.from(encryptedHex, 'hex');
-    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
-    decipher.setAuthTag(authTag);
-    return decipher.update(encrypted) + decipher.final('utf8');
+    // Backward compatibility for legacy records that stored iv+authTag separately.
+    try {
+      return this.encryptionService.decryptLegacy(
+        wallet.encryptedSecretKey,
+        wallet.iv,
+      );
+    } catch (error) {
+      this.encryptionService.logDecryptionFailure(
+        'blockchain_wallets.encryptedSecretKey',
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Unable to decrypt wallet secret. Security team has been notified.',
+      );
+    }
   }
 }

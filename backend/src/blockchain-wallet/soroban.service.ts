@@ -1,3 +1,4 @@
+export { SOROBAN_RPC_CLIENT, SorobanService } from '../soroban/soroban.service';
 import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 

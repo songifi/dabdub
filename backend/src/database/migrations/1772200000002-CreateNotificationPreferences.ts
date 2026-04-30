@@ -82,20 +82,27 @@ export class CreateNotificationPreferences1772200000002 implements MigrationInte
       }),
     );
 
-    await queryRunner.createForeignKey(
-      'notification_preferences',
-      new TableForeignKey({
-        name: 'FK_notif_pref_merchant',
-        columnNames: ['merchant_id'],
-        referencedTableName: 'merchants',
-        referencedColumnNames: ['id'],
-        onDelete: 'CASCADE',
-      }),
-    );
+    const merchantsTableExists = await queryRunner.hasTable('merchants');
+    if (merchantsTableExists) {
+      await queryRunner.createForeignKey(
+        'notification_preferences',
+        new TableForeignKey({
+          name: 'FK_notif_pref_merchant',
+          columnNames: ['merchant_id'],
+          referencedTableName: 'merchants',
+          referencedColumnNames: ['id'],
+          onDelete: 'CASCADE',
+        }),
+      );
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropForeignKey('notification_preferences', 'FK_notif_pref_merchant');
+    const table = await queryRunner.getTable('notification_preferences');
+    const fk = table?.foreignKeys.find((key) => key.name === 'FK_notif_pref_merchant');
+    if (fk) {
+      await queryRunner.dropForeignKey('notification_preferences', 'FK_notif_pref_merchant');
+    }
     await queryRunner.dropIndex('notification_preferences', 'IDX_notif_pref_merchant_id');
     await queryRunner.dropIndex('notification_preferences', 'UQ_notif_pref_merchant_channel_event');
     await queryRunner.dropTable('notification_preferences');

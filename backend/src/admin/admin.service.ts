@@ -10,23 +10,29 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Merchant, MerchantStatus, MerchantRole } from '../merchants/entities/merchant.entity';
 import { Payment } from '../payments/entities/payment.entity';
+import { Settlement, SettlementStatus } from '../settlements/entities/settlement.entity';
 import { FeeConfig, FeeType } from '../fee-config/entities/fee-config.entity';
 import { FeeHistory, FeeChangeType } from '../fee-config/entities/fee-history.entity';
 import { AuditLog } from './entities/audit-log.entity';
 import { FilterService } from '../common/filter.service';
 import { PaginationDto, PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { CacheService } from '../cache/cache.service';
+import { StellarMonitorService } from '../stellar/stellar-monitor.service';
 
 @Injectable()
 export class AdminService {
   private readonly platformFeeCacheKey = 'fee-config:platform:global';
   private readonly platformFeeTtlSeconds = 300;
+  private readonly liveAnalyticsCacheKey = 'admin:analytics:live:v1';
+  private readonly liveAnalyticsTtlSeconds = 60;
 
   constructor(
     @InjectRepository(Merchant)
     private merchantsRepo: Repository<Merchant>,
     @InjectRepository(Payment)
     private paymentsRepo: Repository<Payment>,
+    @InjectRepository(Settlement)
+    private settlementsRepo: Repository<Settlement>,
     @InjectRepository(FeeConfig)
     private readonly feeConfigRepo: Repository<FeeConfig>,
     @InjectRepository(FeeHistory)
@@ -35,6 +41,7 @@ export class AdminService {
     private readonly auditLogRepo: Repository<AuditLog>,
     private readonly filterService: FilterService,
     private readonly cache: CacheService,
+    private readonly stellarMonitor: StellarMonitorService,
   ) {}
 
   async findAllMerchants(page = 1, limit = 20) {
@@ -99,6 +106,58 @@ export class AdminService {
     return {
       payments: stats,
       merchants: merchantStats,
+    };
+  }
+
+  async getLiveAnalytics() {
+    const { value, cacheHit } = await this.cache.getOrSet(
+      this.liveAnalyticsCacheKey,
+      async () => {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        const pendingStatuses = [
+          SettlementStatus.PENDING,
+          SettlementStatus.PENDING_APPROVAL,
+          SettlementStatus.PROCESSING,
+        ];
+
+        const [paymentsLastHour, pendingSettlements, stellarMonitor] = await Promise.all([
+          this.paymentsRepo
+            .createQueryBuilder('payment')
+            .select('COUNT(*)', 'count')
+            .addSelect('COALESCE(SUM(payment.amountUsd), 0)::numeric(18,6)::text', 'valueUsd')
+            .where('payment.createdAt >= :oneHourAgo', { oneHourAgo })
+            .getRawOne<{ count: string; valueUsd: string }>(),
+          this.settlementsRepo
+            .createQueryBuilder('settlement')
+            .select('COUNT(*)', 'count')
+            .addSelect('COALESCE(SUM(settlement.totalAmountUsd), 0)::numeric(18,6)::text', 'valueUsd')
+            .where('settlement.status IN (:...statuses)', { statuses: pendingStatuses })
+            .getRawOne<{ count: string; valueUsd: string }>(),
+          Promise.resolve(this.stellarMonitor.getLastRunStatus()),
+        ]);
+
+        return {
+          generatedAt: now.toISOString(),
+          maxAgeSeconds: this.liveAnalyticsTtlSeconds,
+          paymentsLastHour: {
+            count: Number(paymentsLastHour?.count ?? 0),
+            valueUsd: paymentsLastHour?.valueUsd ?? '0.000000',
+          },
+          pendingSettlements: {
+            count: Number(pendingSettlements?.count ?? 0),
+            valueUsd: pendingSettlements?.valueUsd ?? '0.000000',
+            statuses: pendingStatuses,
+          },
+          stellarMonitor,
+        };
+      },
+      { ttlSeconds: this.liveAnalyticsTtlSeconds },
+    );
+
+    return {
+      ...value,
+      cacheHit,
     };
   }
 

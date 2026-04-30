@@ -4,6 +4,11 @@ export class CreateMvDailyPaymentVolume1772200000010 implements MigrationInterfa
   name = 'CreateMvDailyPaymentVolume1772200000010';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const paymentsTableExists = await queryRunner.hasTable('payments');
+    if (!paymentsTableExists) {
+      return;
+    }
+
     await queryRunner.query(`
       CREATE MATERIALIZED VIEW IF NOT EXISTS mv_daily_payment_volume AS
       SELECT

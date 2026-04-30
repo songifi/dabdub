@@ -21,6 +21,9 @@ import { NotificationChannel, NotificationEventType } from '../notifications/ent
 export class StellarMonitorService implements OnModuleInit {
   private readonly logger = new Logger(StellarMonitorService.name);
   private cursors: Map<string, string> = new Map();
+  private lastRunAt: Date | null = null;
+  private lastRunStatus: 'idle' | 'ok' | 'error' = 'idle';
+  private lastRunError: string | null = null;
 
   constructor(
     @InjectRepository(Payment)
@@ -46,60 +49,84 @@ export class StellarMonitorService implements OnModuleInit {
   }
 
   async scanPendingPayments() {
-    const pendingPayments = await this.paymentsRepo.find({
-      where: { status: PaymentStatus.PENDING },
-      relations: ['merchant'],
-    });
-
-    if (!pendingPayments.length) return;
-
-    const depositAddress = this.stellar.getDepositAddress();
-    if (!depositAddress) return;
-
-    const cursor = this.cursors.get(depositAddress);
-    let transactions: any[];
-
     try {
-      transactions = await this.stellar.getAccountTransactions(depositAddress, cursor);
-    } catch (err) {
-      this.logger.error('Failed to fetch Stellar transactions', err.message);
-      await this.adminAlerts.raise({
-        type: AdminAlertType.STELLAR_MONITOR,
-        dedupeKey: 'stellar-monitor.fetch',
-        message: `Failed to fetch Stellar transactions: ${err.message}`,
-        metadata: { depositAddress },
-        thresholdValue: 1,
-      });
-      return;
-    }
+      const depositAddress = this.stellar.getDepositAddress();
+      if (!depositAddress) {
+        this.markRunSuccess();
+        return;
+      }
 
-    for (const tx of transactions) {
-      this.cursors.set(depositAddress, tx.paging_token);
-
-      const paymentMemo = tx.memo;
-      if (!paymentMemo) continue;
-
-      const matched = pendingPayments.find((p) => p.stellarMemo === paymentMemo);
-      if (!matched) continue;
-
-      const result = await this.stellar.verifyPayment(tx.hash, paymentMemo);
-      if (!result.verified) continue;
+      const cursor = this.cursors.get(depositAddress);
+      let transactions: any[];
 
       try {
-        await this.confirmPayment(matched, tx.hash, result.amount, result.asset, result.from);
+        transactions = await this.stellar.getAccountTransactions(depositAddress, cursor);
       } catch (err) {
+        this.logger.error('Failed to fetch Stellar transactions', err.message);
         await this.adminAlerts.raise({
           type: AdminAlertType.STELLAR_MONITOR,
-          dedupeKey: `stellar-monitor.confirm:${matched.id}`,
-          message: `Failed to confirm payment ${matched.reference}: ${err.message}`,
-          metadata: { txHash: tx.hash, paymentId: matched.id },
+          dedupeKey: 'stellar-monitor.fetch',
+          message: `Failed to fetch Stellar transactions: ${err.message}`,
+          metadata: { depositAddress },
           thresholdValue: 1,
         });
+        this.markRunFailure(err);
+        return;
       }
+
+      for (const tx of transactions) {
+        this.cursors.set(depositAddress, tx.paging_token);
+
+        const paymentMemo = tx.memo;
+        if (!paymentMemo) continue;
+
+        // Query directly by memo+status so monitoring can use the memo index.
+        const matched = await this.paymentsRepo.findOne({
+          where: {
+            status: PaymentStatus.PENDING,
+            stellarMemo: paymentMemo,
+          },
+          relations: ['merchant'],
+        });
+        if (!matched) continue;
+
+        const result = await this.stellar.verifyPayment(tx.hash, paymentMemo);
+        if (!result.verified) continue;
+
+        try {
+          await this.confirmPayment(matched, tx.hash, result.amount, result.asset, result.from);
+        } catch (err) {
+          await this.adminAlerts.raise({
+            type: AdminAlertType.STELLAR_MONITOR,
+            dedupeKey: `stellar-monitor.confirm:${matched.id}`,
+            message: `Failed to confirm payment ${matched.reference}: ${err.message}`,
+            metadata: { txHash: tx.hash, paymentId: matched.id },
+            thresholdValue: 1,
+          });
+        }
+      }
+
+      await this.expireOldPayments();
+
+      // Soroban fallback: poll USDC token contract transfer events
+      await this.sorobanMonitor.pollTransferEvents();
+      this.markRunSuccess();
+    } catch (error) {
+      this.markRunFailure(error);
+      throw error;
     }
+  }
 
-    await this.expireOldPayments();
-
+  getLastRunStatus(): {
+    lastRunAt: string | null;
+    status: 'idle' | 'ok' | 'error';
+    lastError: string | null;
+  } {
+    return {
+      lastRunAt: this.lastRunAt?.toISOString() ?? null,
+      status: this.lastRunStatus,
+      lastError: this.lastRunError,
+    };
     // Soroban escrow monitor: poll contract state-transition events
     await this.sorobanMonitor.pollEscrowEvents();
   }
@@ -210,5 +237,17 @@ export class StellarMonitorService implements OnModuleInit {
         reference: payment.reference,
       });
     }
+  }
+
+  private markRunSuccess(): void {
+    this.lastRunAt = new Date();
+    this.lastRunStatus = 'ok';
+    this.lastRunError = null;
+  }
+
+  private markRunFailure(error: unknown): void {
+    this.lastRunAt = new Date();
+    this.lastRunStatus = 'error';
+    this.lastRunError = error instanceof Error ? error.message : String(error);
   }
 }
